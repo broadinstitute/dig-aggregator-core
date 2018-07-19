@@ -19,7 +19,7 @@ import scala.collection.JavaConverters._
 /**
  * Kafka JSON topic record consumer.
  */
-class Consumer[C <: Config](opts: Opts[C], topic: String) {
+class Consumer[C <: BaseConfig](opts: Opts[C], topic: String) {
   val props = new Properties()
 
   // set all the properties

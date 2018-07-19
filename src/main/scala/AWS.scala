@@ -18,7 +18,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
  * AWS controller (S3 + EMR clients).
  */
-class AWS[C <: Config](opts: Opts[C]) {
+class AWS[C <: BaseConfig](opts: Opts[C]) {
   val region = Regions.valueOf(opts.config.aws.region)
 
   /**

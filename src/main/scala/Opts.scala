@@ -15,7 +15,7 @@ import scribe._
 /**
  * Command line and configuration file argument parsing.
  */
-class Opts[C <: Config](args: Array[String])(implicit m: Manifest[C]) extends ScallopConf(args) {
+class Opts[C <: BaseConfig](args: Array[String])(implicit m: Manifest[C]) extends ScallopConf(args) {
   val configFile = opt[File]("config")
 
   /** Force Kafka consumption from the beginning of time. */

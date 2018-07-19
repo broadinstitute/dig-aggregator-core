@@ -15,13 +15,23 @@ object Config {
   implicit val formats = DefaultFormats
 
   /** Load and parse a configuration file. */
-  def load[C <: Config](file: File)(implicit m: Manifest[C]): C = {
+  def load[C <: BaseConfig](file: File)(implicit m: Manifest[C]): C = {
     read[C](Source.fromFile(file).mkString)
   }
 }
 
-/** Configuration options for Kafka and AWS. */
-case class Config(kafka: KafkaConfig, aws: AmazonConfig)
+/**
+ * Base trait that all configuration files must adhere to.
+ */
+trait BaseConfig {
+  val kafka: KafkaConfig
+  val aws: AWSConfig
+}
+
+/**
+ * Configuration options for Kafka and AWS.
+ */
+case class Config(kafka: KafkaConfig, aws: AWSConfig) extends BaseConfig
 
 /**
  * Kafka configuration settings.
@@ -33,7 +43,7 @@ case class KafkaConfig(brokers: List[String], consumers: Map[String, String]) {
 /**
  * AWS configuration settings.
  */
-case class AmazonConfig(key: String, secret: String, region: String, emr: EMR, s3: S3)
+case class AWSConfig(key: String, secret: String, region: String, emr: EMR, s3: S3)
 
 /**
  * Optional AWS EMR settings.

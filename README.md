@@ -64,6 +64,36 @@ This is the core template that the `Config` class loads and expects to exist:
 
 This is where all "private" configuration settings should be kept, and **not** committed to the repository.
 
+## Extending Options + Configuration File
+
+Since the `Opts` object is used by all the other classes to initialize and setup private data, it should be the first thing created:
+
+```scala
+def main(args: Array[String]): Unit = {
+  val opts = new Opts[Config](args)
+  
+  // parse the command line arguments
+  opts.verify
+}
+```
+
+If you want to subclass `Config` to extend the JSON properties your application uses you can (hence the template parameter), but you can also extend the `Opt` class to add custom command line options as well.
+
+```scala
+case class MyConfig(
+  kafka: KafkaConfig,   // required by BaseConfig
+  aws: AWSConfig,       // required by BaseConfig
+  
+  password: String,     // extended parameter
+) extends BaseConfig
+
+class MyOpts() extends Opts[MyConfig] {
+  val myArg = opt[String]("my-arg")
+}
+```
+
+Now you can use your custom options and configuration.
+
 ## Kafka Consumer
 
 Use the `Opts` class to create a `Consumer`, which can be used to consume all records from a given topic. Example Scala code:
@@ -154,7 +184,7 @@ def main(args: Array[String]): Unit = {
 
 ## AWS Client (S3 + EMR)
 
-An Amazon Web Services ([AWS][aws]) object can be created using the parsed options, which will create both [S3][s3] and [EMR][emr] clients. The [S3][s3] client can be used to perform [CRUD][crud] actions on files stored in the Amazon cloud. The [EMR][emr] client can be used to execute [mapreduce][mr] queries with [Hadoop][hadoop] on those files.
+An Amazon Web Services ([AWS][aws]) object can be created, which will initialize both [S3][s3] and [EMR][emr] clients. The [S3][s3] client can be used to perform [CRUD][crud] actions on files stored in the Amazon cloud. And the [EMR][emr] client can be used to execute [mapreduce][mr] queries with [Hadoop][hadoop] on those files.
 
 ```scala
 def main(args: Array[String]): Unit = {
@@ -174,7 +204,14 @@ def main(args: Array[String]): Unit = {
   /* Perform a mapreduce. This requires that the Java program being run
    * is a JAR assembly stored on S3.
    */
-  val ioMR = aws.runMR("s3://bucket/app.jar", "main.Class", args = List.empty)
+  val ioMR = aws.runMR(
+    "s3://bucket/app.jar",      // location of mapreduce program
+    "main.Class",               // main class to execute
+    args = List(
+      "s3://bucket/path/",      // input path
+      "s3://bucket/out/path/",  // output path
+    )
+  )
 
   // run the program
   (ioPut >> ioMR).unsafeRunSync

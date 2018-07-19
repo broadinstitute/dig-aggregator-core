@@ -12,7 +12,7 @@ import scala.concurrent._
 /**
  * Kafka JSON topic record producer.
  */
-class Producer[C <: Config](opts: Opts[C], topic: String)(implicit ec: ExecutionContext) {
+class Producer[C <: BaseConfig](opts: Opts[C], topic: String)(implicit ec: ExecutionContext) {
   val props = new Properties()
 
   // set all the properties
