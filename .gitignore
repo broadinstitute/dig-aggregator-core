@@ -1,0 +1,13 @@
+# ensime plugin
+.ensime_cache/
+.ensime
+
+# compiled project
+project/project/
+project/target/
+
+# compiled src
+target/
+
+# log files
+*.log
