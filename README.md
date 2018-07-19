@@ -6,8 +6,8 @@ The foundational code has the following features:
 
 * Command line parsing;
 * Configuration file loading;
-* Kafka clients: consumers and producers;
-* AWS clients: S3 and EMR;
+* [Kafka][kafka] clients: consumers and producers;
+* [AWS][aws] clients: [S3][s3] and [EMR][emr];
 * RDBS clients;
 
 It guarantees safety by running all actions through an [IO monad][io]. This ensures that the code - where applicable - can be run concurrently with other code and failures are handled gracefully.
@@ -30,9 +30,13 @@ The `Opts` class can be derived from to include custom command line options. But
 * `--from-beginning` - start topic consumption from the beginning.
 * `--continue` - start topic consumption from where it left off (saved in a state file)
 
+_The `Opts` class is used by the other classes to initialize with private data settings that should **not** be committed to the repository: keys, passwords, IP addresses, etc._ 
+
 ## Configuration file (JSON) loading
 
-The configuration class _must_ derive from `Config` as his will ensure that a basic JSON structure exists that the rest of the core classes can draw from.
+The configuration class _must_ derive from `Config` as this ensures that a basic JSON structure exists for the rest of the core classes can extract initialization parameters from.
+
+This is the core template that the `Config` class loads and expects to exist:
 
 ```json
 {
@@ -58,6 +62,8 @@ The configuration class _must_ derive from `Config` as his will ensure that a ba
 }
 ```
 
+This is where all "private" configuration settings should be kept, and **not** committed to the repository.
+
 ## Kafka Consumer
 
 Use the `Opts` class to create a `Consumer`, which can be used to consume all records from a given topic. Example Scala code:
@@ -69,18 +75,17 @@ def main(args: Array[String]): Unit = {
   // parse the command line arguments
   opts.verify
 
-  /* Create a kafka consumer. This will use the broker list and 
-   * topic specified in the config file loaded by the options.
+  /* Create a kafka consumer.
    *
    * If --continue was specified, then the offsets in the 
-   * configuration's stateFile will be used.
+   * configuration topic's state file will be used.
    * 
-   * Otherwise the stateFile will be ignored and either it will
-   * start over at the beginning if --from-beginning was specified
-   * or from the end.
+   * Otherwise the state file will be ignored and either it 
+   * will start over at the beginning if --from-beginning 
+   * was specified or from the end (the default).
    * 
-   * Regardless, if stateFile is set within the configuration file,
-   * then as the Consumer's state is updated it will be written to 
+   * As the records are consumed and the consumer's state is
+   * updated, the state file for the topic will be written to
    * disk for later use with --continue.
    */
   val consumer = new Consumer[Config](opts, "topic")
@@ -88,36 +93,33 @@ def main(args: Array[String]): Unit = {
   /* Create a stream that reads all the records from the Kafka 
    * topic and sends them to a function for processing.
    */
-  val stream = consumer.consume(process)
+  val io = consumer.consume(process)
 
-  /* Process the stream forever.
-   */
-  stream.unsafeRunSync
+  // run the program
+  io.unsafeRunSync
 }
 
+/* This is where the code should do something with the records 
+ * received from Kafka. All processing must be done from within
+ * the IO monad.
+ */
 def process(consumer: Consumer[Config], recs: ConsumerRecords[String, String]): IO[Unit] = {
-
-  /* This is where the code should do something with the records 
-   * received from Kafka. All processing must be done from within
-   * the IO monad.
-   */
-  val ios = 
-    for (rec <- recs.iterator.asScala) {
-      val io = IO {
-        println(s"Processed partition ${rec.partition} offset ${rec.offset}")
-      }
-
-      /* Since these records have been successfully processed, 
-       * the consumer's state should be updated to reflect that 
-       * so if the program is restarted (with --continue) the 
-       * same  records won't be processed again.
-       */
-      io >> consumer.updateState(rec)
+  val ios = for (rec <- recs.iterator.asScala) {
+    val io = IO {
+      println(s"Processed partition ${rec.partition} offset ${rec.offset}")
     }
+
+    /* Since this record has been successfully processed, the
+     * consumer's state should be updated to reflect that so
+     * if the program is restarted (with --continue) the same
+     * records won't be processed again.
+     */
+    io >> consumer.updateState(rec)
+  }
   
   /* It's critical that the records for each partition be processed 
-   * IN ORDER! However, with a little extra work, records from different
-   * partitions can be run in parallel.
+   * IN ORDER! However, with a little extra work, records from 
+   * different partitions can be run in parallel.
    */
   ios.toList.sequence
 }
@@ -145,15 +147,14 @@ def main(args: Array[String]): Unit = {
    */
   val io = producer.send("key", """{"key": "value"}""")
 
-  /* Run the program.
-   */
+  // run the program
   io.unsafeRunSync
 }
 ```
 
 ## AWS Client (S3 + EMR)
 
-An Amazon Web Services (AWS) object can be created using the parsed options, which will create both S3 and EMR clients. The S3 client can be used to perform [CRUD][crud] actions on files stored in the Amazon cloud. The EMR client can be used to execute [mapreduce][mr] queries with [Hadoop][hadoop] on those files.
+An Amazon Web Services ([AWS][aws]) object can be created using the parsed options, which will create both [S3][s3] and [EMR][emr] clients. The [S3][s3] client can be used to perform [CRUD][crud] actions on files stored in the Amazon cloud. The [EMR][emr] client can be used to execute [mapreduce][mr] queries with [Hadoop][hadoop] on those files.
 
 ```scala
 def main(args: Array[String]): Unit = {
@@ -175,24 +176,23 @@ def main(args: Array[String]): Unit = {
    */
   val ioMR = aws.runMR("s3://bucket/app.jar", "main.Class", args = List.empty)
 
-  /* Run the program.
-   */
+  // run the program
   (ioPut >> ioMR).unsafeRunSync
 }
 ```
 
-The following S3 "file system" methods are currently supported:
+The following [S3][s3] "file system" methods are currently supported:
 
 * `put(key: String, value: String)`
 * `get(key: String)`
 * `ls(key: String, recursive: Boolean=true, pathSep: Char='/')`
 * `rm(keys: Seq[String])`
 
-The only EMR method currently available is:
+The only [EMR][emr] method currently available is:
 
 * `runMR(jar: String, mainClass: String, args: List[String])`
 
-_The implicit `bucket` parameter that is passed to all S3 and EMR methods is the one found in the configuration file._
+_The implicit `bucket` parameter that is passed to all [S3][s3] and [EMR][emr] methods is the one found in the configuration file._
 
 ## RDBS Access
 
