@@ -88,7 +88,7 @@ class AWS[C <: BaseConfig](opts: Opts[C]) {
     }
 
     // scan all the child keys recursively
-    io.flatMap(_.map(ls(_, true)).sequence).map(_.flatten)
+    io.flatMap(_.map(ls(_, true, pathSep)).sequence).map(_.flatten)
   }
 
   /**
