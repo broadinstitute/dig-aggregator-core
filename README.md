@@ -26,7 +26,7 @@ import org.broadinstitute.dig.aggregator.core._
 
 The `Opts` class can be derived from to include custom command line options. But - out of the box - the following command line options exist:
 
-* `--config [file]` - loads a private, JSON, configuration file.
+* `--config [file]` - loads a private, JSON, configuration file (default=`config.json`).
 * `--from-beginning` - start topic consumption from the beginning.
 * `--continue` - start topic consumption from where it left off (saved in a state file)
 
@@ -34,9 +34,7 @@ _The `Opts` class is used by the other classes to initialize with private data s
 
 ## Configuration file (JSON) loading
 
-The configuration class _must_ derive from `Config` as this ensures that a basic JSON structure exists for the rest of the core classes can extract initialization parameters from.
-
-This is the core template that the `Config` class loads and expects to exist:
+The configuration class _must_ derive from the trait `BaseConfig` as this ensures that a basic JSON structure exists for the rest of the core classes can extract initialization parameters from. There is a default implementation of `BaseConfig` (aptly named `Config`). This is the core template that it loads and expects to exist:
 
 ```json
 {

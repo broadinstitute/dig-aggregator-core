@@ -61,7 +61,7 @@ class AWS[C <: BaseConfig](opts: Opts[C]) {
   /**
    * Get a list of keys within a key.
    */
-  def ls(key: String, recursive: Boolean = true, pathSep: Char = '/'): IO[List[String]] = {
+  def ls(key: String, recursive: Boolean=true, pathSep: Char='/'): IO[List[String]] = {
     if (key.last != pathSep) {
       return IO(List(key))
     }
