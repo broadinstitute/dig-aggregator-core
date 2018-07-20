@@ -79,7 +79,7 @@ class AWS[C <: BaseConfig](opts: Opts[C]) {
         keys ++= next.getObjectSummaries.asScala.map(_.getKey).toList
       }
 
-      key :: keys
+      keys
     }
 
     // immediate children only
