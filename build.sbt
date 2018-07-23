@@ -1,8 +1,29 @@
+lazy val Versions = new {
+  val Scala = "2.12.6"
+  val LogbackClassic = "1.2.3"
+  val Fs2 = "0.10.1"
+  val Aws = "1.11.349"
+  val Shapeless = "2.3.3"
+  val ScribeSlf4J = "2.5.3"
+  val Json4s = "3.5.3"
+  val Scallop = "3.1.2"
+  val Cats = "1.1.0"
+  val CatsEffect = "1.0.0-RC2"
+  val Hadoop = "1.2.1"
+  val Kafka = "1.1.0"
+}
+
+lazy val Orgs = new {
+  val DIG = "org.broadinstitute.dig"
+}
+
+organization := Orgs.DIG
+
 name := "dig-aggregator-core"
 
-version := "0.1.0"
+//NB: version set in version.sbt
 
-scalaVersion := "2.12.6"
+scalaVersion := Versions.Scala
 
 scalacOptions ++= Seq(
   "-feature",
@@ -12,15 +33,15 @@ scalacOptions ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "ch.qos.logback" % "logback-classic" % "1.2.3",
-  "co.fs2" %% "fs2-core" % "0.10.1",
-  "com.amazonaws" % "aws-java-sdk" % "1.11.349",
-  "com.chuusai" %% "shapeless" % "2.3.3",
-  "com.outr" %% "scribe-slf4j" % "2.5.3",
-  "org.json4s" %% "json4s-jackson" % "3.5.3",
-  "org.rogach" %% "scallop" % "3.1.2",
-  "org.typelevel" %% "cats-core" % "1.1.0",
-  "org.typelevel" %% "cats-effect" % "1.0.0-RC2",
-  "org.apache.hadoop" % "hadoop-client" % "1.2.1",
-  "org.apache.kafka" %% "kafka" % "1.1.0"
+  "ch.qos.logback" % "logback-classic" % Versions.LogbackClassic,
+  "co.fs2" %% "fs2-core" % Versions.Fs2,
+  "com.amazonaws" % "aws-java-sdk" % Versions.Aws,
+  "com.chuusai" %% "shapeless" % Versions.Shapeless,
+  "com.outr" %% "scribe-slf4j" % Versions.ScribeSlf4J,
+  "org.json4s" %% "json4s-jackson" % Versions.Json4s,
+  "org.rogach" %% "scallop" % Versions.Scallop,
+  "org.typelevel" %% "cats-core" % Versions.Cats,
+  "org.typelevel" %% "cats-effect" % Versions.CatsEffect,
+  "org.apache.hadoop" % "hadoop-client" % Versions.Hadoop,
+  "org.apache.kafka" %% "kafka" % Versions.Kafka
 )
