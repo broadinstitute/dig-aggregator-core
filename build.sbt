@@ -1,16 +1,15 @@
 lazy val Versions = new {
   val Scala = "2.12.6"
-  val LogbackClassic = "1.2.3"
   val Fs2 = "0.10.1"
   val Aws = "1.11.349"
   val Shapeless = "2.3.3"
-  val ScribeSlf4J = "2.5.3"
   val Json4s = "3.5.3"
   val Scallop = "3.1.2"
   val Cats = "1.1.0"
   val CatsEffect = "1.0.0-RC2"
   val Hadoop = "1.2.1"
   val Kafka = "1.1.0"
+  val Slf4J = "1.7.25"
 }
 
 lazy val Orgs = new {
@@ -33,11 +32,10 @@ scalacOptions ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "ch.qos.logback" % "logback-classic" % Versions.LogbackClassic,
+  "org.slf4j" % "slf4j-api" % Versions.Slf4J,
   "co.fs2" %% "fs2-core" % Versions.Fs2,
   "com.amazonaws" % "aws-java-sdk" % Versions.Aws,
   "com.chuusai" %% "shapeless" % Versions.Shapeless,
-  "com.outr" %% "scribe-slf4j" % Versions.ScribeSlf4J,
   "org.json4s" %% "json4s-jackson" % Versions.Json4s,
   "org.rogach" %% "scallop" % Versions.Scallop,
   "org.typelevel" %% "cats-core" % Versions.Cats,
