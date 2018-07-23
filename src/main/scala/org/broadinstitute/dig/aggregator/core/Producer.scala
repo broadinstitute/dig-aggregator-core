@@ -12,8 +12,8 @@ import scala.concurrent._
 /**
  * Kafka JSON topic record producer.
  */
-class Producer[C <: BaseConfig](opts: Opts[C], topic: String)(implicit ec: ExecutionContext) {
-  val props = new Properties()
+final class Producer[C <: BaseConfig](opts: Opts[C], topic: String)(implicit ec: ExecutionContext) {
+  val props: Properties = new Properties()
 
   // set all the properties
   props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, opts.config.kafka.brokerList)
@@ -26,17 +26,19 @@ class Producer[C <: BaseConfig](opts: Opts[C], topic: String)(implicit ec: Execu
   /**
    * The Kafka producer client to sent variant messages to.
    */
-  val client = new KafkaProducer[String, String](props)
+  val client: KafkaProducer[String, String] = new KafkaProducer(props)
 
   /**
    * Send a JSON message to the Kafka queue to a given topic.
    */
   def send(key: String, value: String): IO[RecordMetadata] = {
-    val future = Future {
-      client.send(new ProducerRecord[String, String](topic, key, value)).get
+    val futureIo = IO {
+      Future {
+        client.send(new ProducerRecord[String, String](topic, key, value)).get
+      }
     }
 
     // submit it to kafka
-    IO.fromFuture(IO(future))
+    IO.fromFuture(futureIo)
   }
 }

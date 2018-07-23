@@ -10,19 +10,17 @@ import org.rogach.scallop._
 
 import scala.io.Source
 
-import scribe._
-
 /**
  * Command line and configuration file argument parsing.
  */
-class Opts[C <: BaseConfig](args: Array[String])(implicit m: Manifest[C]) extends ScallopConf(args) {
-  val configFile = opt[File]("config")
+final class Opts[C <: BaseConfig](args: Array[String])(implicit m: Manifest[C]) extends ScallopConf(args) {
+  val configFile: ScallopOption[File] = opt[File]("config", default = Some(new File("config.json")))
 
   /** Force Kafka consumption from the beginning of time. */
-  val fromBeginning = opt[Boolean]("from-beginning")
+  val fromBeginning: ScallopOption[Boolean] = opt[Boolean]("from-beginning")
 
   /** Force Kafka consumption to continue from the state file. */
-  val continue = opt[Boolean]("continue")
+  val continue: ScallopOption[Boolean] = opt[Boolean]("continue")
 
   // ensure the configuration file exists if provided
   validateFileExists(configFile)
@@ -30,13 +28,13 @@ class Opts[C <: BaseConfig](args: Array[String])(implicit m: Manifest[C]) extend
   // both --continue and --from-beginning cannot be specified
   mutuallyExclusive(continue, fromBeginning)
 
+  verify
+  
   /* Private configuration settings. */
-  lazy val config: C = {
-    configFile.toOption.map(Config.load[C]).get
-  }
+  lazy val config: C = configFile.toOption.map(Config.load[C]).get
 
   /** If --continue is not supplied, start from the beginning or end. */
-  lazy val position = {
+  lazy val position: State.Position = {
     val from = continue.map(_ => State.Continue).toOption
     val beginning = fromBeginning.map(_ => State.Beginning).toOption
 

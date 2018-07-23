@@ -19,8 +19,8 @@ import scala.collection.JavaConverters._
 /**
  * Kafka JSON topic record consumer.
  */
-class Consumer[C <: BaseConfig](opts: Opts[C], topic: String) {
-  val props = new Properties()
+final class Consumer[C <: BaseConfig](opts: Opts[C], topic: String) {
+  val props: Properties = new Properties()
 
   // set all the properties
   props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, opts.config.kafka.brokerList)
@@ -30,19 +30,19 @@ class Consumer[C <: BaseConfig](opts: Opts[C], topic: String) {
   /**
    * The Kafka client used to receive variant JSON messages.
    */
-  val client = new KafkaConsumer[String, String](props)
+  val client: KafkaConsumer[String, String] = new KafkaConsumer(props)
 
   /**
    * Get all the partitions for this topic.
    */
-  val partitions = client.partitionsFor(topic).asScala.map {
+  val partitions: Seq[TopicPartition] = client.partitionsFor(topic).asScala.map {
     info => new TopicPartition(topic, info.partition)
   }
 
   /**
    * The current consumer state.
    */
-  var state = opts.position match {
+  private var state: ConsumerState = opts.position match {
     case State.Continue  => State.load(new File(opts.config.kafka.consumers(topic)))
     case State.Beginning => State.fromBeginning(client, partitions)
     case State.End       => State.fromEnd(client, partitions)
@@ -60,7 +60,7 @@ class Consumer[C <: BaseConfig](opts: Opts[C], topic: String) {
    * Create a Stream that will continuously read from Kafka and pass the
    * record batches to a process function.
    */
-  def consume[A](process: ConsumerRecords[String, String] => IO[A]) = {
+  def consume[A](process: ConsumerRecords[String, String] => IO[A]): IO[Unit] = {
     val fetch = IO {
       client.poll(Long.MaxValue)
     }

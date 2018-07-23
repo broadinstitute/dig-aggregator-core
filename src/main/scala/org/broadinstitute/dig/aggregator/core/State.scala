@@ -22,12 +22,12 @@ import scala.io.Source
 /**
  * The last offset processed per partition.
  */
-case class PartitionState(partition: TopicPartition, offset: Long) {
+final case class PartitionState(partition: TopicPartition, offset: Long) {
 
   /**
    * Helper function for matching a TopicPartition.
    */
-  def matches(topic: String, partition: Int) = {
+  def matches(topic: String, partition: Int): Boolean = {
     this.partition.topic.equals(topic) && this.partition.partition == partition
   }
 }
@@ -35,7 +35,7 @@ case class PartitionState(partition: TopicPartition, offset: Long) {
 /**
  * A list of topic partition offsets.
  */
-case class ConsumerState(partitions: List[PartitionState]) {
+final case class ConsumerState(partitions: List[PartitionState]) {
 
   /**
    * Returns a new ConsumerState with an updated offset for a topic partition.
@@ -55,7 +55,7 @@ case class ConsumerState(partitions: List[PartitionState]) {
  * Companion object for creating, loading, and saving ConsumerState instances.
  */
 object State {
-  implicit val formats = DefaultFormats
+  implicit val formats: DefaultFormats = DefaultFormats
 
   /**
    * The partition offsets to start consuming from.
@@ -70,7 +70,7 @@ object State {
   /**
    * Create a new ConsumerState that starts from the beginning offset.
    */
-  def fromBeginning(client: KafkaConsumer[String, String], partitions: Seq[TopicPartition]) = {
+  def fromBeginning(client: KafkaConsumer[String, String], partitions: Seq[TopicPartition]): ConsumerState = {
     val offsets = client.beginningOffsets(partitions.asJava).asScala map {
       case (topicPartition, offset) => PartitionState(topicPartition, offset)
     }
@@ -82,7 +82,7 @@ object State {
   /**
    * Create a new ConsumerState that starts from the last offset.
    */
-  def fromEnd(client: KafkaConsumer[String, String], partitions: Seq[TopicPartition]) = {
+  def fromEnd(client: KafkaConsumer[String, String], partitions: Seq[TopicPartition]): ConsumerState = {
     val offsets = client.endOffsets(partitions.asJava).asScala map {
       case (topicPartition, offset) => PartitionState(topicPartition, offset)
     }
@@ -94,14 +94,14 @@ object State {
   /**
    * Load a ConsumerState from a JSON file.
    */
-  def load(file: File) = {
+  def load(file: File): ConsumerState = {
     read[ConsumerState](Source.fromFile(file).mkString)
   }
 
   /**
    * Save a ConsumerState to a JSON file.
    */
-  def save(state: ConsumerState, file: File) = {
+  def save(state: ConsumerState, file: File): Unit = {
     val json = writePretty(state)
     val writer = new PrintWriter(file)
 
