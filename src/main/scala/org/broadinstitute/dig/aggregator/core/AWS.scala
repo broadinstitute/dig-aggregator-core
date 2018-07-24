@@ -14,6 +14,8 @@ import com.amazonaws.services.s3.model._
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.collection.mutable.Buffer
+import scala.collection.mutable.ListBuffer
 
 /**
  * AWS controller (S3 + EMR clients).
@@ -59,17 +61,21 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) {
   }
 
   private def keysFrom(listing: ObjectListing): List[String] = {
-    var keys: List[String] = listing.getObjectSummaries.asScala.map(_.getKey).toList
+    val keys: Buffer[String] = new ListBuffer
+    
+    def getKeys(l: ObjectListing): Iterable[String] = l.getObjectSummaries.asScala.map(_.getKey)
+    
+    keys ++= getKeys(listing)
   
     // might be broken up into multiple requests
     while(listing.isTruncated) {
       val next = s3.listNextBatchOfObjects(listing)
   
       // update the list of keys
-      keys ++= next.getObjectSummaries.asScala.map(_.getKey).toList
+      keys ++= getKeys(next)
     }
   
-    keys
+    keys.toList
   }
   
   /**

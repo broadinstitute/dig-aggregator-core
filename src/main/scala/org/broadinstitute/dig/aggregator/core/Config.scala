@@ -12,7 +12,7 @@ import scala.io.Source
  * Companion object with methods for loading configuration files.
  */
 object Config {
-  implicit val formats: DefaultFormats = DefaultFormats
+  implicit val formats: Formats = DefaultFormats
 
   /** Load and parse a configuration file. */
   def load[C <: BaseConfig](file: File)(implicit m: Manifest[C]): C = {
@@ -37,7 +37,7 @@ final case class Config(kafka: KafkaConfig, aws: AWSConfig) extends BaseConfig
  * Kafka configuration settings.
  */
 final case class KafkaConfig(brokers: List[String], consumers: Map[String, String]) {
-  lazy val brokerList = brokers.mkString(",")
+  lazy val brokerList: String = brokers.mkString(",")
 }
 
 /**

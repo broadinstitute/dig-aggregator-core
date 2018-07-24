@@ -55,7 +55,7 @@ final case class ConsumerState(partitions: List[PartitionState]) {
  * Companion object for creating, loading, and saving ConsumerState instances.
  */
 object State {
-  implicit val formats: DefaultFormats = DefaultFormats
+  implicit val formats: Formats = DefaultFormats
 
   /**
    * The partition offsets to start consuming from.

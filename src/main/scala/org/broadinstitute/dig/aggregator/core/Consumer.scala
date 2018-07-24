@@ -20,21 +20,23 @@ import scala.collection.JavaConverters._
  * Kafka JSON topic record consumer.
  */
 final class Consumer[C <: BaseConfig](opts: Opts[C], topic: String) {
-  val props: Properties = new Properties()
-
-  // set all the properties
-  props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, opts.config.kafka.brokerList)
-  props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[serialization.StringDeserializer].getCanonicalName)
-  props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[serialization.StringDeserializer].getCanonicalName)
+  
+  //NB: Use a helper method to build Properties, to minimize the amount of contructor logic interleaved in the 
+  //class body.
+  private val props: Properties = Props(
+      ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG -> opts.config.kafka.brokerList,
+      ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG -> classOf[serialization.StringDeserializer].getCanonicalName,
+      ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> classOf[serialization.StringDeserializer].getCanonicalName)
 
   /**
    * The Kafka client used to receive variant JSON messages.
    */
-  val client: KafkaConsumer[String, String] = new KafkaConsumer(props)
+  private val client: KafkaConsumer[String, String] = new KafkaConsumer(props)
 
   /**
    * Get all the partitions for this topic.
    */
+  //TODO: Should this be lazy?  Does it reach out to the broker when this class is instantiated?
   val partitions: Seq[TopicPartition] = client.partitionsFor(topic).asScala.map {
     info => new TopicPartition(topic, info.partition)
   }
@@ -66,10 +68,14 @@ final class Consumer[C <: BaseConfig](opts: Opts[C], topic: String) {
     }
 
     // process the stream
-    Stream.eval(fetch).repeat
-      .evalMap(records => LiftIO[IO].liftIO(process(records)))
-      .compile
-      .drain
+    Stream.
+        eval(fetch).
+        repeat.
+        //Note that this previously used ListIO[IO].liftIO(anIo), which does not appear to have any effect.
+        //(ie, it turned an IO[A] into an IO[A].)
+        evalMap(process). 
+        compile.
+        drain
   }
 
   /**
