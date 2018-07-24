@@ -10,6 +10,7 @@ lazy val Versions = new {
   val Hadoop = "1.2.1"
   val Kafka = "1.1.0"
   val Slf4J = "1.7.25"
+  val ScalaTest = "3.0.5"
 }
 
 lazy val Orgs = new {
@@ -41,5 +42,6 @@ libraryDependencies ++= Seq(
   "org.typelevel" %% "cats-core" % Versions.Cats,
   "org.typelevel" %% "cats-effect" % Versions.CatsEffect,
   "org.apache.hadoop" % "hadoop-client" % Versions.Hadoop,
-  "org.apache.kafka" %% "kafka" % Versions.Kafka
+  "org.apache.kafka" %% "kafka" % Versions.Kafka,
+  "org.scalatest" %% "scalatest" % Versions.ScalaTest % "test"
 )
