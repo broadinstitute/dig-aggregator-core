@@ -7,7 +7,7 @@ import cats.implicits._
 import com.amazonaws.auth._
 import com.amazonaws.regions._
 import com.amazonaws.services.elasticmapreduce._
-import com.amazonaws.services.elasticmapreduce.model.{Unit => _, _}
+import com.amazonaws.services.elasticmapreduce.model.{ Unit => _, _ }
 import com.amazonaws.services.elasticmapreduce.util._
 import com.amazonaws.services.s3._
 import com.amazonaws.services.s3.model._
@@ -21,19 +21,18 @@ import scala.collection.mutable.ListBuffer
  * AWS controller (S3 + EMR clients).
  */
 final class AWS[C <: BaseConfig](opts: Opts[C]) {
-  val region: Regions = Regions.valueOf(opts.config.aws.region)
+  private val region: Regions = Regions.valueOf(opts.config.aws.region)
 
   /**
    * AWS IAM credentials provider.
    */
-  val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-    new BasicAWSCredentials(opts.config.aws.key, opts.config.aws.secret)
-  )
+  private val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
+    new BasicAWSCredentials(opts.config.aws.key, opts.config.aws.secret))
 
   /**
    * S3 client for storage.
    */
-  val s3: AmazonS3 = AmazonS3ClientBuilder.standard
+  private val s3: AmazonS3 = AmazonS3ClientBuilder.standard
     .withRegion(region)
     .withCredentials(credentials)
     .build
@@ -41,7 +40,7 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) {
   /**
    * EMR client for running map/reduce jobs.
    */
-  val emr: AmazonElasticMapReduce = AmazonElasticMapReduceClientBuilder.standard
+  private val emr: AmazonElasticMapReduce = AmazonElasticMapReduceClientBuilder.standard
     .withCredentials(credentials)
     .withRegion(region)
     .build
@@ -62,44 +61,53 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) {
 
   private def keysFrom(listing: ObjectListing): List[String] = {
     val keys: Buffer[String] = new ListBuffer
-    
+
     def getKeys(l: ObjectListing): Iterable[String] = l.getObjectSummaries.asScala.map(_.getKey)
-    
+
     keys ++= getKeys(listing)
-  
+
     // might be broken up into multiple requests
-    while(listing.isTruncated) {
+    while (listing.isTruncated) {
       val next = s3.listNextBatchOfObjects(listing)
-  
+
       // update the list of keys
       keys ++= getKeys(next)
     }
-  
+
     keys.toList
   }
-  
+
   /**
    * Get a list of keys within a key.
    */
   def ls(key: String, recursive: Boolean = true, pathSep: Char = '/'): IO[List[String]] = {
     if (key.last != pathSep) {
-      IO(List(key))
-    } else {
-      // get all the immediate child keys
-      val io = IO {
-        val listing = s3.listObjects(opts.config.aws.s3.bucket, key)
-        
-        keysFrom(listing)
-      }
-  
-      // immediate children only
-      if (!recursive) { io }
-      else {
-        // scan all the child keys recursively
-        // Lamely, .sequence is only available on Lists of IOs, not Seqs of IOs.
-        io.flatMap(_.map(ls(_, true, pathSep)).sequence).map(_.flatten)
-      }
+      return IO(List(key))
     }
+
+    // get all the immediate child keys
+    val io = IO {
+      val listing = s3.listObjects(opts.config.aws.s3.bucket, key)
+      var keys = listing.getObjectSummaries.asScala.map(_.getKey).toList
+
+      // might be broken up into multiple requests
+      while (listing.isTruncated) {
+        val next = s3.listNextBatchOfObjects(listing)
+
+        // update the list of keys
+        keys ++= next.getObjectSummaries.asScala.map(_.getKey).toList
+      }
+
+      keys
+    }
+
+    // immediate children only
+    if (!recursive) {
+      return io
+    }
+
+    // scan all the child keys recursively
+    io.flatMap(_.map(ls(_, true, pathSep)).sequence).map(_.flatten)
   }
 
   /**
@@ -113,15 +121,15 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) {
       s3.deleteObjects(request)
     }
   }
-  
-    /**
+
+  /**
    * Create a object to be used as a folder in S3.
    */
   def mkdir(name: String, metadata: String): IO[PutObjectResult] = {
     for {
       existing <- ls(s"$name/")
-      delete   <- rm(existing)
-      dir      <- put(s"$name/", "")
+      delete <- rm(existing)
+      dir <- put(s"$name/", "")
       metadata <- put(s"$name/_metadata", metadata)
     } yield metadata
   }

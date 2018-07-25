@@ -71,7 +71,7 @@ object State {
    * Create a new ConsumerState that starts from the beginning offset.
    */
   def fromBeginning(client: KafkaConsumer[String, String], partitions: Seq[TopicPartition]): ConsumerState = {
-    val offsets = client.beginningOffsets(partitions.asJava).asScala map {
+    val offsets = client.beginningOffsets(partitions.asJava).asScala.map {
       case (topicPartition, offset) => PartitionState(topicPartition, offset)
     }
 
@@ -83,7 +83,7 @@ object State {
    * Create a new ConsumerState that starts from the last offset.
    */
   def fromEnd(client: KafkaConsumer[String, String], partitions: Seq[TopicPartition]): ConsumerState = {
-    val offsets = client.endOffsets(partitions.asJava).asScala map {
+    val offsets = client.endOffsets(partitions.asJava).asScala.map {
       case (topicPartition, offset) => PartitionState(topicPartition, offset)
     }
 

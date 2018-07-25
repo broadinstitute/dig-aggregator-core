@@ -37,7 +37,7 @@ final class Consumer[C <: BaseConfig](opts: Opts[C], topic: String) {
    * Get all the partitions for this topic.
    */
   //TODO: Should this be lazy?  Does it reach out to the broker when this class is instantiated?
-  val partitions: Seq[TopicPartition] = client.partitionsFor(topic).asScala.map {
+  private lazy val partitions: Seq[TopicPartition] = client.partitionsFor(topic).asScala.map {
     info => new TopicPartition(topic, info.partition)
   }
 
@@ -68,14 +68,14 @@ final class Consumer[C <: BaseConfig](opts: Opts[C], topic: String) {
     }
 
     // process the stream
-    Stream.
-        eval(fetch).
-        repeat.
+    Stream
+        .eval(fetch)
+        .repeat
         //Note that this previously used ListIO[IO].liftIO(anIo), which does not appear to have any effect.
         //(ie, it turned an IO[A] into an IO[A].)
-        evalMap(process). 
-        compile.
-        drain
+        .evalMap(records => LiftIO[IO].liftIO(process(records))) 
+        .compile
+        .drain
   }
 
   /**
