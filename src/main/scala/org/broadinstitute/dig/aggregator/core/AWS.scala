@@ -16,11 +16,13 @@ import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.collection.mutable.Buffer
 import scala.collection.mutable.ListBuffer
+import com.typesafe.scalalogging.LazyLogging
 
 /**
  * AWS controller (S3 + EMR clients).
  */
-final class AWS[C <: BaseConfig](opts: Opts[C]) {
+final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
+  
   private val region: Regions = Regions.valueOf(opts.config.aws.region)
 
   /**
@@ -45,6 +47,8 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) {
     .withRegion(region)
     .build
 
+  logger.info("Made AWS instance")
+    
   /**
    * Upload a string to S3 in a particular bucket.
    */
@@ -60,65 +64,67 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) {
   }
 
   private def keysFrom(listing: ObjectListing): List[String] = {
-    val keys: Buffer[String] = new ListBuffer
-
     def getKeys(l: ObjectListing): Iterable[String] = l.getObjectSummaries.asScala.map(_.getKey)
+    
+    import Implicits._
+    
+    val keys = listing.iterator.flatMap(getKeys).toList
+    
+    logger.info(s"Got ${keys.size} total keys from listing")
 
-    keys ++= getKeys(listing)
-
-    // might be broken up into multiple requests
-    while (listing.isTruncated) {
-      val next = s3.listNextBatchOfObjects(listing)
-
-      // update the list of keys
-      keys ++= getKeys(next)
-    }
-
-    keys.toList
+    keys
   }
 
   /**
    * Get a list of keys within a key.
    */
   def ls(key: String, recursive: Boolean = true, pathSep: Char = '/'): IO[List[String]] = {
-    if (key.last != pathSep) {
-      return IO(List(key))
-    }
-
-    // get all the immediate child keys
-    val io = IO {
-      val listing = s3.listObjects(opts.config.aws.s3.bucket, key)
-      var keys = listing.getObjectSummaries.asScala.map(_.getKey).toList
-
-      // might be broken up into multiple requests
-      while (listing.isTruncated) {
-        val next = s3.listNextBatchOfObjects(listing)
-
-        // update the list of keys
-        keys ++= next.getObjectSummaries.asScala.map(_.getKey).toList
+    logger.info(s"Listing (${if(!recursive) "NOT " else ""}recursively) keys under '$key'")
+    
+    val notAPseudoDir = key.last != pathSep
+    
+    if (notAPseudoDir) {
+      logger.info(s"Key is NOT a pseudo-dir, returning '$key'")
+      
+      IO(List(key))
+    } else {
+      // get all the immediate child keys
+      val keyAndItsChildrenIo = IO {
+        logger.info(s"Key IS a pseudo-dir, listing")
+        
+        val listing = s3.listObjects(opts.config.aws.s3.bucket, key)
+  
+        keysFrom(listing)
       }
-
-      keys
+  
+      // scan all the child keys recursively
+      def recurse = keyAndItsChildrenIo.flatMap { keys =>
+        //Filter ourselves out, or else we loop forever!
+        val childKeysOnly = keys.filter(_ != key)
+        
+        val descendantsIo: IO[List[List[String]]] = childKeysOnly.map(ls(_, true, pathSep)).sequence
+        
+        //flatten, and add the "root" back in
+        descendantsIo.map(_.flatten).map(key +: _)
+      }
+      
+      // immediate children only
+      if (recursive) { recurse } 
+      else { keyAndItsChildrenIo }
     }
-
-    // immediate children only
-    if (!recursive) {
-      return io
-    }
-
-    // scan all the child keys recursively
-    io.flatMap(_.map(ls(_, true, pathSep)).sequence).map(_.flatten)
   }
 
   /**
    * Remove a list of files from S3.
    */
-  def rm(keys: Seq[String]): IO[Unit] = IO {
+  def rm(keys: Seq[String]): IO[Option[DeleteObjectsResult]] = IO {
     if (keys.nonEmpty) {
       val objs = keys.map(new DeleteObjectsRequest.KeyVersion(_))
       val request = (new DeleteObjectsRequest(opts.config.aws.s3.bucket)).withKeys(objs.asJava)
 
-      s3.deleteObjects(request)
+      Some(s3.deleteObjects(request))
+    } else {
+      None
     }
   }
 
@@ -127,10 +133,15 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) {
    */
   def mkdir(name: String, metadata: String): IO[PutObjectResult] = {
     for {
+      _ <- IO(logger.info(s"AWS: Making 'dir' '$name'"))
       existing <- ls(s"$name/")
+      _ <- IO(logger.info(s"AWS: Found ${existing.size} existing keys under '$name'"))
       delete <- rm(existing)
+      _ <- IO(logger.info(s"AWS: removed ${existing.size} keys under '$name'"))
       dir <- put(s"$name/", "")
+      _ <- IO(logger.info(s"AWS: made 'dir' $name/"))
       metadata <- put(s"$name/_metadata", metadata)
+      _ <- IO(logger.info(s"AWS: created $name/_metadata"))
     } yield metadata
   }
 
@@ -153,6 +164,25 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) {
     // start it
     IO {
       emr.addJobFlowSteps(request)
+    }
+  }
+  
+  private object Implicits {
+    final implicit class RichObjectListing(val listing: ObjectListing) {
+      def iterator: Iterator[ObjectListing] = Iterator(listing) ++ new Iterator[ObjectListing] {
+        private[this] var listingRef = listing
+        private[this] var isFirst = true
+        
+        override def hasNext: Boolean = isFirst || listingRef.isTruncated
+  
+        def next(): ObjectListing = {
+          isFirst = false
+          
+          listingRef = s3.listNextBatchOfObjects(listingRef)
+          
+          listingRef
+        }
+      }
     }
   }
 }
