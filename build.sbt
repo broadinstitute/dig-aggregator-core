@@ -17,22 +17,15 @@ lazy val Orgs = new {
   val DIG = "org.broadinstitute.dig"
 }
 
-organization := Orgs.DIG
-
-name := "dig-aggregator-core"
-
-//NB: version set in version.sbt
-
-scalaVersion := Versions.Scala
-
-scalacOptions ++= Seq(
+lazy val scalacOpts = Seq(
   "-feature",
   "-deprecation",
+  "-unchecked",
   "-Ypartial-unification",
   "-Ywarn-value-discard"
 )
 
-libraryDependencies ++= Seq(
+lazy val mainDeps = Seq(
   "org.slf4j" % "slf4j-api" % Versions.Slf4J,
   "co.fs2" %% "fs2-core" % Versions.Fs2,
   "com.amazonaws" % "aws-java-sdk" % Versions.Aws,
@@ -42,6 +35,28 @@ libraryDependencies ++= Seq(
   "org.typelevel" %% "cats-core" % Versions.Cats,
   "org.typelevel" %% "cats-effect" % Versions.CatsEffect,
   "org.apache.hadoop" % "hadoop-client" % Versions.Hadoop,
-  "org.apache.kafka" %% "kafka" % Versions.Kafka,
-  "org.scalatest" %% "scalatest" % Versions.ScalaTest % "test"
+  "org.apache.kafka" %% "kafka" % Versions.Kafka
 )
+
+lazy val testDeps = Seq(
+  "org.scalatest" %% "scalatest" % Versions.ScalaTest % "it,test"
+)
+
+lazy val root = (project in file("."))
+  .configs(IntegrationTest)
+  .settings(Defaults.itSettings : _*)
+  .settings(
+    name := "dig-aggregator-core",
+    organization := Orgs.DIG,
+    //NB: version set in version.sbt
+    scalaVersion := Versions.Scala,
+    scalacOptions ++= scalacOpts,
+    libraryDependencies ++= (mainDeps ++ testDeps)
+  )
+
+//Make integration tests run serially.
+parallelExecution in IntegrationTest := false
+
+//Show full stack traces from unit and integration tests (F); display test run times (D)
+testOptions in IntegrationTest += Tests.Argument("-oFD")
+testOptions in Test += Tests.Argument("-oFD")

@@ -46,8 +46,6 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
     .withCredentials(credentials)
     .withRegion(region)
     .build
-
-  logger.info("Made AWS instance")
     
   /**
    * Upload a string to S3 in a particular bucket.
@@ -68,30 +66,24 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
     
     import Implicits._
     
-    val keys = listing.iterator.flatMap(getKeys).toList
-    
-    logger.info(s"Got ${keys.size} total keys from listing")
-
-    keys
+    listing.iterator.flatMap(getKeys).toList
   }
 
   /**
    * Get a list of keys within a key.
    */
-  def ls(key: String, recursive: Boolean = true, pathSep: Char = '/'): IO[List[String]] = {
-    logger.info(s"Listing (${if(!recursive) "NOT " else ""}recursively) keys under '$key'")
+  def ls(key: String, recursive: Boolean = true, pathSep: Char = AWS.pathSep): IO[List[String]] = {
+    logger.debug(s"Listing (${if(!recursive) "NOT " else ""}recursively) keys under '$key'")
     
     val notAPseudoDir = key.last != pathSep
     
     if (notAPseudoDir) {
-      logger.info(s"Key is NOT a pseudo-dir, returning '$key'")
-      
+      //TODO: Should we go out to AWS in this case?  Doesn't this imply that they key exists in s3, when it may not? 
       IO(List(key))
     } else {
       // get all the immediate child keys
       val keyAndItsChildrenIo = IO {
-        logger.info(s"Key IS a pseudo-dir, listing")
-        
+
         val listing = s3.listObjects(opts.config.aws.s3.bucket, key)
   
         keysFrom(listing)
@@ -117,32 +109,39 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
   /**
    * Remove a list of files from S3.
    */
-  def rm(keys: Seq[String]): IO[Option[DeleteObjectsResult]] = IO {
-    if (keys.nonEmpty) {
-      val objs = keys.map(new DeleteObjectsRequest.KeyVersion(_))
-      val request = (new DeleteObjectsRequest(opts.config.aws.s3.bucket)).withKeys(objs.asJava)
-
-      Some(s3.deleteObjects(request))
-    } else {
-      None
+  def rm(keys: Seq[String]): IO[List[DeleteObjectsResult]] = {
+    logger.debug(s"Deleting ${keys.size} keys")
+    
+    //NB: AWS will bomb out if we send a delete request with no keys.
+    if(keys.isEmpty) { IO(Nil) }
+    else {
+      //NB: Go in chunks, since AWS can delete at most `chunkSize` objects in one request
+      val chunkSize = 1000
+      
+      val keyChunks = keys.sliding(chunkSize, chunkSize)
+      
+      val keyVersionChunks = keyChunks.map(_.map(new DeleteObjectsRequest.KeyVersion(_)))
+      
+      val requests = keyVersionChunks.map { keyVersions => 
+        (new DeleteObjectsRequest(opts.config.aws.s3.bucket)).withKeys(keyVersions.asJava)
+      }
+      
+      val responseIOs = requests.map(request => IO(s3.deleteObjects(request)))
+      
+      responseIOs.toList.sequence
     }
   }
 
   /**
    * Create a object to be used as a folder in S3.
    */
-  def mkdir(name: String, metadata: String): IO[PutObjectResult] = {
+  def mkdir(name: String, metadata: String): IO[(PutObjectResult, PutObjectResult)] = {
     for {
-      _ <- IO(logger.info(s"AWS: Making 'dir' '$name'"))
       existing <- ls(s"$name/")
-      _ <- IO(logger.info(s"AWS: Found ${existing.size} existing keys under '$name'"))
       delete <- rm(existing)
-      _ <- IO(logger.info(s"AWS: removed ${existing.size} keys under '$name'"))
       dir <- put(s"$name/", "")
-      _ <- IO(logger.info(s"AWS: made 'dir' $name/"))
       metadata <- put(s"$name/_metadata", metadata)
-      _ <- IO(logger.info(s"AWS: created $name/_metadata"))
-    } yield metadata
+    } yield dir -> metadata
   }
 
   /**
@@ -185,4 +184,8 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
       }
     }
   }
+}
+
+object AWS {
+  val pathSep: Char = '/'
 }
