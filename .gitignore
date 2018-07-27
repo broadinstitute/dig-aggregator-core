@@ -12,6 +12,7 @@ out/
 
 # log files
 *.log
+
 #Eclipse
 /bin/
 .classpath
@@ -19,3 +20,6 @@ out/
 .settings
 .cache-main
 .cache-tests
+
+#config files
+src/it/resources/config.json
