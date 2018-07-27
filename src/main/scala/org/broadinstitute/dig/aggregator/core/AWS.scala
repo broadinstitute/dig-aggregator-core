@@ -136,6 +136,8 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
    * Create a object to be used as a folder in S3.
    */
   def mkdir(name: String, metadata: String): IO[(PutObjectResult, PutObjectResult)] = {
+    logger.debug(s"Making pseudo-dir '$name'")
+    
     for {
       existing <- ls(s"$name/")
       delete <- rm(existing)
