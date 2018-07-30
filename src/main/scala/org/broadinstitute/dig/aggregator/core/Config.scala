@@ -2,11 +2,11 @@ package org.broadinstitute.dig.aggregator.core
 
 import java.io.File
 
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
-import org.json4s.jackson.Serialization.{read, writePretty}
-
 import scala.io.Source
+
+import org.json4s.DefaultFormats
+import org.json4s.Formats
+import org.json4s.jackson.Serialization.read
 
 /**
  * Companion object with methods for loading configuration files.

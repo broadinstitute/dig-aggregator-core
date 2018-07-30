@@ -2,13 +2,8 @@ package org.broadinstitute.dig.aggregator.core
 
 import java.io.File
 
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
-import org.json4s.jackson.Serialization.{read, writePretty}
-
-import org.rogach.scallop._
-
-import scala.io.Source
+import org.rogach.scallop.ScallopConf
+import org.rogach.scallop.ScallopOption
 import org.rogach.scallop.exceptions.ScallopException
 
 /**

@@ -1,21 +1,27 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats._
-import cats.effect._
+import scala.collection.JavaConverters._
+
+import cats.effect.IO
 import cats.implicits._
 
-import com.amazonaws.auth._
-import com.amazonaws.regions._
-import com.amazonaws.services.elasticmapreduce._
-import com.amazonaws.services.elasticmapreduce.model.{ Unit => _, _ }
-import com.amazonaws.services.elasticmapreduce.util._
-import com.amazonaws.services.s3._
-import com.amazonaws.services.s3.model._
+import com.amazonaws.auth.AWSStaticCredentialsProvider
+import com.amazonaws.auth.BasicAWSCredentials
+import com.amazonaws.regions.Regions
+import com.amazonaws.services.s3.AmazonS3
+import com.amazonaws.services.s3.AmazonS3ClientBuilder
+import com.amazonaws.services.s3.model.DeleteObjectsRequest
+import com.amazonaws.services.s3.model.DeleteObjectsResult
+import com.amazonaws.services.s3.model.ObjectListing
+import com.amazonaws.services.s3.model.PutObjectResult
+import com.amazonaws.services.s3.model.S3Object
+import com.amazonaws.services.elasticmapreduce.AmazonElasticMapReduce
+import com.amazonaws.services.elasticmapreduce.AmazonElasticMapReduceClientBuilder
+import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsRequest
+import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsResult
+import com.amazonaws.services.elasticmapreduce.model.HadoopJarStepConfig
+import com.amazonaws.services.elasticmapreduce.model.StepConfig
 
-import scala.collection.JavaConverters._
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.collection.mutable.Buffer
-import scala.collection.mutable.ListBuffer
 import com.typesafe.scalalogging.LazyLogging
 
 /**

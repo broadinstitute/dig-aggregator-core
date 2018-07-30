@@ -1,20 +1,19 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats.effect._
-
-import fs2._
-
 import java.io.File
 import java.util.Properties
 
-import org.apache.kafka.clients.consumer._
-import org.apache.kafka.common._
-
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
-import org.json4s.jackson.Serialization.{read, writePretty}
-
 import scala.collection.JavaConverters._
+
+import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.consumer.ConsumerRecords
+import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.common.serialization
+import org.apache.kafka.common.TopicPartition
+
+import cats.effect.IO
+import fs2.Stream
 
 /**
  * Kafka JSON topic record consumer.

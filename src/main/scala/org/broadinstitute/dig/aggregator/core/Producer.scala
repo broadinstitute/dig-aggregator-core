@@ -1,13 +1,17 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats.effect._
-
 import java.util.Properties
 
-import org.apache.kafka.clients.producer._
-import org.apache.kafka.common._
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 
-import scala.concurrent._
+import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.ProducerConfig
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.clients.producer.RecordMetadata
+import org.apache.kafka.common.serialization
+
+import cats.effect.IO
 
 /**
  * Kafka JSON topic record producer.
