@@ -71,9 +71,9 @@ final class Consumer[C <: BaseConfig](opts: Opts[C], topic: String) {
     Stream
         .eval(fetch)
         .repeat
-        //Note that this previously used ListIO[IO].liftIO(anIo), which does not appear to have any effect.
+        //Note that this previously used LiftIO[IO].liftIO(anIo), which does not appear to have any effect.
         //(ie, it turned an IO[A] into an IO[A].)
-        .evalMap(process) 
+        .evalMap(process)
         .compile
         .drain
   }
