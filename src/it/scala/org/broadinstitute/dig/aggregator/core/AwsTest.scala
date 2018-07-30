@@ -187,7 +187,7 @@ final class AwsTest extends AwsFunSuite {
       
       new String(bytesSoFar.toArray)
     } finally {
-      ois.close()
+      s3Object.close()
     }
   }
 }
