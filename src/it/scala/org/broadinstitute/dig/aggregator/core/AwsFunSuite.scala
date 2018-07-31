@@ -11,15 +11,20 @@ import cats.effect.IO
  * Jul 27, 2018
  */
 trait AwsFunSuite extends FunSuite {
+  protected def aws: AWS[_]
+  
   def testWithPseudoDir(name: String)(body: String => Any): Unit = {
     test(name) {
       val mungedName = name.filter(_ != AWS.pathSep)
       
-      val now = Instant.now
+      val pseudoDirKey = s"integrationTests${AWS.pathSep}${mungedName}"
       
-      import AwsFunSuite.dateFormatter
+      val nukeTestDir = for {
+        keys <- aws.ls(s"${pseudoDirKey}${AWS.pathSep}")
+        _ <- aws.rm(keys)
+      } yield ()
       
-      val pseudoDirKey = s"integrationTests/${mungedName}/${dateFormatter.format(now)}"
+      nukeTestDir.unsafeRunSync()
       
       body(pseudoDirKey)
     }
@@ -27,11 +32,5 @@ trait AwsFunSuite extends FunSuite {
   
   def testWithPseudoDirIO[A](name: String)(body: String => IO[A]): Unit = {
     testWithPseudoDir(name)(body(_).unsafeRunSync())
-  }
-}
-
-object AwsFunSuite {
-  private val dateFormatter: DateTimeFormatter = {
-    DateTimeFormatter.ofPattern("yyyy-MM-dd_HHmmss.SSS").withZone(ZoneId.systemDefault)
   }
 }

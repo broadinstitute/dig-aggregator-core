@@ -79,8 +79,6 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
    * Get a list of keys within a key.
    */
   def ls(key: String, recursive: Boolean = true, pathSep: Char = AWS.pathSep): IO[List[String]] = {
-    logger.debug(s"Listing (${if(!recursive) "NOT " else ""}recursively) keys under '$key'")
-    
     val notAPseudoDir = key.last != pathSep
     
     if (notAPseudoDir) {
@@ -107,8 +105,7 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
       }
       
       // immediate children only
-      if (recursive) { recurse } 
-      else { keyAndItsChildrenIo }
+      if (recursive) recurse else keyAndItsChildrenIo
     }
   }
 

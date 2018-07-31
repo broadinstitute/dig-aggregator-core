@@ -36,8 +36,6 @@ final class Producer[C <: BaseConfig](opts: Opts[C], topic: String)(implicit ec:
    * Send a JSON message to the Kafka queue to a given topic.
    */
   def send(key: String, value: String): IO[RecordMetadata] = {
-    //Note that previously, the code made a Future and then wrapped it in an IO.  Futures start running immediately,
-    //so this seemed like a problem, or at least, something very unexpected given that the result is an IO.
     val futureIo = IO {
       Future {
         client.send(new ProducerRecord[String, String](topic, key, value)).get

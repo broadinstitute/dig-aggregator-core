@@ -14,6 +14,8 @@ final class AwsTest extends AwsFunSuite {
   //Config file needs to be in place before this test will work.
   private val opts = new Opts[Config](Array("--config", "src/it/resources/config.json"))
   
+  override protected val aws = new AWS[Config](opts)
+  
   /**
    * Put() an object, then get() it  
    */
@@ -58,7 +60,6 @@ final class AwsTest extends AwsFunSuite {
   
   //Create n objects, then list them
   private def doPutLsTest(n: Int): String => IO[Unit] = { pseudoDirKey =>
-    val aws = new AWS[Config](opts)
     
     import cats.implicits._
     
@@ -82,8 +83,7 @@ final class AwsTest extends AwsFunSuite {
   
   //Create n objects, then delete them
   private def doRmTest(n: Int): String => IO[Unit] = { pseudoDirKey =>
-    val aws = new AWS[Config](opts)
-    
+
     import cats.implicits._
     
     def toKey(i: Int) = s"${pseudoDirKey}/${i}"
@@ -111,7 +111,6 @@ final class AwsTest extends AwsFunSuite {
   
   //Put an object, then read it back again
   private lazy val doPutGetTest: String => IO[Unit] = { pseudoDirKey =>
-    val aws = new AWS[Config](opts)
     
     import cats.implicits._
     
@@ -134,8 +133,7 @@ final class AwsTest extends AwsFunSuite {
 
   //Make a pseudo-dir, then make the same one again with different metadata
   private lazy val doMkdirTest: String => IO[Unit] = { pseudoDirKey =>
-    val aws = new AWS[Config](opts)
-    
+
     import cats.implicits._
     
     val pseudoDirKeyWithSlash = s"$pseudoDirKey/"
@@ -164,9 +162,9 @@ final class AwsTest extends AwsFunSuite {
   }
   
   private def asString(s3Object: S3Object): String = {
-    val ois = s3Object.getObjectContent
-    
     try {
+      val ois = s3Object.getObjectContent
+      
       val chunkSize = 4096
       
       def read(): Array[Byte] = {
