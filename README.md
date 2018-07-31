@@ -1,6 +1,6 @@
 # DIG Aggregator Core Library
 
-This is a core baseline library that all DIG Java/Scala applications can use to have a working baseline with. 
+This is a library that all DIG Java/Scala applications that talk to Kafka or AWS can use to have a working baseline. 
 
 The foundational code has the following features:
 
@@ -14,7 +14,13 @@ It guarantees safety by running all actions through an [IO monad][io]. This ensu
 
 ## Usage
 
-TODO: Describe adding this repository as an SBT library dependency.
+### Running tests.  
+
+To run the unit tests, run `sbt test`; to run the integration tests, run `sbt it:test`.
+
+### Building a jar
+
+To build a jar, run `sbt publishLocal`.
 
 Once the JAR is part of your program you can import it like so:
 
@@ -69,9 +75,8 @@ Since the `Opts` object is used by all the other classes to initialize and setup
 ```scala
 def main(args: Array[String]): Unit = {
   val opts = new Opts[Config](args)
-  
-  // parse the command line arguments
-  opts.verify
+
+  ...
 }
 ```
 
@@ -100,9 +105,6 @@ Use the `Opts` class to create a `Consumer`, which can be used to consume all re
 def main(args: Array[String]): Unit = {
   val opts = new Opts[Config](args)
   
-  // parse the command line arguments
-  opts.verify
-
   /* Create a kafka consumer.
    *
    * If --continue was specified, then the offsets in the 
