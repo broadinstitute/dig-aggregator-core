@@ -5,6 +5,7 @@ import cats.effect.IO
 import com.amazonaws.services.s3.model.S3Object
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.Buffer
+import java.nio.charset.Charset
 
 /**
  * @author clint
@@ -28,6 +29,27 @@ final class AwsTest extends AwsFunSuite {
    */
   testWithPseudoDirIO("Mkdir") {
     doMkdirTest
+  }
+  
+  /**
+   * Create 1 non-pseudo-dir object and list it
+   */
+  testWithPseudoDirIO("PutLsNonDir") { 
+    doPutLsOneObjectTest(_ + "/foo")
+  }
+  
+  /**
+   * Create 1 pseudo-dir object and list it
+   */
+  testWithPseudoDirIO("PutLsDir") { 
+    doPutLsOneObjectTest(_ + "/foo/")
+  }
+  
+  /**
+   * Create 1 object inside a pseudo-dir and list it
+   */
+  testWithPseudoDirIO("PutLs1") { 
+    doPutLsTest(1)
   }
   
   /**
@@ -57,6 +79,21 @@ final class AwsTest extends AwsFunSuite {
   testWithPseudoDirIO("Rm2500") {
     doRmTest(2500)
   }
+
+  //Create one object and list it
+  private def doPutLsOneObjectTest(makeKey: String => String): String => IO[Unit] = { pseudoDirKey =>
+    val key = makeKey(pseudoDirKey)
+    
+    for {
+      shouldntExist <- aws.ls(key)
+      _ <- aws.put(key, "abc")
+      shouldExist <- aws.ls(key)
+    } yield {
+      assert(shouldntExist == Nil)
+      
+      assert(shouldExist == Seq(key))
+    }
+  }
   
   //Create n objects, then list them
   private def doPutLsTest(n: Int): String => IO[Unit] = { pseudoDirKey =>
@@ -72,9 +109,9 @@ final class AwsTest extends AwsFunSuite {
       _ <- (1 to n).toList.map(i => aws.put(toKey(i), i.toString)).sequence
       keys <- aws.ls(pseudoDirKeyWithSlash)
     } yield {
-      assert(keysBeforePut == Seq(pseudoDirKeyWithSlash))
+      assert(keysBeforePut == Nil)
       
-      val expected = pseudoDirKeyWithSlash +: (1 to n).map(toKey)
+      val expected = (1 to n).map(toKey)
       
       //Convert to sets to ignore ordering
       assert(keys.toSet == expected.toSet)
@@ -96,13 +133,13 @@ final class AwsTest extends AwsFunSuite {
       _ <- aws.rm(keysBeforeDeletion)
       keysAfterDeletion <- aws.ls(pseudoDirKeyWithSlash)
     } yield {
-      val expectedBeforeDeletion = pseudoDirKeyWithSlash +: (1 to n).map(toKey)
+      val expectedBeforeDeletion = (1 to n).map(toKey)
       
       //Convert to sets to ignore ordering
       assert(keysBeforeDeletion.toSet == expectedBeforeDeletion.toSet)
       
-      //AWS doesn't delete the "containing folder"
-      val expectedAfterDeletion = Seq(pseudoDirKeyWithSlash)
+      //The "containing folder" was never never explicitly created, so it shouldn't exist
+      val expectedAfterDeletion = Nil
       
       //Convert to sets to ignore ordering
       assert(keysAfterDeletion == expectedAfterDeletion)
@@ -125,7 +162,7 @@ final class AwsTest extends AwsFunSuite {
       contentsFromAws <- aws.get(key).map(asString)
     } yield {
       //sanity check: the thing we're putting shouldn't have been there yet
-      assert(beforePut == Seq(pseudoDirKeyWithSlash))
+      assert(beforePut == Nil)
       
       assert(contentsFromAws == contents)
     }
@@ -161,6 +198,8 @@ final class AwsTest extends AwsFunSuite {
     }
   }
   
+  private val utf8 = Charset.forName("UTF-8")  
+  
   private def asString(s3Object: S3Object): String = {
     try {
       val ois = s3Object.getObjectContent
@@ -183,7 +222,7 @@ final class AwsTest extends AwsFunSuite {
       
       chunks.foreach(bytesSoFar ++= _)
       
-      new String(bytesSoFar.toArray)
+      new String(bytesSoFar.toArray, utf8)
     } finally {
       s3Object.close()
     }

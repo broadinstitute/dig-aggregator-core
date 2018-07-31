@@ -12,6 +12,7 @@ import com.amazonaws.services.s3.AmazonS3
 import com.amazonaws.services.s3.AmazonS3ClientBuilder
 import com.amazonaws.services.s3.model.DeleteObjectsRequest
 import com.amazonaws.services.s3.model.DeleteObjectsResult
+import com.amazonaws.services.s3.model.GetObjectRequest
 import com.amazonaws.services.s3.model.ObjectListing
 import com.amazonaws.services.s3.model.PutObjectResult
 import com.amazonaws.services.s3.model.S3Object
@@ -31,6 +32,8 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
   
   private val region: Regions = Regions.valueOf(opts.config.aws.region)
 
+  private val bucket = opts.config.aws.s3.bucket
+  
   /**
    * AWS IAM credentials provider.
    */
@@ -57,54 +60,67 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
    * Upload a string to S3 in a particular bucket.
    */
   def put(key: String, text: String): IO[PutObjectResult] = IO {
-    s3.putObject(opts.config.aws.s3.bucket, key, text)
+    s3.putObject(bucket, key, text)
   }
 
   /**
    * Download a file from an S3 bucket.
    */
   def get(key: String): IO[S3Object] = IO {
-    s3.getObject(opts.config.aws.s3.bucket, key)
+    s3.getObject(bucket, key)
   }
-
-  private def keysFrom(listing: ObjectListing): List[String] = {
-    def getKeys(l: ObjectListing): Iterable[String] = l.getObjectSummaries.asScala.map(_.getKey)
+  
+  /**
+   * Test whether or not a key exists.
+   */
+  def exists(key: String): IO[Boolean] = {
+    //NB: Don't use get(), so that we can make a custom request that asks for the smallest
+    //possible amount of the data (1 byte) at the key.  This is likely more efficient, and 
+    //makes it easier to dispose of resources used by the returned object in a way that makes
+    //the AWS SDK happy.
+    val req = new GetObjectRequest(bucket, key)
+    //Ask for as little data as possible, only the first byte. 
+    req.setRange(0, 0)
     
-    import Implicits._
+    def dispose(s3Object: S3Object) = AWS.abort(s3Object) >> IO(s3Object.close())
     
-    listing.iterator.flatMap(getKeys).toList
+    IO(s3.getObject(req)).redeemWith(
+        //If anything fails, say the key doesn't exist
+        recover = _ => IO(false), 
+        //If get() succeeds, properly close the resulting S3Object so the SDK doesn't write loud warnings to stderr
+        bind = s3Object => dispose(s3Object) >> IO(true))
   }
 
   /**
    * Get a list of keys within a key.
    */
   def ls(key: String, recursive: Boolean = true, pathSep: Char = AWS.pathSep): IO[List[String]] = {
-    val notAPseudoDir = key.last != pathSep
     
+    val notAPseudoDir = key.last != pathSep
+
     if (notAPseudoDir) {
-      //TODO: Should we go out to AWS in this case?  Doesn't this imply that they key exists in s3, when it may not? 
-      IO(List(key))
+      exists(key).map(keyExists => if(keyExists) List(key) else Nil)
     } else {
       // get all the immediate child keys
       val keyAndItsChildrenIo = IO {
-
-        val listing = s3.listObjects(opts.config.aws.s3.bucket, key)
-  
-        keysFrom(listing)
-      }
+        import Implicits._
+        
+        s3.listObjects(bucket, key).keys
+      }      
   
       // scan all the child keys recursively
       def recurse = keyAndItsChildrenIo.flatMap { keys =>
         //Filter ourselves out, or else we loop forever!
         val childKeysOnly = keys.filter(_ != key)
         
+        val rootKeyIfItExists = keys.find(_ == key)
+        
         val descendantsIo: IO[List[List[String]]] = childKeysOnly.map(ls(_, true, pathSep)).sequence
         
-        //flatten, and add the "root" back in
-        descendantsIo.map(_.flatten).map(key +: _)
+        //flatten, and add the "root" back in if it was removed
+        descendantsIo.map(_.flatten).map(rootKeyIfItExists.toList ++ _)
       }
       
-      // immediate children only
       if (recursive) recurse else keyAndItsChildrenIo
     }
   }
@@ -126,7 +142,7 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
       val keyVersionChunks = keyChunks.map(_.map(new DeleteObjectsRequest.KeyVersion(_)))
       
       val requests = keyVersionChunks.map { keyVersions => 
-        (new DeleteObjectsRequest(opts.config.aws.s3.bucket)).withKeys(keyVersions.asJava)
+        (new DeleteObjectsRequest(bucket)).withKeys(keyVersions.asJava)
       }
       
       val responseIOs = requests.map(request => IO(s3.deleteObjects(request)))
@@ -154,7 +170,7 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
    */
   def runMR(jar: String, mainClass: String, args: Seq[String] = List.empty): IO[AddJobFlowStepsResult] = {
     val config = new HadoopJarStepConfig()
-      .withJar(s"s3://${opts.config.aws.s3.bucket}/jobs/$jar")
+      .withJar(s"s3://${bucket}/jobs/$jar")
       .withMainClass(mainClass)
       .withArgs(args.asJava)
 
@@ -173,7 +189,11 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
   
   private object Implicits {
     final implicit class RichObjectListing(val listing: ObjectListing) {
-      def iterator: Iterator[ObjectListing] = Iterator(listing) ++ new Iterator[ObjectListing] {
+      def keys: List[String] = {
+        chunksIterator.flatMap(_.getObjectSummaries.asScala.map(_.getKey)).toList
+      }
+      
+      def chunksIterator: Iterator[ObjectListing] = Iterator(listing) ++ new Iterator[ObjectListing] {
         private[this] var listingRef = listing
         private[this] var isFirst = true
         
@@ -193,4 +213,8 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
 
 object AWS {
   val pathSep: Char = '/'
+  
+  private def abort(s3Object: S3Object): IO[Unit] = IO {
+    s3Object.getObjectContent.abort()
+  }
 }
