@@ -2,9 +2,6 @@ package org.broadinstitute.dig.aggregator.core
 
 import java.util.Properties
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -16,7 +13,7 @@ import cats.effect.IO
 /**
  * Kafka JSON topic record producer.
  */
-final class Producer[C <: BaseConfig](opts: Opts[C], topic: String)(implicit ec: ExecutionContext) {
+final class Producer[C <: BaseConfig](opts: Opts[C], topic: String) {
   //NB: Use a helper method to build Properties, to minimize the amount of contructor logic interleaved in the 
   //class body.
   private val props: Properties = Props(
@@ -36,13 +33,8 @@ final class Producer[C <: BaseConfig](opts: Opts[C], topic: String)(implicit ec:
    * Send a JSON message to the Kafka queue to a given topic.
    */
   def send(key: String, value: String): IO[RecordMetadata] = {
-    val futureIo = IO {
-      Future {
-        client.send(new ProducerRecord[String, String](topic, key, value)).get
-      }
+    IO {
+      client.send(new ProducerRecord[String, String](topic, key, value)).get
     }
-
-    // submit it to kafka
-    IO.fromFuture(futureIo)
   }
 }
