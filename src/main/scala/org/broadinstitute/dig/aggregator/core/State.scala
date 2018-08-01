@@ -1,33 +1,27 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats._
-import cats.effect._
-
-import fs2._
-
 import java.io.File
 import java.io.PrintWriter
-import java.util.Properties
-
-import org.apache.kafka.clients.consumer._
-import org.apache.kafka.common._
-
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
-import org.json4s.jackson.Serialization.{read, writePretty}
 
 import scala.collection.JavaConverters._
 import scala.io.Source
 
+import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.common.TopicPartition
+import org.json4s.DefaultFormats
+import org.json4s.Formats
+import org.json4s.jackson.Serialization.read
+import org.json4s.jackson.Serialization.writePretty
+
 /**
  * The last offset processed per partition.
  */
-case class PartitionState(partition: TopicPartition, offset: Long) {
+final case class PartitionState(partition: TopicPartition, offset: Long) {
 
   /**
    * Helper function for matching a TopicPartition.
    */
-  def matches(topic: String, partition: Int) = {
+  def matches(topic: String, partition: Int): Boolean = {
     this.partition.topic.equals(topic) && this.partition.partition == partition
   }
 }
@@ -35,7 +29,7 @@ case class PartitionState(partition: TopicPartition, offset: Long) {
 /**
  * A list of topic partition offsets.
  */
-case class ConsumerState(partitions: List[PartitionState]) {
+final case class ConsumerState(partitions: List[PartitionState]) {
 
   /**
    * Returns a new ConsumerState with an updated offset for a topic partition.
@@ -55,7 +49,7 @@ case class ConsumerState(partitions: List[PartitionState]) {
  * Companion object for creating, loading, and saving ConsumerState instances.
  */
 object State {
-  implicit val formats = DefaultFormats
+  implicit val formats: Formats = DefaultFormats
 
   /**
    * The partition offsets to start consuming from.
@@ -70,8 +64,8 @@ object State {
   /**
    * Create a new ConsumerState that starts from the beginning offset.
    */
-  def fromBeginning(client: KafkaConsumer[String, String], partitions: Seq[TopicPartition]) = {
-    val offsets = client.beginningOffsets(partitions.asJava).asScala map {
+  def fromBeginning(client: KafkaConsumer[String, String], partitions: Seq[TopicPartition]): ConsumerState = {
+    val offsets = client.beginningOffsets(partitions.asJava).asScala.map {
       case (topicPartition, offset) => PartitionState(topicPartition, offset)
     }
 
@@ -82,8 +76,8 @@ object State {
   /**
    * Create a new ConsumerState that starts from the last offset.
    */
-  def fromEnd(client: KafkaConsumer[String, String], partitions: Seq[TopicPartition]) = {
-    val offsets = client.endOffsets(partitions.asJava).asScala map {
+  def fromEnd(client: KafkaConsumer[String, String], partitions: Seq[TopicPartition]): ConsumerState = {
+    val offsets = client.endOffsets(partitions.asJava).asScala.map {
       case (topicPartition, offset) => PartitionState(topicPartition, offset)
     }
 
@@ -94,14 +88,14 @@ object State {
   /**
    * Load a ConsumerState from a JSON file.
    */
-  def load(file: File) = {
+  def load(file: File): ConsumerState = {
     read[ConsumerState](Source.fromFile(file).mkString)
   }
 
   /**
    * Save a ConsumerState to a JSON file.
    */
-  def save(state: ConsumerState, file: File) = {
+  def save(state: ConsumerState, file: File): Unit = {
     val json = writePretty(state)
     val writer = new PrintWriter(file)
 

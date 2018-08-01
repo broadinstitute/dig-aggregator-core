@@ -2,17 +2,17 @@ package org.broadinstitute.dig.aggregator.core
 
 import java.io.File
 
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
-import org.json4s.jackson.Serialization.{read, writePretty}
-
 import scala.io.Source
+
+import org.json4s.DefaultFormats
+import org.json4s.Formats
+import org.json4s.jackson.Serialization.read
 
 /**
  * Companion object with methods for loading configuration files.
  */
 object Config {
-  implicit val formats = DefaultFormats
+  implicit val formats: Formats = DefaultFormats
 
   /** Load and parse a configuration file. */
   def load[C <: BaseConfig](file: File)(implicit m: Manifest[C]): C = {
@@ -31,26 +31,26 @@ trait BaseConfig {
 /**
  * Configuration options for Kafka and AWS.
  */
-case class Config(kafka: KafkaConfig, aws: AWSConfig) extends BaseConfig
+final case class Config(kafka: KafkaConfig, aws: AWSConfig) extends BaseConfig
 
 /**
  * Kafka configuration settings.
  */
-case class KafkaConfig(brokers: List[String], consumers: Map[String, String]) {
-  lazy val brokerList = brokers.mkString(",")
+final case class KafkaConfig(brokers: List[String], consumers: Map[String, String]) {
+  lazy val brokerList: String = brokers.mkString(",")
 }
 
 /**
  * AWS configuration settings.
  */
-case class AWSConfig(key: String, secret: String, region: String, emr: EMR, s3: S3)
+final case class AWSConfig(key: String, secret: String, region: String, emr: EMR, s3: S3)
 
 /**
  * Optional AWS EMR settings.
  */
-case class EMR(cluster: String)
+final case class EMR(cluster: String)
 
 /**
  * Optional AWS S3 settings.
  */
-case class S3(bucket: String)
+final case class S3(bucket: String)

@@ -1,37 +1,49 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats._
-import cats.effect._
+import scala.collection.JavaConverters._
+
+import cats.effect.IO
 import cats.implicits._
 
-import com.amazonaws.auth._
-import com.amazonaws.regions._
-import com.amazonaws.services.elasticmapreduce._
-import com.amazonaws.services.elasticmapreduce.model._
-import com.amazonaws.services.elasticmapreduce.util._
-import com.amazonaws.services.s3._
-import com.amazonaws.services.s3.model._
+import com.amazonaws.auth.AWSStaticCredentialsProvider
+import com.amazonaws.auth.BasicAWSCredentials
+import com.amazonaws.regions.Regions
+import com.amazonaws.services.s3.AmazonS3
+import com.amazonaws.services.s3.AmazonS3ClientBuilder
+import com.amazonaws.services.s3.model.DeleteObjectsRequest
+import com.amazonaws.services.s3.model.DeleteObjectsResult
+import com.amazonaws.services.s3.model.GetObjectRequest
+import com.amazonaws.services.s3.model.ObjectListing
+import com.amazonaws.services.s3.model.PutObjectResult
+import com.amazonaws.services.s3.model.S3Object
+import com.amazonaws.services.elasticmapreduce.AmazonElasticMapReduce
+import com.amazonaws.services.elasticmapreduce.AmazonElasticMapReduceClientBuilder
+import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsRequest
+import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsResult
+import com.amazonaws.services.elasticmapreduce.model.HadoopJarStepConfig
+import com.amazonaws.services.elasticmapreduce.model.StepConfig
 
-import scala.collection.JavaConverters._
-import scala.concurrent.ExecutionContext.Implicits.global
+import com.typesafe.scalalogging.LazyLogging
 
 /**
  * AWS controller (S3 + EMR clients).
  */
-class AWS[C <: BaseConfig](opts: Opts[C]) {
-  val region = Regions.valueOf(opts.config.aws.region)
+final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
+  
+  private val region: Regions = Regions.valueOf(opts.config.aws.region)
 
+  private val bucket = opts.config.aws.s3.bucket
+  
   /**
    * AWS IAM credentials provider.
    */
-  val credentials = new AWSStaticCredentialsProvider(
-    new BasicAWSCredentials(opts.config.aws.key, opts.config.aws.secret)
-  )
+  private val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
+    new BasicAWSCredentials(opts.config.aws.key, opts.config.aws.secret))
 
   /**
    * S3 client for storage.
    */
-  val s3 = AmazonS3ClientBuilder.standard
+  private val s3: AmazonS3 = AmazonS3ClientBuilder.standard
     .withRegion(region)
     .withCredentials(credentials)
     .build
@@ -39,77 +51,126 @@ class AWS[C <: BaseConfig](opts: Opts[C]) {
   /**
    * EMR client for running map/reduce jobs.
    */
-  val emr = AmazonElasticMapReduceClientBuilder.standard
+  private val emr: AmazonElasticMapReduce = AmazonElasticMapReduceClientBuilder.standard
     .withCredentials(credentials)
     .withRegion(region)
     .build
-
+    
   /**
    * Upload a string to S3 in a particular bucket.
    */
-  def put(key: String, text: String) = IO {
-    s3.putObject(opts.config.aws.s3.bucket, key, text)
+  def put(key: String, text: String): IO[PutObjectResult] = IO {
+    s3.putObject(bucket, key, text)
   }
 
   /**
    * Download a file from an S3 bucket.
    */
-  def get(key: String) = IO {
-    s3.getObject(opts.config.aws.s3.bucket, key)
+  def get(key: String): IO[S3Object] = IO {
+    s3.getObject(bucket, key)
+  }
+  
+  /**
+   * Test whether or not a key exists.
+   */
+  def exists(key: String): IO[Boolean] = {
+    //NB: Don't use get(), so that we can make a custom request that asks for the smallest
+    //possible amount of the data (1 byte) at the key.  This is likely more efficient, and 
+    //makes it easier to dispose of resources used by the returned object in a way that makes
+    //the AWS SDK happy.
+    val req = new GetObjectRequest(bucket, key)
+    //Ask for as little data as possible, only the first byte. 
+    req.setRange(0, 0)
+    
+    def dispose(s3Object: S3Object) = AWS.abort(s3Object) >> IO(s3Object.close())
+    
+    IO(s3.getObject(req)).redeemWith(
+        //If anything fails, say the key doesn't exist
+        recover = _ => IO(false), 
+        //If get() succeeds, properly close the resulting S3Object so the SDK doesn't write loud warnings to stderr
+        bind = s3Object => dispose(s3Object) >> IO(true))
   }
 
   /**
    * Get a list of keys within a key.
    */
-  def ls(key: String, recursive: Boolean=true, pathSep: Char='/'): IO[List[String]] = {
-    if (key.last != pathSep) {
-      return IO(List(key))
-    }
+  def ls(key: String, recursive: Boolean = true, pathSep: Char = AWS.pathSep): IO[List[String]] = {
+    
+    val notAPseudoDir = key.last != pathSep
 
-    // get all the immediate child keys
-    val io = IO {
-      val listing = s3.listObjects(opts.config.aws.s3.bucket, key)
-      var keys = listing.getObjectSummaries.asScala.map(_.getKey).toList
-
-      // might be broken up into multiple requests
-      while(listing.isTruncated) {
-        val next = s3.listNextBatchOfObjects(listing)
-
-        // update the list of keys
-        keys ++= next.getObjectSummaries.asScala.map(_.getKey).toList
+    if (notAPseudoDir) {
+      exists(key).map(keyExists => if(keyExists) List(key) else Nil)
+    } else {
+      // get all the immediate child keys
+      val keyAndItsChildrenIo = IO {
+        import Implicits._
+        
+        s3.listObjects(bucket, key).keys
+      }      
+  
+      // scan all the child keys recursively
+      def recurse = keyAndItsChildrenIo.flatMap { keys =>
+        //Filter ourselves out, or else we loop forever!
+        val childKeysOnly = keys.filter(_ != key)
+        
+        val rootKeyIfItExists = keys.find(_ == key)
+        
+        val descendantsIo: IO[List[List[String]]] = childKeysOnly.map(ls(_, true, pathSep)).sequence
+        
+        //flatten, and add the "root" back in if it was removed
+        descendantsIo.map(_.flatten).map(rootKeyIfItExists.toList ++ _)
       }
-
-      keys
+      
+      if (recursive) recurse else keyAndItsChildrenIo
     }
-
-    // immediate children only
-    if (!recursive) {
-      return io
-    }
-
-    // scan all the child keys recursively
-    io.flatMap(_.map(ls(_, true, pathSep)).sequence).map(_.flatten)
   }
 
   /**
    * Remove a list of files from S3.
    */
-  def rm(keys: Seq[String]) = IO {
-    if (!keys.isEmpty) {
-      val objs = keys.map { new DeleteObjectsRequest.KeyVersion(_) }
-      val request = new DeleteObjectsRequest(opts.config.aws.s3.bucket)
-        .withKeys(objs.asJava)
-
-      s3.deleteObjects(request)
+  def rm(keys: Seq[String]): IO[List[DeleteObjectsResult]] = {
+    logger.debug(s"Deleting ${keys.size} keys")
+    
+    //NB: AWS will bomb out if we send a delete request with no keys.
+    if(keys.isEmpty) { IO(Nil) }
+    else {
+      //NB: Go in chunks, since AWS can delete at most `chunkSize` objects in one request
+      val chunkSize = 1000
+      
+      val keyChunks = keys.sliding(chunkSize, chunkSize)
+      
+      val keyVersionChunks = keyChunks.map(_.map(new DeleteObjectsRequest.KeyVersion(_)))
+      
+      val requests = keyVersionChunks.map { keyVersions => 
+        (new DeleteObjectsRequest(bucket)).withKeys(keyVersions.asJava)
+      }
+      
+      val responseIOs = requests.map(request => IO(s3.deleteObjects(request)))
+      
+      responseIOs.toList.sequence
     }
+  }
+
+  /**
+   * Create a object to be used as a folder in S3.
+   */
+  def mkdir(name: String, metadata: String): IO[(PutObjectResult, PutObjectResult)] = {
+    logger.debug(s"Making pseudo-dir '$name'")
+    
+    for {
+      existing <- ls(s"$name/")
+      delete <- rm(existing)
+      dir <- put(s"$name/", "")
+      metadata <- put(s"$name/_metadata", metadata)
+    } yield dir -> metadata
   }
 
   /**
    * Run a map/reduce job.
    */
-  def runMR(jar: String, mainClass: String, args: Seq[String] = List.empty) = {
+  def runMR(jar: String, mainClass: String, args: Seq[String] = List.empty): IO[AddJobFlowStepsResult] = {
     val config = new HadoopJarStepConfig()
-      .withJar(s"s3://${opts.config.aws.s3.bucket}/jobs/$jar")
+      .withJar(s"s3://${bucket}/jobs/$jar")
       .withMainClass(mainClass)
       .withArgs(args.asJava)
 
@@ -124,5 +185,36 @@ class AWS[C <: BaseConfig](opts: Opts[C]) {
     IO {
       emr.addJobFlowSteps(request)
     }
+  }
+  
+  private object Implicits {
+    final implicit class RichObjectListing(val listing: ObjectListing) {
+      def keys: List[String] = {
+        chunksIterator.flatMap(_.getObjectSummaries.asScala.map(_.getKey)).toList
+      }
+      
+      def chunksIterator: Iterator[ObjectListing] = Iterator(listing) ++ new Iterator[ObjectListing] {
+        private[this] var listingRef = listing
+        private[this] var isFirst = true
+        
+        override def hasNext: Boolean = isFirst || listingRef.isTruncated
+  
+        def next(): ObjectListing = {
+          isFirst = false
+          
+          listingRef = s3.listNextBatchOfObjects(listingRef)
+          
+          listingRef
+        }
+      }
+    }
+  }
+}
+
+object AWS {
+  val pathSep: Char = '/'
+  
+  private def abort(s3Object: S3Object): IO[Unit] = IO {
+    s3Object.getObjectContent.abort()
   }
 }

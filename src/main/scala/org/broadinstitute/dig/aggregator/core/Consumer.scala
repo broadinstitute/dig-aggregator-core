@@ -1,48 +1,48 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats.effect._
-
-import fs2._
-
 import java.io.File
 import java.util.Properties
 
-import org.apache.kafka.clients.consumer._
-import org.apache.kafka.common._
-
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
-import org.json4s.jackson.Serialization.{read, writePretty}
-
 import scala.collection.JavaConverters._
+
+import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.consumer.ConsumerRecords
+import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.common.serialization
+import org.apache.kafka.common.TopicPartition
+
+import cats.effect.IO
+import fs2.Stream
 
 /**
  * Kafka JSON topic record consumer.
  */
-class Consumer[C <: BaseConfig](opts: Opts[C], topic: String) {
-  val props = new Properties()
-
-  // set all the properties
-  props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, opts.config.kafka.brokerList)
-  props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[serialization.StringDeserializer].getCanonicalName)
-  props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[serialization.StringDeserializer].getCanonicalName)
+final class Consumer[C <: BaseConfig](opts: Opts[C], topic: String) {
+  
+  //NB: Use a helper method to build Properties, to minimize the amount of contructor logic interleaved in the 
+  //class body.
+  private val props: Properties = Props(
+      ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG -> opts.config.kafka.brokerList,
+      ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG -> classOf[serialization.StringDeserializer].getCanonicalName,
+      ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> classOf[serialization.StringDeserializer].getCanonicalName)
 
   /**
    * The Kafka client used to receive variant JSON messages.
    */
-  val client = new KafkaConsumer[String, String](props)
+  private val client: KafkaConsumer[String, String] = new KafkaConsumer(props)
 
   /**
    * Get all the partitions for this topic.
    */
-  val partitions = client.partitionsFor(topic).asScala.map {
+  private val partitions: Seq[TopicPartition] = client.partitionsFor(topic).asScala.map {
     info => new TopicPartition(topic, info.partition)
   }
 
   /**
    * The current consumer state.
    */
-  var state = opts.position match {
+  private var state: ConsumerState = opts.position match {
     case State.Continue  => State.load(new File(opts.config.kafka.consumers(topic)))
     case State.Beginning => State.fromBeginning(client, partitions)
     case State.End       => State.fromEnd(client, partitions)
@@ -60,16 +60,18 @@ class Consumer[C <: BaseConfig](opts: Opts[C], topic: String) {
    * Create a Stream that will continuously read from Kafka and pass the
    * record batches to a process function.
    */
-  def consume[A](process: ConsumerRecords[String, String] => IO[A]) = {
+  def consume[A](process: ConsumerRecords[String, String] => IO[A]): IO[Unit] = {
     val fetch = IO {
       client.poll(Long.MaxValue)
     }
 
     // process the stream
-    Stream.eval(fetch).repeat
-      .evalMap(records => LiftIO[IO].liftIO(process(records)))
-      .compile
-      .drain
+    Stream
+        .eval(fetch)
+        .repeat
+        .evalMap(process)
+        .compile
+        .drain
   }
 
   /**
