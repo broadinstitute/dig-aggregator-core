@@ -77,7 +77,7 @@ buildInfoTask := {
 
   val buildDate = java.time.Instant.now
 
-  val file = dir / "${n}-versionInfo.properties"
+  val file = dir / s"${n}-versionInfo.properties"
 
   val contents = s"name=${n}\nversion=${v}\nbranch=${branch}\nlastCommit=${lastCommit.getOrElse("")}\nuncommittedChanges=${anyUncommittedChanges}\ndescribedVersion=${describedVersion.getOrElse("")}\nbuildDate=${buildDate}\n"
 
