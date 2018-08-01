@@ -19,7 +19,7 @@ lazy val Orgs = new {
 
 lazy val Paths = new {
   //`publish` will produce artifacts under this path
-  val LocalRepo = "/humgen/diabetes/users/dig/loamstream/repo"
+  val LocalRepo = "/humgen/diabetes/users/dig/aggregator/repo"
 }
 
 lazy val Resolvers = new {
