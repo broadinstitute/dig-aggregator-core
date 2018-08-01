@@ -17,6 +17,15 @@ lazy val Orgs = new {
   val DIG = "org.broadinstitute.dig"
 }
 
+lazy val Paths = new {
+  //`publish` will produce artifacts under this path
+  val LocalRepo = "/humgen/diabetes/users/dig/loamstream/repo"
+}
+
+lazy val Resolvers = new {
+  val LocalRepo = Resolver.file("localRepo", new File(Paths.LocalRepo))
+}
+
 lazy val scalacOpts = Seq(
   "-feature",
   "-deprecation",
@@ -51,6 +60,7 @@ lazy val root = (project in file("."))
     //NB: version set in version.sbt
     scalaVersion := Versions.Scala,
     scalacOptions ++= scalacOpts,
+    publishTo := Some(Resolvers.LocalRepo),
     libraryDependencies ++= (mainDeps ++ testDeps)
   )
 
@@ -60,3 +70,4 @@ parallelExecution in IntegrationTest := false
 //Show full stack traces from unit and integration tests (F); display test run times (D)
 testOptions in IntegrationTest += Tests.Argument("-oFD")
 testOptions in Test += Tests.Argument("-oFD")
+
