@@ -60,3 +60,30 @@ parallelExecution in IntegrationTest := false
 //Show full stack traces from unit and integration tests (F); display test run times (D)
 testOptions in IntegrationTest += Tests.Argument("-oFD")
 testOptions in Test += Tests.Argument("-oFD")
+
+//Enables `buildInfoTask`, which bakes git version info into the LS jar.
+enablePlugins(GitVersioning)
+
+val buildInfoTask = taskKey[Seq[File]]("buildInfo")
+
+buildInfoTask := {
+  val dir = (resourceManaged in Compile).value
+  val n = name.value
+  val v = version.value
+  val branch = git.gitCurrentBranch.value
+  val lastCommit = git.gitHeadCommit.value
+  val describedVersion = git.gitDescribedVersion.value
+  val anyUncommittedChanges = git.gitUncommittedChanges.value
+
+  val buildDate = java.time.Instant.now
+
+  val file = dir / "dig-aggregator-core-versionInfo.properties"
+
+  val contents = s"name=${n}\nversion=${v}\nbranch=${branch}\nlastCommit=${lastCommit.getOrElse("")}\nuncommittedChanges=${anyUncommittedChanges}\ndescribedVersion=${describedVersion.getOrElse("")}\nbuildDate=${buildDate}\n"
+
+  IO.write(file, contents)
+
+  Seq(file)
+}
+
+(resourceGenerators in Compile) += buildInfoTask.taskValue
