@@ -161,7 +161,7 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
       existing <- ls(s"$name/")
       delete <- rm(existing)
       dir <- put(s"$name/", "")
-      metadata <- put(s"$name/_metadata", metadata)
+      metadata <- put(s"$name/metadata", metadata)
     } yield dir -> metadata
   }
 
