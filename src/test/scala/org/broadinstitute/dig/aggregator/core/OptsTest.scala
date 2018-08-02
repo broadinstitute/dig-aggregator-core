@@ -31,6 +31,42 @@ final class OptsTest extends FunSuite {
     opts(s"--continue --config $confFile")
   }
   
+  test("--version is mutually exclusive with --from-beginning and --continue") {
+    intercept[ScallopException] {
+      opts(s"--version --from-beginning --config $confFile")
+    }
+    
+    intercept[ScallopException] {
+      opts("--version --continue --config $confFile")
+    }
+  }
+  
+  test("flags") {
+    {
+      val o = opts(s"--version --config $confFile")
+      
+      assert(o.version() === true)
+      assert(o.continue() === false)
+      assert(o.fromBeginning() === false)
+    }
+    
+    {
+      val o = opts(s"--continue --config $confFile")
+    
+      assert(o.version() === false)
+      assert(o.continue() === true)
+      assert(o.fromBeginning() === false)
+    }
+    
+    {
+      val o = opts(s"--from-beginning --config $confFile")
+    
+      assert(o.version() === false)
+      assert(o.continue() === false)
+      assert(o.fromBeginning() === true)
+    }
+  }
+  
   test("position") {
     assert(opts(s"--config $confFile").position == State.End)
     assert(opts(s"--from-beginning --config $confFile").position == State.Beginning)

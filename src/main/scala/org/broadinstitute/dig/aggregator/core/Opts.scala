@@ -10,19 +10,25 @@ import org.rogach.scallop.exceptions.ScallopException
  * Command line and configuration file argument parsing.
  */
 class Opts[C <: BaseConfig](args: Array[String])(implicit m: Manifest[C]) extends ScallopConf(args) {
-  val configFile: ScallopOption[File] = opt[File]("config", default = Some(new File("config.json")))
+  val configFile: ScallopOption[File] = opt("config", default = Some(new File("config.json")))
 
   /** Force Kafka consumption from the beginning of time. */
-  val fromBeginning: ScallopOption[Boolean] = opt[Boolean]("from-beginning", required = false)
+  val fromBeginning: ScallopOption[Boolean] = opt("from-beginning", required = false)
 
   /** Force Kafka consumption to continue from the state file. */
-  val continue: ScallopOption[Boolean] = opt[Boolean]("continue", required = false)
+  val continue: ScallopOption[Boolean] = opt("continue", required = false)
 
+  /** Show version info and quit. */
+  val version: ScallopOption[Boolean] = opt("version", required = false)
+  
   // ensure the configuration file exists if provided
   validateFileExists(configFile)
 
   // both --continue and --from-beginning cannot be specified
   mutuallyExclusive(continue, fromBeginning)
+  
+  mutuallyExclusive(version, continue)
+  mutuallyExclusive(version, fromBeginning)
 
   verify
   
