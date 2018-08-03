@@ -62,7 +62,7 @@ lazy val root = (project in file("."))
     scalaVersion := Versions.Scala,
     scalacOptions ++= scalacOpts,
     publishTo := Some(Resolvers.LocalRepo),
-    publishMavenStyle := false,
+    publishMavenStyle := true,
     libraryDependencies ++= (mainDeps ++ testDeps)
   )
 
