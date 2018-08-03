@@ -180,21 +180,21 @@ final class AwsTest extends AwsFunSuite {
     
     for {
       _ <- aws.mkdir(pseudoDirKey, metadataContents0)
-      metadata0 <- aws.get(s"${pseudoDirKey}/_metadata").map(asString)
+      metadata0 <- aws.get(s"${pseudoDirKey}/metadata").map(asString)
       contents0 <- aws.ls(pseudoDirKeyWithSlash)
       _ <- aws.mkdir(pseudoDirKey, metadataContents1)
-      metadata1 <- aws.get(s"${pseudoDirKey}/_metadata").map(asString)
+      metadata1 <- aws.get(s"${pseudoDirKey}/metadata").map(asString)
       contents1 <- aws.ls(pseudoDirKeyWithSlash)
     } yield {
       assert(metadata0 == metadataContents0)
       
       //Convert to sets to ignore ordering
-      assert(contents0.toSet == Set(pseudoDirKeyWithSlash, s"${pseudoDirKey}/_metadata"))
+      assert(contents0.toSet == Set(pseudoDirKeyWithSlash, s"${pseudoDirKey}/metadata"))
       
       assert(metadata1 == metadataContents1)
       
       //Convert to sets to ignore ordering
-      assert(contents0.toSet == Set(pseudoDirKeyWithSlash, s"${pseudoDirKey}/_metadata"))
+      assert(contents0.toSet == Set(pseudoDirKeyWithSlash, s"${pseudoDirKey}/metadata"))
     }
   }
   
