@@ -61,8 +61,6 @@ lazy val root = (project in file("."))
     //NB: version set in version.sbt
     scalaVersion := Versions.Scala,
     scalacOptions ++= scalacOpts,
-    publishTo := Some(Resolvers.LocalRepo),
-    publishMavenStyle := true,
     libraryDependencies ++= (mainDeps ++ testDeps)
   )
 
