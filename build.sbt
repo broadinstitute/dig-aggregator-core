@@ -13,6 +13,7 @@ lazy val Versions = new {
   val ScalaTest = "3.0.5"
 }
 
+
 lazy val Orgs = new {
   val DIG = "org.broadinstitute.dig"
 }
@@ -61,6 +62,7 @@ lazy val root = (project in file("."))
     scalaVersion := Versions.Scala,
     scalacOptions ++= scalacOpts,
     publishTo := Some(Resolvers.LocalRepo),
+    publishMavenStyle := false,
     libraryDependencies ++= (mainDeps ++ testDeps)
   )
 
