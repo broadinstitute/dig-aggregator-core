@@ -18,15 +18,6 @@ lazy val Orgs = new {
   val DIG = "org.broadinstitute.dig"
 }
 
-lazy val Paths = new {
-  //`publish` will produce artifacts under this path
-  val LocalRepo = "/humgen/diabetes/users/dig/aggregator/repo"
-}
-
-lazy val Resolvers = new {
-  val LocalRepo = Resolver.file("localRepo", new File(Paths.LocalRepo))
-}
-
 lazy val scalacOpts = Seq(
   "-feature",
   "-deprecation",
@@ -108,7 +99,11 @@ releaseProcess := Seq[ReleaseStep](
   setReleaseVersion,                      // : ReleaseStep
   commitReleaseVersion,                   // : ReleaseStep, performs the initial git checks
   tagRelease,                             // : ReleaseStep
-  //publishArtifacts,                       // : ReleaseStep, checks whether `publishTo` is properly set up
+  // run 'publishLocal' instead of 'publish', since publishing to a repo on the Broad FS never resulted in
+  // artifacts that could be resolved by other builds. :(
+  // See: https://github.com/sbt/sbt-release#can-we-finally-customize-that-release-process-please
+  //      https://stackoverflow.com/questions/44058275/add-docker-publish-step-to-sbt-release-process-with-new-tag
+  //      https://github.com/sbt/sbt/issues/1917
   releaseStepCommand("publishLocal"),
   setNextVersion,                         // : ReleaseStep
   commitNextVersion,                      // : ReleaseStep
