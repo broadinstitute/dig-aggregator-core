@@ -33,8 +33,7 @@ import org.broadinstitute.dig.aggregator.core._
 The `Opts` class can be derived from to include custom command line options. But - out of the box - the following command line options exist:
 
 * `--config [file]` - loads a private, JSON, configuration file (default=`config.json`).
-* `--from-beginning` - start topic consumption from the beginning.
-* `--continue` - start topic consumption from where it left off (saved in a state file)
+* `--reset` - force a reset of the topic consumer offsets.
 
 _The `Opts` class is used by the other classes to initialize with private data settings that should **not** be committed to the repository: keys, passwords, IP addresses, etc._ 
 
@@ -105,7 +104,7 @@ Now you can use your custom options and configuration.
 
 ## Kafka Consumer
 
-Use the `Opts` class to create a `Consumer`, which can be used to consume all records from a given topic. Example Scala code:
+Use the `Opts` to create a `Consumer`, which can be used to consume all records from a given topic. Example Scala code:
 
 ```scala
 def main(args: Array[String]): Unit = {
@@ -113,23 +112,35 @@ def main(args: Array[String]): Unit = {
   
   /* Create a kafka consumer.
    *
-   * If --continue was specified, then the offsets in the 
-   * configuration topic's state file will be used.
-   * 
-   * Otherwise the state file will be ignored and either it 
-   * will start over at the beginning if --from-beginning 
-   * was specified or from the end (the default).
-   * 
    * As the records are consumed and the consumer's state is
-   * updated, the state file for the topic will be written to
-   * disk for later use with --continue.
+   * updated, and all the partition offsets are written to the
+   * `partitions` table in the database. Without the --reset flag,
+   * the consumer will pick up from where it left off.
+   *
+   * All partition offsets in the database are keyed by the `app`
+   * name in the configuration file and the `topic` name used when
+   * the consumer was created.
    */
-  val consumer = new Consumer[Config](opts, "topic")
+  val consumer = new Consumer(opts.config, "topic")
 
-  /* Create a stream that reads all the records from the Kafka 
-   * topic and sends them to a function for processing.
-   */
-  val io = consumer.consume(process)
+  val io = for {
+    /* Assign the partitions that this consumer should listen to
+     * and seek to the last offset that was processed by this
+     * application.
+     *
+     * If --reset was specified, the the partition offsets stored
+     * in the consumer state database will be ignored and - instead -
+     * the `commits` table will be examined to find where the last
+     * offsets are for each partition where a dataset was 100%
+     * completely written.
+     */
+    _ <- consumer.assignPartitions(opts.reset())
+
+    /* Create a stream that reads all the records from the Kafka 
+     * topic and sends them to a function for processing.
+     */
+    _ <- consumer.consume(process)
+  } yield ()
 
   // run the program
   io.unsafeRunSync
@@ -139,7 +150,7 @@ def main(args: Array[String]): Unit = {
  * received from Kafka. All processing must be done from within
  * the IO monad.
  */
-def process(consumer: Consumer[Config], recs: ConsumerRecords[String, String]): IO[Unit] = {
+def process(consumer: Consumer, recs: Consumer#Records): IO[Unit] = {
   val ios = for (rec <- recs.iterator.asScala) {
     val io = IO {
       println(s"Processed partition ${rec.partition} offset ${rec.offset}")
@@ -147,8 +158,8 @@ def process(consumer: Consumer[Config], recs: ConsumerRecords[String, String]): 
 
     /* Since this record has been successfully processed, the
      * consumer's state should be updated to reflect that so
-     * if the program is restarted (with --continue) the same
-     * records won't be processed again.
+     * if the program is restarted the same records won't be
+     * processed again.
      */
     io >> consumer.updateState(rec)
   }
@@ -156,8 +167,11 @@ def process(consumer: Consumer[Config], recs: ConsumerRecords[String, String]): 
   /* It's critical that the records for each partition be processed 
    * IN ORDER! However, with a little extra work, records from 
    * different partitions can be run in parallel.
+   *
+   * Once the entire batch is done being processed, write the state
+   * to the database.
    */
-  ios.toList.sequence
+  ios.toList.sequence >> consumer.saveState()
 }
 ```
 
@@ -175,7 +189,7 @@ def main(args: Array[String]): Unit = {
   /* Create a kafka producer. It is always assumed that the key and
    * value are both Strings.
    */
-  val producer = new Producer[Config](opts, "topic")
+  val producer = new Producer(opts.config, "topic")
 
   /* Send a message to the topic. Again, sending a message runs in the
    * IO monad so that it can be combined safely with consuming and other
@@ -201,7 +215,7 @@ def main(args: Array[String]): Unit = {
 
   /* Create an AWS object with both S3 and EMR clients.
    */
-  val aws = new AWS[Config](opts)
+  val aws = new AWS(opts.config)
 
   /* Add a file (key) to S3.
    */
