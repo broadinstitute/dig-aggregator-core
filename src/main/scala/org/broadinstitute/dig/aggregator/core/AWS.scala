@@ -28,17 +28,15 @@ import com.typesafe.scalalogging.LazyLogging
 /**
  * AWS controller (S3 + EMR clients).
  */
-final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
-  
-  private val region: Regions = Regions.valueOf(opts.config.aws.region)
-
-  private val bucket = opts.config.aws.s3.bucket
+final class AWS(config: BaseConfig) extends LazyLogging {
+  private val region: Regions = Regions.valueOf(config.aws.region)
+  private val bucket = config.aws.s3.bucket
   
   /**
    * AWS IAM credentials provider.
    */
   private val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-    new BasicAWSCredentials(opts.config.aws.key, opts.config.aws.secret))
+    new BasicAWSCredentials(config.aws.key, config.aws.secret))
 
   /**
    * S3 client for storage.
@@ -169,17 +167,17 @@ final class AWS[C <: BaseConfig](opts: Opts[C]) extends LazyLogging {
    * Run a map/reduce job.
    */
   def runMR(jar: String, mainClass: String, args: Seq[String] = List.empty): IO[AddJobFlowStepsResult] = {
-    val config = new HadoopJarStepConfig()
+    val stepConfig = new HadoopJarStepConfig()
       .withJar(s"s3://${bucket}/jobs/$jar")
       .withMainClass(mainClass)
       .withArgs(args.asJava)
 
     // create the step to run this config
-    val step = new StepConfig(mainClass, config)
+    val step = new StepConfig(mainClass, stepConfig)
 
     // create the request to run the step
     val request = new AddJobFlowStepsRequest()
-      .withJobFlowId(opts.config.aws.emr.cluster)
+      .withJobFlowId(config.aws.emr.cluster)
 
     // start it
     IO {

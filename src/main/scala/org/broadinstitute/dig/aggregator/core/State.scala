@@ -1,47 +1,55 @@
 package org.broadinstitute.dig.aggregator.core
 
+import cats._
+import cats.effect._
+import cats.implicits._
+
+import doobie._
+import doobie.implicits._
+
 import java.io.File
 import java.io.PrintWriter
 
 import scala.collection.JavaConverters._
 import scala.io.Source
 
-import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.common.TopicPartition
-import org.json4s.DefaultFormats
-import org.json4s.Formats
-import org.json4s.jackson.Serialization.read
-import org.json4s.jackson.Serialization.writePretty
+import org.apache.kafka.clients.consumer.ConsumerRecord
 
 /**
- * The last offset processed per partition.
+ * The consumer state object tracks of what offset - for each partition in a
+ * Kafka topic - an application has successfully processed through.
  */
-final case class PartitionState(partition: TopicPartition, offset: Long) {
+class State(val app: String, val topic: String, var offsets: Map[Int, Long]) {
 
   /**
-   * Helper function for matching a TopicPartition.
+   * Update the current state from a record that's been processed.
    */
-  def matches(topic: String, partition: Int): Boolean = {
-    this.partition.topic.equals(topic) && this.partition.partition == partition
+  def update(record: ConsumerRecord[_, _]) = {
+    require(record.topic == topic, "ConsumerRecord topic doesn't match $topic!")
+
+    // update the offsets map
+    offsets += record.partition -> record.offset
   }
-}
-
-/**
- * A list of topic partition offsets.
- */
-final case class ConsumerState(partitions: List[PartitionState]) {
 
   /**
-   * Returns a new ConsumerState with an updated offset for a topic partition.
+   * Save this Kafka consumer state to the database.
    */
-  def withOffset(topic: String, partition: Int, offset: Long): ConsumerState = {
-    val updatedPartitions = partitions.map {
-      case state if state.matches(topic, partition) => state.copy(offset=offset)
-      case state                                    => state
+  def save(xa: Transactor[IO]): IO[Boolean] = {
+    val q = """INSERT INTO partitions (app, topic, partition, offset)
+              |VALUES (?, ?, ?, ?)
+              |ON DUPLICATE KEY UPDATE offset = VALUES(offset)
+              |""".stripMargin
+
+    // convert the state into a set of values to insert
+    val values = offsets.map {
+      case (partition, offset) => (app, topic, partition, offset)
     }
 
-    // return a new consumer state
-    this.copy(partitions = updatedPartitions)
+    // run the query, replace existing offsets, true if db was updated
+    Update[(String, String, Int, Long)](q)
+      .updateMany(values.toList)
+      .transact(xa)
+      .map(_ > 0)
   }
 }
 
@@ -49,57 +57,42 @@ final case class ConsumerState(partitions: List[PartitionState]) {
  * Companion object for creating, loading, and saving ConsumerState instances.
  */
 object State {
-  implicit val formats: Formats = DefaultFormats
 
   /**
-   * The partition offsets to start consuming from.
+   * Load a ConsumerState from MySQL. This collects all the partition/offset
+   * rows for a given app+topic and merges them together. If no partition
+   * offsets exist in the database for this app+topic, then `None` is returned
+   * and it is expected that `State.latest` will be used to reset the state
+   * of the consumer.
    */
-  sealed trait Position
+  def load(xa: Transactor[IO], app: String, topic: String): IO[Option[State]] = {
+    val q = sql"""SELECT partition, offset FROM partitions
+                 |WHERE app = $app AND topic = $topic
+                 |ORDER BY partition
+                 |""".stripMargin.query[(Int, Long)].to[List]
 
-  /** Start from the beginning, end, or continue from known offsets. */
-  final case object Beginning extends Position
-  final case object End extends Position
-  final case object Continue extends Position
+    // TODO: should this function take beginning as well and verify # partitions?
 
-  /**
-   * Create a new ConsumerState that starts from the beginning offset.
-   */
-  def fromBeginning(client: KafkaConsumer[String, String], partitions: Seq[TopicPartition]): ConsumerState = {
-    val offsets = client.beginningOffsets(partitions.asJava).asScala.map {
-      case (topicPartition, offset) => PartitionState(topicPartition, offset)
+    // fetch all the offsets for every partition on this topic for this app
+    q.transact(xa).map { offsets =>
+      if (offsets.isEmpty) None else Some(new State(app, topic, offsets.toMap))
     }
-
-    // create the new state
-    ConsumerState(offsets.toList)
   }
 
   /**
-   * Create a new ConsumerState that starts from the last offset.
+   * In the commits table are all the datasets that have been committed for
+   * a given source topic. Instead of processing from the beginning or end,
+   * when resetting (or creating a new consumer), it's best to query the
+   * commits table for the "latest" offsets across partitions, skipping all
+   * the datasets that have already been processed.
    */
-  def fromEnd(client: KafkaConsumer[String, String], partitions: Seq[TopicPartition]): ConsumerState = {
-    val offsets = client.endOffsets(partitions.asJava).asScala.map {
-      case (topicPartition, offset) => PartitionState(topicPartition, offset)
-    }
+  def latest(xa: Transactor[IO], topic: String, beginning: Map[Int, Long]): IO[Map[Int, Long]] = {
+    val q = sql"""SELECT partition, MAX(offset) AS offset FROM commits
+                        |WHERE topic = $topic
+                        |GROUP BY partition
+                        |""".stripMargin.query[(Int, Long)].to[List]
 
-    // create the new state
-    ConsumerState(offsets.toList)
-  }
-
-  /**
-   * Load a ConsumerState from a JSON file.
-   */
-  def load(file: File): ConsumerState = {
-    read[ConsumerState](Source.fromFile(file).mkString)
-  }
-
-  /**
-   * Save a ConsumerState to a JSON file.
-   */
-  def save(state: ConsumerState, file: File): Unit = {
-    val json = writePretty(state)
-    val writer = new PrintWriter(file)
-
-    writer.write(json)
-    writer.close
+    // fetch a map of all the latest partition/offsets for this source
+    q.transact(xa).map(_.foldLeft(beginning)(_ + _))
   }
 }

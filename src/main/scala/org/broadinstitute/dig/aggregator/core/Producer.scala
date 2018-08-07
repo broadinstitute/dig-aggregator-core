@@ -2,10 +2,7 @@ package org.broadinstitute.dig.aggregator.core
 
 import java.util.Properties
 
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.clients.producer.RecordMetadata
+import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.serialization
 
 import cats.effect.IO
@@ -13,16 +10,24 @@ import cats.effect.IO
 /**
  * Kafka JSON topic record producer.
  */
-final class Producer[C <: BaseConfig](opts: Opts[C], topic: String) {
-  //NB: Use a helper method to build Properties, to minimize the amount of contructor logic interleaved in the 
-  //class body.
+final class Producer(config: BaseConfig, topic: String) {
+
+  /**
+   * Helper type alias since template parameters are fixed.
+   */
+  type Record = ProducerRecord[String, String]
+
+  /**
+   * Kafka connection properties.
+   */
   private val props: Properties = Props(
-    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG -> opts.config.kafka.brokerList,
+    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG -> config.kafka.brokerList,
     ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG -> classOf[serialization.StringSerializer].getCanonicalName,
     ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG -> classOf[serialization.StringSerializer].getCanonicalName,
     ProducerConfig.ACKS_CONFIG -> "1",
     ProducerConfig.RETRIES_CONFIG -> "3",
-    ProducerConfig.LINGER_MS_CONFIG -> "5")
+    ProducerConfig.LINGER_MS_CONFIG -> "5"
+  )
 
   /**
    * The Kafka producer client to sent variant messages to.
@@ -34,7 +39,7 @@ final class Producer[C <: BaseConfig](opts: Opts[C], topic: String) {
    */
   def send(key: String, value: String): IO[RecordMetadata] = {
     IO {
-      client.send(new ProducerRecord[String, String](topic, key, value)).get
+      client.send(new Record(topic, key, value)).get
     }
   }
 }

@@ -44,13 +44,11 @@ The configuration class _must_ derive from the trait `BaseConfig` as this ensure
 
 ```json
 {
+    "app": "Unique App Name",
     "kafka": {
         "brokers": [
             "ec2-xx-xx-xx-xx.compute-1.amazonaws.com:9092"
-        ],
-        "consumers": {
-            "topic": "state_file.json"
-        }
+        ]
     },
     "aws": {
         "key": "key",
@@ -62,6 +60,12 @@ The configuration class _must_ derive from the trait `BaseConfig` as this ensure
         "s3": {
             "bucket": "s3-bucket-name"
         }
+    },
+    "mysql": {
+        "driver": "com.mysql.cj.jdbc.Driver",
+        "url": "xx.xx.rds.amazonaws.com:3306",
+        "user": "username",
+        "password": "password"
     }
 }
 ```
@@ -84,8 +88,10 @@ If you want to subclass `Config` to extend the JSON properties your application 
 
 ```scala
 case class MyConfig(
+  app: String,          // required by BaseConfig
   kafka: KafkaConfig,   // required by BaseConfig
   aws: AWSConfig,       // required by BaseConfig
+  mysql: MySQLConfig,   // required by BaseConfig
   
   password: String,     // extended parameter
 ) extends BaseConfig
