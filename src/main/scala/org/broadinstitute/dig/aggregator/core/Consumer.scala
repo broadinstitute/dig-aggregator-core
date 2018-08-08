@@ -84,7 +84,7 @@ final class Consumer(config: BaseConfig, topic: String) {
     }
 
     // create the state from a merge of the beginning offsets and the latest
-    State.latest(xa, topic, offsets.toMap).map { offsets =>
+    State.reset(xa, topic, offsets.toMap).map { offsets =>
       state = new State(config.app, topic, offsets)
     }
   }

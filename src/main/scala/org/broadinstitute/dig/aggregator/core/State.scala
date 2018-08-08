@@ -59,6 +59,18 @@ class State(val app: String, val topic: String, var offsets: Map[Int, Long]) {
 object State {
 
   /**
+   *
+   */
+  case class Commit(
+      commit: Long, // commits topic offset
+      topic: String, // dataset topic
+      partition: Int, // dataset topic partition
+      offset: Long, // dataset topic offset
+      dataset: String, // dataset name
+      version: Int // dataset version
+  )
+
+  /**
    * Load a ConsumerState from MySQL. This collects all the partition/offset
    * rows for a given app+topic and merges them together. If no partition
    * offsets exist in the database for this app+topic, then `None` is returned
@@ -81,16 +93,32 @@ object State {
 
   /**
    * In the commits table are all the datasets that have been committed for
-   * a given source topic. Instead of processing from the beginning or end,
-   * when resetting (or creating a new consumer), it's best to query the
-   * commits table for the "latest" offsets across partitions, skipping all
-   * the datasets that have already been processed.
+   * a given source topic. When a new dataset processor app is created (or
+   * needs to start over), this function can get all the datasets that have
+   * already been committed as well as the last commit offset so the processor
+   * knows where to start consuming from.
    */
-  def latest(xa: Transactor[IO], topic: String, beginning: Map[Int, Long]): IO[Map[Int, Long]] = {
+  def commits(xa: Transactor[IO], topic: String): IO[List[Commit]] = {
+    val q = sql"""SELECT commit, topic, partition, offset, dataset, version FROM commits
+                 |WHERE topic = $topic
+                 |ORDER BY commit
+                 |""".stripMargin.query[Commit].to[List]
+
+    // run the query
+    q.transact(xa)
+  }
+
+  /**
+   * Since the commits table knows the partition and offset of a source topic
+   * that had a dataset committed, those offsets can safely be skipped by
+   * data type processors. If a type processor needs to reset its state, it
+   * can get the map of partitions and offsets to seek to here.
+   */
+  def reset(xa: Transactor[IO], topic: String, beginning: Map[Int, Long]): IO[Map[Int, Long]] = {
     val q = sql"""SELECT partition, MAX(offset) AS offset FROM commits
-                        |WHERE topic = $topic
-                        |GROUP BY partition
-                        |""".stripMargin.query[(Int, Long)].to[List]
+                 |WHERE topic = $topic
+                 |GROUP BY partition
+                 |""".stripMargin.query[(Int, Long)].to[List]
 
     // fetch a map of all the latest partition/offsets for this source
     q.transact(xa).map(_.foldLeft(beginning)(_ + _))
