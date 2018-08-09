@@ -66,10 +66,9 @@ case class Commit(
                  |  )
                  |
                  |ON DUPLICATE KEY UPDATE
-                 |  `commit`    = VALUES(`commit`)
+                 |  `commit`    = VALUES(`commit`),
                  |  `partition` = VALUES(`partition`),
                  |  `offset`    = VALUES(`offset`),
-                 |  `record`    = VALUES(`record`),
                  |  `timestamp` = NOW()
                  |""".stripMargin.update
 
@@ -117,15 +116,6 @@ object Commit {
     require(record.topic.equals("commits"))
 
     val json = parse(record.value)
-
-    println(record.value)
-    println(json)
-
-    println((json \ "topic").extract[String])
-    println((json \ "partition").extract[Int])
-    println((json \ "offset").extract[Long])
-    println((json \ "dataset").extract[String])
-    println((json \ "version").extract[Int])
 
     Commit(
       commit = record.offset,
