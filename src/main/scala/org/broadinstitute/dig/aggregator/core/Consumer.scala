@@ -81,7 +81,7 @@ final class Consumer(config: BaseConfig, topic: String) {
     println()
 
     // terminate the entire application if the user doesn't answer "Y"
-    if (StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")) {
+    if (!StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")) {
       System.exit(0)
     }
 
