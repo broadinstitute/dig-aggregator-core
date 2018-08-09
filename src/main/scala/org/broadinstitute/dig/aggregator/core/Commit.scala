@@ -15,7 +15,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.json4s._
 import org.json4s.JsonDSL.WithBigDecimal._
 import org.json4s.jackson.JsonMethods._
-import org.json4s.jackson.Serialization.write
 
 import scala.collection.JavaConverters._
 import scala.io.Source
@@ -107,7 +106,7 @@ object Commit {
         ("version"   -> version.toInt)
 
     // convert the JSON object to a string for the commits topic
-    compact(write(json))
+    compact(render(json))
   }
 
   /**
@@ -118,6 +117,15 @@ object Commit {
     require(record.topic.equals("commits"))
 
     val json = parse(record.value)
+
+    println(record.value)
+    println(json)
+
+    println((json \ "topic").extract[String])
+    println((json \ "partition").extract[Int])
+    println((json \ "offset").extract[Long])
+    println((json \ "dataset").extract[String])
+    println((json \ "version").extract[Int])
 
     Commit(
       commit = record.offset,
