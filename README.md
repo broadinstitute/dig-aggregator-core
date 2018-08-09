@@ -8,7 +8,7 @@ The foundational code has the following features:
 * Configuration file loading;
 * [Kafka][kafka] clients: consumers and producers;
 * [AWS][aws] clients: [S3][s3] and [EMR][emr];
-* RDBS clients;
+* [MySQL][mysql] client;
 
 It guarantees safety by running all actions through an [IO monad][io]. This ensures that the code - where applicable - can be run concurrently with other code and failures are handled gracefully.
 
@@ -63,6 +63,7 @@ The configuration class _must_ derive from the trait `BaseConfig` as this ensure
     "mysql": {
         "driver": "com.mysql.cj.jdbc.Driver",
         "url": "xx.xx.rds.amazonaws.com:3306",
+        "schema": "db",
         "user": "username",
         "password": "password"
     }
@@ -123,24 +124,10 @@ def main(args: Array[String]): Unit = {
    */
   val consumer = new Consumer(opts.config, "topic")
 
-  val io = for {
-    /* Assign the partitions that this consumer should listen to
-     * and seek to the last offset that was processed by this
-     * application.
-     *
-     * If --reset was specified, the the partition offsets stored
-     * in the consumer state database will be ignored and - instead -
-     * the `commits` table will be examined to find where the last
-     * offsets are for each partition where a dataset was 100%
-     * completely written.
-     */
-    _ <- consumer.assignPartitions(opts.reset())
-
-    /* Create a stream that reads all the records from the Kafka 
-     * topic and sends them to a function for processing.
-     */
-    _ <- consumer.consume(process)
-  } yield ()
+  /* Load the current state from the database (or reset to a known
+   * good state) and begin consuming all records in the topic.
+   */
+  val io = consumer.consume(process)
 
   // run the program
   io.unsafeRunSync
@@ -251,9 +238,9 @@ The only [EMR][emr] method currently available is:
 
 _The implicit `bucket` parameter that is passed to all [S3][s3] and [EMR][emr] methods is the one found in the configuration file._
 
-## RDBS Access
+## MySQL
 
-TODO: Add support for Doobie and MySQL.
+TODO: Talk about [doobie][doobie], `config.mysql.newTransactor()` and running queries.
 
 # fin.
 
@@ -266,3 +253,5 @@ TODO: Add support for Doobie and MySQL.
 [mr]: https://hadoop.apache.org/docs/r1.2.1/mapred_tutorial.html
 [s3]: https://aws.amazon.com/s3/
 [emr]: https://aws.amazon.com/emr/
+[mysql]: https://www.mysql.com/
+[doobie]: https://tpolecat.github.io/doobie/

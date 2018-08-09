@@ -1,6 +1,9 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats.effect.IO
+import cats._
+import cats.effect._
+import cats.effect.concurrent._
+import cats.implicits._
 
 import doobie._
 
@@ -13,6 +16,8 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common._
 
 import scala.collection.JavaConverters._
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.io.StdIn
 
 /**
@@ -21,22 +26,22 @@ import scala.io.StdIn
 final class Consumer(config: BaseConfig, topic: String) {
 
   /**
-   * Helper types since the template parameters are constant.
+   *Create a connection to the database for writing state.
    */
-  type Record = ConsumerRecord[String, String]
-  type Records = ConsumerRecords[String, String]
+  val xa = config.mysql.newTransactor()
 
   /**
-   * MySQL database connection for the consumer state.
+   * Helper types since the template parameters are constant.
    */
-  private val xa: Transactor[IO] = config.mysql.createTransactor("kafka")
+  type Record  = ConsumerRecord[String, String]
+  type Records = ConsumerRecords[String, String]
 
   /**
    * Kafka connection properties.
    */
   private val props: Properties = Props(
-    ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG -> config.kafka.brokerList,
-    ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG -> classOf[serialization.StringDeserializer].getCanonicalName,
+    ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG        -> config.kafka.brokerList,
+    ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG   -> classOf[serialization.StringDeserializer].getCanonicalName,
     ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> classOf[serialization.StringDeserializer].getCanonicalName
   )
 
@@ -51,15 +56,12 @@ final class Consumer(config: BaseConfig, topic: String) {
   private val partitions: Seq[Int] = client.partitionsFor(topic).asScala.map(_.partition)
 
   /**
-   * The current consumer state.
+   * Get the earliest offsets for each partition in this topic. Then load
+   * the latest offsets for each of those partitions from the commits table
+   * and merge the results into a new state.
    */
-  private var state: State = ???
-
-  /**
-   * Seek to the latest offsets for this topic.
-   */
-  private[this] def resetState(): IO[Unit] = {
-    val topicPartitions = partitions.map(new TopicPartition(topic, _))
+  private[this] def resetState(): IO[State] = {
+    val topicPartitions  = partitions.map(new TopicPartition(topic, _))
     val beginningOffsets = client.beginningOffsets(topicPartitions.asJava)
 
     // convert the partition offsets to a map of partition -> offset
@@ -68,88 +70,110 @@ final class Consumer(config: BaseConfig, topic: String) {
     }
 
     // BIG RED LETTERS FOR THE USER!
-    println("WARNING! The consumer state is being reset because either")
-    println("         reset flag was passed on the command line or the")
-    println("         commits database doesn't contain any partition")
-    println("         offsets for this app/topic pair.")
+    println("WARNING! The consumer state is being reset because either reset")
+    println("         flag was passed on the command line or the commits")
+    println("         database doesn't contain any partition offsets for this")
+    println("         application + topic.")
     println()
-    println("         If this is the desired course of action, answer Y")
-    println("         at the prompt; any other response will terminate")
-    println("         the program before any damage is done.")
+    println("         If this is the desired course of action, answer 'Y' at")
+    println("         the prompt; any other response will exit the program")
+    println("         before any damage is done.")
     println()
 
     // terminate the entire application if the user doesn't answer "Y"
-    if (StdIn.readLine("[y/N]: ") != "Y") {
+    if (StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")) {
       System.exit(0)
     }
 
     // create the state from a merge of the beginning offsets and the latest
-    State.reset(xa, topic, offsets.toMap).map { offsets =>
-      state = new State(config.app, topic, offsets)
+    State.reset(xa, config.app, topic, offsets.toMap).map {
+      new State(config.app, topic, _)
     }
   }
 
   /**
-   * Seek to the offsets specified in the consumer state of the database. If
-   * the database doesn't actually contain any partition offsets for this app
-   * and topic, then default to using reset state.
+   * Load the set of partitions and offsets this application has saved to the
+   * database for this topic. If the database doesn't actually contain any
+   * partition offsets for this app + topic, then reset the state.
    */
-  private[this] def loadState(): IO[Unit] = {
+  private[this] def loadState(): IO[State] = {
     State.load(xa, config.app, topic).flatMap {
-      case Some(s) => IO { state = s }
+      case Some(s) => IO(s)
       case None    => resetState()
     }
   }
 
   /**
    * Before the consumer can start consuming records it must seek to the
-   * correct offset for each partition, which initializes the state.
+   * correct offset for each partition, which initializes the state. If
+   * the reset flag was passed on the command line then `reset` is true
+   * and forced, otherwise it attempts to load the last state from the
+   * database with resetState used as a fallback.
    */
-  def assignPartitions(reset: Boolean): IO[Unit] = {
+  private[this] def assignPartitions(reset: Boolean): IO[State] = {
     val getState = if (reset) resetState() else loadState()
 
-    // load the state, then assign partitions and seek to offsets
-    for (_ <- getState) yield {
+    // load or reset the state, then assign the partitions
+    for (state <- getState) yield {
       client.assign(state.offsets.keys.map(new TopicPartition(topic, _)).toList.asJava)
 
+      // advance the partitions to the correct offsets
       for ((partition, offset) <- state.offsets) {
         client.seek(new TopicPartition(topic, partition), offset)
       }
+
+      // initial state
+      state
+    }
+  }
+
+  /**
+   * Constantly grab the last set of records processed and try to update -
+   * and save to the database - a new state. If no new records are there,
+   * just wait a little while before checking again.
+   */
+  private[this] def updateState(state: State, ref: Ref[IO, Option[Records]]): IO[Unit] = {
+    val wait = IO.sleep(10.seconds)
+
+    /*
+     * Wait a bit, then take - and return - whatever is in the ref (`_`) and
+     * replace it with `None`. If there were records in the ref, update the
+     * state and write it to the database. Then recurse.
+     */
+    wait >> ref.modify(None -> _).flatMap {
+      case Some(records) => (state ++ records).save(xa).flatMap(updateState(_, ref))
+      case None          => updateState(state, ref)
     }
   }
 
   /**
    * Create a Stream that will continuously read from Kafka and pass the
-   * record batches to a process function.
+   * records to a process function.
    */
-  def consume[A](process: Records => IO[A]): IO[Unit] = {
+  def consume[A](reset: Boolean)(process: Records => IO[A]): IO[Unit] = {
     val fetch = IO {
       client.poll(Long.MaxValue)
     }
 
-    // process the stream
-    Stream
-      .eval(fetch)
-      .repeat
-      .evalMap(process)
-      .compile
-      .drain
-  }
+    for {
+      ref   <- Ref[IO].of[Option[Records]](None)
+      state <- assignPartitions(reset)
 
-  /**
-   * Update the internal state with a ConsumerRecord.
-   */
-  def updateState(record: Record): Unit = {
-    require(record.topic.equals(topic), s"Record topic doesn't match $topic!")
+      // create tasks to save the state and another to process the stream
+      saveTask = updateState(state, ref)
+      streamTask = Stream.eval(fetch)
+        .repeat
+        .evalMap(rs => process(rs) >> ref.set(Some(rs)))
+        .compile
+        .drain
 
-    // update the offset map in the state
-    state.update(record)
-  }
+      // run each task asynchronously in a fiber
+      streamFiber <- streamTask.start
+      saveFiber   <- saveTask.start
 
-  /**
-   * Save the state of this consumer to the database.
-   */
-  def saveState(): IO[Boolean] = {
-    state.save(xa)
+      // wait for them to both complete (which will never happen)
+      _ <- streamFiber.join
+      _ <- saveFiber.join
+    } yield ()
   }
 }

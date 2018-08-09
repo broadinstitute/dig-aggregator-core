@@ -48,13 +48,13 @@ case class Commit(
    * dataset+version already exists for this topic.
    */
   def insert(xa: Transactor[IO]): IO[Int] = {
-    val q = sql"""INSERT INTO commits
-                 |  ( commit
-                 |  , topic
-                 |  , partition
-                 |  , offset
-                 |  , dataset
-                 |  , version
+    val q = sql"""INSERT INTO `commits`
+                 |  ( `commit`
+                 |  , `topic`
+                 |  , `partition`
+                 |  , `offset`
+                 |  , `dataset`
+                 |  , `version`
                  |  )
                  |
                  |VALUES
@@ -67,11 +67,11 @@ case class Commit(
                  |  )
                  |
                  |ON DUPLICATE KEY UPDATE
-                 |  commit    = VALUES(commit)
-                 |  partition = VALUES(partition),
-                 |  offset    = VALUES(offset),
-                 |  record    = VALUES(record),
-                 |  timestamp = NOW()
+                 |  `commit`    = VALUES(`commit`)
+                 |  `partition` = VALUES(`partition`),
+                 |  `offset`    = VALUES(`offset`),
+                 |  `record`    = VALUES(`record`),
+                 |  `timestamp` = NOW()
                  |""".stripMargin.update
 
     q.run.transact(xa)
@@ -87,6 +87,8 @@ object Commit {
   // pattern for splitting a dataset/version into its parts
   private val idVer = raw"([^/]+)/(\d+)".r
 
+  // TODO: commit.post with a lazy producer would be nice!
+
   /**
    * Create a new Commit message that can be sent to the `commits` topic.
    */
@@ -96,13 +98,13 @@ object Commit {
     // extract the dataset ID and version
     val idVer(dataset, version) = datasetVersion
 
-    // create a json object
+    // cannot use Commit object here since `commit` offset doesn't exist yet
     val json =
-      ("topic" -> record.topic) ~
+      ("topic"       -> record.topic) ~
         ("partition" -> record.partition) ~
-        ("offset" -> record.offset) ~
-        ("dataset" -> dataset) ~
-        ("version" -> version)
+        ("offset"    -> record.offset) ~
+        ("dataset"   -> dataset) ~
+        ("version"   -> version.toInt)
 
     // convert the JSON object to a string for the commits topic
     compact(write(json))
@@ -128,37 +130,6 @@ object Commit {
   }
 
   /**
-   * Commit records are sent in batches, this allows for faster upserting into
-   * the database of commits.
-   */
-  def insertMany(xa: Transactor[IO], records: Consumer#Records): IO[Int] = {
-    val q = """INSERT INTO commits
-                 |  ( commit
-                 |  , topic
-                 |  , partition
-                 |  , offset
-                 |  , dataset
-                 |  , version
-                 |  )
-                 |
-                 |VALUES (?, ?, ?, ?, ?, ?)
-                 |
-                 |ON DUPLICATE KEY UPDATE
-                 |  commit    = VALUES(commit)
-                 |  partition = VALUES(partition),
-                 |  offset    = VALUES(offset),
-                 |  record    = VALUES(record),
-                 |  timestamp = NOW()
-                 |""".stripMargin
-
-    // parse all the records into Commit objects
-    val values = records.iterator.asScala.map(fromCommitRecord).toList
-
-    // run the query, returns # of rows inserted/updated
-    Update[Commit](q).updateMany(values).transact(xa)
-  }
-
-  /**
    * In the commits table are all the datasets that have been committed for
    * a given source topic. When a new dataset processor app is created (or
    * needs to start over), this function can get all the datasets that have
@@ -166,9 +137,10 @@ object Commit {
    * knows where to start consuming from.
    */
   def datasets(xa: Transactor[IO], topic: String): IO[List[Commit]] = {
-    val q = sql"""SELECT commit, topic, partition, offset, dataset, version FROM commits
-                 |WHERE topic = $topic
-                 |ORDER BY commit
+    val q = sql"""SELECT   `commit`, `topic`, `partition`, `offset`, `dataset`, `version`
+                 |FROM     `commits`
+                 |WHERE    `topic` = $topic
+                 |ORDER BY `commit`
                  |""".stripMargin.query[Commit].to[List]
 
     // run the query

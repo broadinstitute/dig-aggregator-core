@@ -2,7 +2,8 @@ package org.broadinstitute.dig.aggregator.core
 
 import scala.collection.JavaConverters._
 
-import cats.effect.IO
+import cats._
+import cats.effect._
 import cats.implicits._
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider
@@ -24,6 +25,8 @@ import com.amazonaws.services.elasticmapreduce.model.HadoopJarStepConfig
 import com.amazonaws.services.elasticmapreduce.model.StepConfig
 
 import com.typesafe.scalalogging.LazyLogging
+
+import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
  * AWS controller (S3 + EMR clients).
@@ -145,7 +148,8 @@ final class AWS(config: BaseConfig) extends LazyLogging {
       
       val responseIOs = requests.map(request => IO(s3.deleteObjects(request)))
       
-      responseIOs.toList.sequence
+      // the keys can be deleted in parallel
+      responseIOs.toList.parSequence
     }
   }
 

@@ -19,25 +19,39 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
  * The consumer state object tracks of what offset - for each partition in a
  * Kafka topic - an application has successfully processed through.
  */
-class State(val app: String, val topic: String, var offsets: Map[Int, Long]) {
+case class State(val app: String, val topic: String, var offsets: Map[Int, Long]) {
 
   /**
-   * Update the current state from a record that's been processed.
+   * Return a new state with a updated partition offsets.
    */
-  def update(record: ConsumerRecord[_, _]) = {
+  def +(record: Consumer#Record): State = {
     require(record.topic == topic, "ConsumerRecord topic doesn't match $topic!")
 
     // update the offsets map
-    offsets += record.partition -> record.offset
+    copy(offsets = offsets + (record.partition -> record.offset))
+  }
+
+  /**
+   * Return a new state with a updated partition offsets.
+   */
+  def ++(records: Consumer#Records): State = {
+    records.iterator.asScala.foldLeft(this)(_ + _)
   }
 
   /**
    * Save this Kafka consumer state to the database.
    */
-  def save(xa: Transactor[IO]): IO[Boolean] = {
-    val q = """INSERT INTO partitions (app, topic, partition, offset)
+  def save(xa: Transactor[IO]): IO[State] = {
+    val q = """INSERT INTO `offsets`
+              |  ( `app`
+              |  , `topic`
+              |  , `partition`
+              |  , `offset`
+              |  )
+              |
               |VALUES (?, ?, ?, ?)
-              |ON DUPLICATE KEY UPDATE offset = VALUES(offset)
+              |
+              |ON DUPLICATE KEY UPDATE `offset` = VALUES(`offset`)
               |""".stripMargin
 
     // convert the state into a set of values to insert
@@ -49,7 +63,7 @@ class State(val app: String, val topic: String, var offsets: Map[Int, Long]) {
     Update[(String, String, Int, Long)](q)
       .updateMany(values.toList)
       .transact(xa)
-      .map(_ > 0)
+      .map(_ => this)
   }
 }
 
@@ -57,6 +71,7 @@ class State(val app: String, val topic: String, var offsets: Map[Int, Long]) {
  * Companion object for creating, loading, and saving ConsumerState instances.
  */
 object State {
+  type OffsetMap = Map[Int, Long]
 
   /**
    *
@@ -78,9 +93,10 @@ object State {
    * of the consumer.
    */
   def load(xa: Transactor[IO], app: String, topic: String): IO[Option[State]] = {
-    val q = sql"""SELECT partition, offset FROM partitions
-                 |WHERE app = $app AND topic = $topic
-                 |ORDER BY partition
+    val q = sql"""SELECT   `partition`, `offset`
+                 |FROM     `offsets`
+                 |WHERE    `app` = $app AND `topic` = $topic
+                 |ORDER BY `partition`
                  |""".stripMargin.query[(Int, Long)].to[List]
 
     // TODO: should this function take beginning as well and verify # partitions?
@@ -92,35 +108,30 @@ object State {
   }
 
   /**
-   * In the commits table are all the datasets that have been committed for
-   * a given source topic. When a new dataset processor app is created (or
-   * needs to start over), this function can get all the datasets that have
-   * already been committed as well as the last commit offset so the processor
-   * knows where to start consuming from.
-   */
-  def commits(xa: Transactor[IO], topic: String): IO[List[Commit]] = {
-    val q = sql"""SELECT commit, topic, partition, offset, dataset, version FROM commits
-                 |WHERE topic = $topic
-                 |ORDER BY commit
-                 |""".stripMargin.query[Commit].to[List]
-
-    // run the query
-    q.transact(xa)
-  }
-
-  /**
    * Since the commits table knows the partition and offset of a source topic
    * that had a dataset committed, those offsets can safely be skipped by
    * data type processors. If a type processor needs to reset its state, it
    * can get the map of partitions and offsets to seek to here.
    */
-  def reset(xa: Transactor[IO], topic: String, beginning: Map[Int, Long]): IO[Map[Int, Long]] = {
-    val q = sql"""SELECT partition, MAX(offset) AS offset FROM commits
-                 |WHERE topic = $topic
-                 |GROUP BY partition
-                 |""".stripMargin.query[(Int, Long)].to[List]
+  def reset(xa: Transactor[IO], app: String, topic: String, from: OffsetMap): IO[OffsetMap] = {
+    val delete = sql"""DELETE FROM `offsets`
+                      |WHERE       `app` = $app
+                      |AND         `topic` = $topic
+                      |""".stripMargin.update
 
-    // fetch a map of all the latest partition/offsets for this source
-    q.transact(xa).map(_.foldLeft(beginning)(_ + _))
+    val select = sql"""SELECT   `partition`, MAX(`offset`) AS `offset`
+                      |FROM     `commits`
+                      |WHERE    `topic` = $topic
+                      |GROUP BY `partition`
+                      |""".stripMargin.query[(Int, Long)].to[List]
+
+    // delete then select in the same transaction
+    val offsets = for {
+      _ <- delete.run
+      r <- select
+    } yield r.foldLeft(from)(_ + _)
+
+    // execute the queries
+    offsets.transact(xa)
   }
 }

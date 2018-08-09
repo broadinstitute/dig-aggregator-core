@@ -2,7 +2,10 @@ package org.broadinstitute.dig.aggregator.core
 
 import cats.effect.IO
 
+import com.zaxxer.hikari._
+
 import doobie._
+import doobie.hikari._
 
 import java.io.File
 
@@ -65,15 +68,34 @@ final case class S3(bucket: String)
 /**
  * MysQL configuration settings.
  */
-final case class MySQLConfig(url: String, driver: String, user: String, password: String) {
+final case class MySQLConfig(url: String,
+                             driver: String,
+                             schema: String,
+                             user: String,
+                             password: String) {
 
   /**
-   * Create a connection to the database that can be used to execute queries.
-   * The `schema` parameter is the database to open.
+   * Query parameters to the connection string URL.
    */
-  def createTransactor(schema: String): Transactor[IO] = {
-    val connectionString = s"jdbc:mysql://$url/$schema?useCursorFetch=true"
+  val qs = List("useCursorFetch" -> true, "useSSL" -> false)
+    .map(p => s"${p._1}=${p._2}")
+    .mkString("&")
 
-    Transactor.fromDriverManager[IO](driver, connectionString, user, password)
+  /**
+   * Create a new connection to the database for running queries.
+   *
+   * A connection pool here isn't really all that big a deal because queries
+   * are run serially while processing Kafka messages.
+   */
+  def newTransactor(): Transactor[IO] = {
+    val connectionString = s"jdbc:mysql://$url/$schema?$qs"
+
+    // create the connection
+    Transactor.fromDriverManager[IO](
+      driver,
+      connectionString,
+      user,
+      password,
+    )
   }
 }
