@@ -1,5 +1,12 @@
 package org.broadinstitute.dig.aggregator.core
 
+import cats.effect.IO
+
+import com.zaxxer.hikari._
+
+import doobie._
+import doobie.hikari._
+
 import java.io.File
 
 import scala.io.Source
@@ -24,19 +31,22 @@ object Config {
  * Base trait that all configuration files must adhere to.
  */
 trait BaseConfig {
+  val app: String
   val kafka: KafkaConfig
   val aws: AWSConfig
+  val mysql: MySQLConfig
 }
 
 /**
  * Configuration options for Kafka and AWS.
  */
-final case class Config(kafka: KafkaConfig, aws: AWSConfig) extends BaseConfig
+final case class Config(app: String, kafka: KafkaConfig, aws: AWSConfig, mysql: MySQLConfig)
+    extends BaseConfig
 
 /**
  * Kafka configuration settings.
  */
-final case class KafkaConfig(brokers: List[String], consumers: Map[String, String]) {
+final case class KafkaConfig(brokers: List[String]) {
   lazy val brokerList: String = brokers.mkString(",")
 }
 
@@ -54,3 +64,38 @@ final case class EMR(cluster: String)
  * Optional AWS S3 settings.
  */
 final case class S3(bucket: String)
+
+/**
+ * MysQL configuration settings.
+ */
+final case class MySQLConfig(url: String,
+                             driver: String,
+                             schema: String,
+                             user: String,
+                             password: String) {
+
+  /**
+   * Query parameters to the connection string URL.
+   */
+  val qs = List("useCursorFetch" -> true, "useSSL" -> false)
+    .map(p => s"${p._1}=${p._2}")
+    .mkString("&")
+
+  /**
+   * Create a new connection to the database for running queries.
+   *
+   * A connection pool here isn't really all that big a deal because queries
+   * are run serially while processing Kafka messages.
+   */
+  def newTransactor(): Transactor[IO] = {
+    val connectionString = s"jdbc:mysql://$url/$schema?$qs"
+
+    // create the connection
+    Transactor.fromDriverManager[IO](
+      driver,
+      connectionString,
+      user,
+      password,
+    )
+  }
+}

@@ -1,16 +1,18 @@
 lazy val Versions = new {
-  val Scala = "2.12.6"
-  val Fs2 = "0.10.1"
   val Aws = "1.11.349"
-  val Shapeless = "2.3.3"
-  val Json4s = "3.5.3"
-  val Scallop = "3.1.2"
   val Cats = "1.1.0"
   val CatsEffect = "1.0.0-RC2"
+  val Doobie = "0.5.3"
+  val Fs2 = "0.10.1"
   val Hadoop = "1.2.1"
+  val Json4s = "3.5.3"
   val Kafka = "1.1.0"
-  val Slf4J = "1.7.25"
+  val MySQL = "8.0.11"
+  val Scala = "2.12.6"
   val ScalaTest = "3.0.5"
+  val Scallop = "3.1.2"
+  val Shapeless = "2.3.3"
+  val Slf4J = "1.7.25"
 }
 
 
@@ -33,10 +35,13 @@ lazy val mainDeps = Seq(
   "com.chuusai" %% "shapeless" % Versions.Shapeless,
   "org.json4s" %% "json4s-jackson" % Versions.Json4s,
   "org.rogach" %% "scallop" % Versions.Scallop,
+  "org.tpolecat" %% "doobie-core" % Versions.Doobie,
+  "org.tpolecat" %% "doobie-hikari" % Versions.Doobie,
   "org.typelevel" %% "cats-core" % Versions.Cats,
   "org.typelevel" %% "cats-effect" % Versions.CatsEffect,
   "org.apache.hadoop" % "hadoop-client" % Versions.Hadoop,
-  "org.apache.kafka" %% "kafka" % Versions.Kafka
+  "org.apache.kafka" %% "kafka" % Versions.Kafka,
+  "mysql" % "mysql-connector-java" % Versions.MySQL
 )
 
 lazy val testDeps = Seq(
@@ -45,7 +50,7 @@ lazy val testDeps = Seq(
 
 lazy val root = (project in file("."))
   .configs(IntegrationTest)
-  .settings(Defaults.itSettings : _*)
+  .settings(Defaults.itSettings: _*)
   .settings(
     name := "dig-aggregator-core",
     organization := Orgs.DIG,
@@ -80,7 +85,10 @@ buildInfoTask := {
 
   val file = dir / s"${n}-versionInfo.properties"
 
-  val contents = s"name=${n}\nversion=${v}\nbranch=${branch}\nlastCommit=${lastCommit.getOrElse("")}\nuncommittedChanges=${anyUncommittedChanges}\ndescribedVersion=${describedVersion.getOrElse("")}\nbuildDate=${buildDate}\n"
+  val contents =
+    s"name=${n}\nversion=${v}\nbranch=${branch}\nlastCommit=${lastCommit.getOrElse(
+      "")}\nuncommittedChanges=${anyUncommittedChanges}\ndescribedVersion=${describedVersion
+      .getOrElse("")}\nbuildDate=${buildDate}\n"
 
   IO.write(file, contents)
 
