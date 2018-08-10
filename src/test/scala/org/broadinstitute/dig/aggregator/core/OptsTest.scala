@@ -15,12 +15,6 @@ final class OptsTest extends FunSuite {
 
   private val confFile = "src/test/resources/config.json"
 
-  test("--version is mutually exclusive with --reset") {
-    intercept[ScallopException] {
-      opts(s"--version --reset --config $confFile")
-    }
-  }
-
   test("flags") {
     {
       val o = opts(s"--version --config $confFile")
