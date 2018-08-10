@@ -1,9 +1,8 @@
 package org.broadinstitute.dig.aggregator.core
 
-import scala.collection.JavaConverters._
-
 import cats._
 import cats.effect._
+import cats.effect.concurrent._
 import cats.implicits._
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider
@@ -14,13 +13,18 @@ import com.amazonaws.services.s3.model._
 import com.amazonaws.services.elasticmapreduce._
 import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsRequest
 import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsResult
-import com.amazonaws.services.elasticmapreduce.model.HadoopJarStepConfig
-import com.amazonaws.services.elasticmapreduce.model.StepConfig
+import com.amazonaws.services.elasticmapreduce.model.JobFlowDetail
+import com.amazonaws.services.elasticmapreduce.model.ListStepsRequest
+import com.amazonaws.services.elasticmapreduce.model.StepState
+import com.amazonaws.services.elasticmapreduce.model.StepSummary
 
 import com.typesafe.scalalogging.LazyLogging
 
+import java.io.InputStream
+
+import scala.collection.JavaConverters._
+import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
 
 /**
  * AWS controller (S3 + EMR clients).
@@ -71,6 +75,13 @@ final class AWS(config: BaseConfig) extends LazyLogging {
   }
 
   /**
+   * Upload a file to S3 in a particular bucket.
+   */
+  def put(key: String, stream: InputStream): IO[PutObjectResult] = IO {
+    s3.putObject(bucket, key, stream, new ObjectMetadata())
+  }
+
+  /**
    * Download a file from an S3 bucket.
    */
   def get(key: String): IO[S3Object] = IO {
@@ -116,26 +127,66 @@ final class AWS(config: BaseConfig) extends LazyLogging {
   }
 
   /**
-   * Run a map/reduce job.
+   * Given a set of steps, start a job.
    */
-  def runMR(jar: String,
-            mainClass: String,
-            args: Seq[String] = List.empty): IO[AddJobFlowStepsResult] = {
-    val stepConfig = new HadoopJarStepConfig()
-      .withJar(s"s3://${bucket}/jobs/$jar")
-      .withMainClass(mainClass)
-      .withArgs(args.asJava)
-
-    // create the step to run this config
-    val step = new StepConfig(mainClass, stepConfig)
-
-    // create the request to run the step
+  def runJob(steps: Seq[JobStep]): IO[AddJobFlowStepsResult] = {
     val request = new AddJobFlowStepsRequest()
       .withJobFlowId(config.aws.emr.cluster)
+      .withSteps(steps.map(_.config).asJava)
 
-    // start it
     IO {
-      emr.addJobFlowSteps(request)
+      val job = emr.addJobFlowSteps(request)
+
+      // show the job ID so it can be referenced in the AWS console
+      logger.debug(s"Submitted job with ${steps.size} steps...")
+      job
+    }
+  }
+
+  /**
+   * Every 20 seconds, send a request to the cluster to determine the state
+   * of all the steps in the job. Only return once the state is one of the
+   * following:
+   *
+   *   StepState.COMPLETED
+   *   StepState.FAILED
+   *   StepState.INTERRUPTED
+   *   StepState.CANCELLED
+   */
+  def waitForJob(job: AddJobFlowStepsResult): IO[Either[StepSummary, Unit]] = {
+    import Implicits._
+
+    val request = new ListStepsRequest()
+      .withClusterId(config.aws.emr.cluster)
+      .withStepIds(job.getStepIds)
+
+    // wait a little bit then request status
+    val req = for (_ <- IO.sleep(20.seconds)) yield emr.listSteps(request)
+
+    /*
+     * The step summaries are returned in reverse order. The job is complete
+     * when all the steps have their status set to COMPLETED, at which point
+     * the curStep will be None.
+     */
+    val curStep = req.map(_.getSteps.asScala).map(_.find(!_.isComplete))
+
+    /*
+     * If the current step has failed, interrupted, or cancelled, then the
+     * entire job is also considered failed, and return the failed step.
+     */
+    curStep.flatMap {
+      case None => IO(Right(()))
+
+      // the current step stopped for some reason
+      case Some(step) if step.isStopped =>
+        logger.error(s"Job failed: ${step.stopReason}")
+        IO(Left(step))
+
+      // still waiting for the current step to complete
+      case Some(step) => {
+        logger.debug(s"...${step.getName} (${step.getId}): ${step.getStatus.getState}")
+        waitForJob(job)
+      }
     }
   }
 }

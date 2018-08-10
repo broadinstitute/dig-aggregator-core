@@ -3,6 +3,12 @@ package org.broadinstitute.dig.aggregator.core
 import com.amazonaws.services.s3._
 import com.amazonaws.services.s3.model._
 import com.amazonaws.services.elasticmapreduce._
+import com.amazonaws.services.elasticmapreduce.model.StepState
+import com.amazonaws.services.elasticmapreduce.model.StepSummary
+
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.net.URI
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
@@ -82,5 +88,65 @@ object Implicits {
     def keys: List[String] = {
       it.flatMap(_.getObjectSummaries.asScala.map(_.getKey)).toList
     }
+  }
+
+  /**
+   *
+   */
+  implicit class RichS3URI(s3URI: URI) {
+    lazy val basename: String = {
+      val path = Paths.get(s3URI.getPath)
+
+      // extract just the final part of the path
+      path.getName(path.getNameCount - 1).toString
+    }
+  }
+
+  /**
+   * Helper functions for a step.
+   */
+  implicit class RichStepSummary(summary: StepSummary) {
+    lazy val state: StepState = StepState.valueOf(summary.getStatus.getState)
+
+    /**
+     * True if this step has successfully completed.
+     */
+    def isComplete: Boolean = state == StepState.COMPLETED
+
+    /**
+     * True if this step failed.
+     */
+    def isFailure: Boolean = state == StepState.FAILED
+
+    /**
+     * If failed, this is the reason why.
+     */
+    def failureReason: Option[String] = {
+      Option(summary.getStatus.getFailureDetails).flatMap { details =>
+        Option(details.getMessage)
+      }
+    }
+
+    /**
+     * True if this step stopped for any reason.
+     */
+    def isStopped: Boolean = state match {
+      case StepState.FAILED      => true
+      case StepState.INTERRUPTED => true
+      case StepState.CANCELLED   => true
+      case _                     => false
+    }
+
+    /**
+     * Return a reason for why this step was stopped.
+     */
+    def stopReason: String =
+      failureReason.getOrElse {
+        state match {
+          case StepState.INTERRUPTED => state.toString
+          case StepState.CANCELLED   => state.toString
+          case _                     => "Unknown"
+        }
+      }
   }
 }
