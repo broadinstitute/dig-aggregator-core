@@ -38,8 +38,7 @@ case class Commit(
     topic: String, // dataset topic
     partition: Int, // dataset topic partition
     offset: Long, // dataset topic offset
-    dataset: String, // dataset name
-    version: Int // dataset version
+    dataset: String // dataset name
 ) {
 
   /**
@@ -53,7 +52,6 @@ case class Commit(
                  |  , `partition`
                  |  , `offset`
                  |  , `dataset`
-                 |  , `version`
                  |  )
                  |
                  |VALUES
@@ -62,7 +60,6 @@ case class Commit(
                  |  , $partition
                  |  , $offset
                  |  , $dataset
-                 |  , $version
                  |  )
                  |
                  |ON DUPLICATE KEY UPDATE
@@ -82,27 +79,20 @@ case class Commit(
 object Commit {
   private implicit val formats = DefaultFormats
 
-  // pattern for splitting a dataset/version into its parts
-  private val idVer = raw"([^/]+)/(\d+)".r
-
   // TODO: commit.post with a lazy producer would be nice!
 
   /**
    * Create a new Commit message that can be sent to the `commits` topic.
    */
-  def message(record: Consumer#Record, datasetVersion: String): String = {
+  def message(record: Consumer#Record, dataset: String): String = {
     require(!record.topic.equals("commits"))
-
-    // extract the dataset ID and version
-    val idVer(dataset, version) = datasetVersion
 
     // cannot use Commit object here since `commit` offset doesn't exist yet
     val json =
       ("topic"       -> record.topic) ~
         ("partition" -> record.partition) ~
         ("offset"    -> record.offset) ~
-        ("dataset"   -> dataset) ~
-        ("version"   -> version.toInt)
+        ("dataset"   -> dataset)
 
     // convert the JSON object to a string for the commits topic
     compact(render(json))
@@ -122,8 +112,7 @@ object Commit {
       topic = (json \ "topic").extract[String],
       partition = (json \ "partition").extract[Int],
       offset = (json \ "offset").extract[Long],
-      dataset = (json \ "dataset").extract[String],
-      version = (json \ "version").extract[Int]
+      dataset = (json \ "dataset").extract[String]
     )
   }
 
@@ -135,7 +124,7 @@ object Commit {
    * knows where to start consuming from.
    */
   def datasets(xa: Transactor[IO], topic: String): IO[List[Commit]] = {
-    val q = sql"""SELECT   `commit`, `topic`, `partition`, `offset`, `dataset`, `version`
+    val q = sql"""SELECT   `commit`, `topic`, `partition`, `offset`, `dataset`
                  |FROM     `commits`
                  |WHERE    `topic` = $topic
                  |ORDER BY `commit`

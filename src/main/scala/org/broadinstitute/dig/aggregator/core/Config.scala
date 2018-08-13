@@ -2,6 +2,8 @@ package org.broadinstitute.dig.aggregator.core
 
 import cats.effect.IO
 
+import com.typesafe.scalalogging.Logger
+
 import com.zaxxer.hikari._
 
 import doobie._
@@ -41,7 +43,23 @@ trait BaseConfig {
  * Configuration options for Kafka and AWS.
  */
 final case class Config(app: String, kafka: KafkaConfig, aws: AWSConfig, mysql: MySQLConfig)
-    extends BaseConfig
+    extends BaseConfig {
+
+  /**
+   * Output to a logger all the information about this configuration.
+   */
+  def log(logger: Logger): Unit = {
+    logger.info(s"App name=$app")
+    logger.info(s"Kafka brokers=${kafka.brokerList}")
+    logger.info(s"AWS key=${aws.key}")
+    logger.info(s"AWS secret=${aws.secret}")
+    logger.info(s"AWS EMR region=${aws.region}")
+    logger.info(s"AWS S3 bucket=${aws.s3.bucket}")
+    logger.info(s"MySQL url=${mysql.url}")
+    logger.info(s"MysQL user=${mysql.user}")
+    logger.info(s"MySQL password=${mysql.password}")
+  }
+}
 
 /**
  * Kafka configuration settings.
