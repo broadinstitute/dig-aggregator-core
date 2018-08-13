@@ -13,25 +13,40 @@ import java.net.URI
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.io.Source
 import scala.util._
 
-/**
- *
- */
 object Implicits {
+
+  /**
+   * Helper functions for S3 objects.
+   */
+  implicit class RichS3Object(val s3Object: S3Object) {
+
+    /**
+     * Stop downloading and close and S3 object to free resources.
+     */
+    def dispose(): Unit = {
+      s3Object.getObjectContent.abort()
+      s3Object.close()
+    }
+
+    /**
+     * Read the entire contents of an S3 object as a string.
+     */
+    def read(): String = {
+      val contents = Source.fromInputStream(s3Object.getObjectContent).mkString
+
+      // when done reading, be sure and close
+      s3Object.close()
+      contents
+    }
+  }
 
   /**
    * Helper functions for common S3 operations that are a little tricky.
    */
   implicit class RichS3Client(val s3: AmazonS3) {
-
-    /**
-     * Stop downloading and close and S3 object to free resources.
-     */
-    def dispose(s3Object: S3Object): Unit = {
-      s3Object.getObjectContent.abort()
-      s3Object.close()
-    }
 
     /**
      * Test whether or not a key exists.
@@ -44,7 +59,7 @@ object Implicits {
 
       // an assert indicates that the object doesn't exist
       Try(s3.getObject(req)) match {
-        case Success(s3Object) => dispose(s3Object); true
+        case Success(s3Object) => s3Object.dispose(); true
         case Failure(_)        => false
       }
     }
@@ -78,7 +93,7 @@ object Implicits {
   }
 
   /**
-   *
+   * RichS3Client.listKeys returns one of these...
    */
   implicit class RichObjectListing(it: Iterator[ObjectListing]) {
 
@@ -91,11 +106,12 @@ object Implicits {
   }
 
   /**
-   *
+   * When dealing with S3 paths, it's often helpful to be able to get
+   * just the final filename from a path.
    */
-  implicit class RichS3URI(s3URI: URI) {
+  implicit class RichURI(uri: URI) {
     lazy val basename: String = {
-      val path = Paths.get(s3URI.getPath)
+      val path = Paths.get(uri.getPath)
 
       // extract just the final part of the path
       path.getName(path.getNameCount - 1).toString
@@ -103,7 +119,7 @@ object Implicits {
   }
 
   /**
-   * Helper functions for a step.
+   * Helper functions for a Hadoop job step.
    */
   implicit class RichStepSummary(summary: StepSummary) {
     lazy val state: StepState = StepState.valueOf(summary.getStatus.getState)

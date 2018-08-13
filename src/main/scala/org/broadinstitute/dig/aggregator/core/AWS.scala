@@ -35,19 +35,19 @@ final class AWS(config: BaseConfig) extends LazyLogging {
   /**
    * The same region and bucket are used for all operations.
    */
-  private val region: Regions = Regions.valueOf(config.aws.region)
-  private val bucket          = config.aws.s3.bucket
+  val region: Regions = Regions.valueOf(config.aws.region)
+  val bucket          = config.aws.s3.bucket
 
   /**
    * AWS IAM credentials provider.
    */
-  private val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
+  val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
     new BasicAWSCredentials(config.aws.key, config.aws.secret))
 
   /**
    * S3 client for storage.
    */
-  private val s3: AmazonS3 = AmazonS3ClientBuilder.standard
+  val s3: AmazonS3 = AmazonS3ClientBuilder.standard
     .withRegion(region)
     .withCredentials(credentials)
     .build
@@ -55,7 +55,7 @@ final class AWS(config: BaseConfig) extends LazyLogging {
   /**
    * EMR client for running map/reduce jobs.
    */
-  private val emr: AmazonElasticMapReduce = AmazonElasticMapReduceClientBuilder.standard
+  val emr: AmazonElasticMapReduce = AmazonElasticMapReduceClientBuilder.standard
     .withCredentials(credentials)
     .withRegion(region)
     .build
@@ -82,7 +82,7 @@ final class AWS(config: BaseConfig) extends LazyLogging {
   }
 
   /**
-   * Download a file from an S3 bucket.
+   * Fetch a file from an S3 bucket (does not download content).
    */
   def get(key: String): IO[S3Object] = IO {
     s3.getObject(bucket, key)
@@ -96,18 +96,29 @@ final class AWS(config: BaseConfig) extends LazyLogging {
   }
 
   /**
+   * List all the keys in a given S3 folder.
+   */
+  def ls(key: String): IO[List[String]] = IO {
+    s3.listKeys(bucket, key).keys
+  }
+
+  /**
    * Delete (recursively) all the keys under a given key from S3.
    */
   def rmdir(key: String): IO[List[String]] = {
     val ios = for (listing <- s3.listKeys(bucket, key)) yield {
-      val keys        = listing.getObjectSummaries.asScala.map(_.getKey)
-      val keyVersions = keys.map(new DeleteObjectsRequest.KeyVersion(_))
-      val request     = new DeleteObjectsRequest(bucket).withKeys(keyVersions.asJava)
+      if (listing.getObjectSummaries.size == 0) {
+        IO(Nil)
+      } else {
+        val keys        = listing.getObjectSummaries.asScala.map(_.getKey)
+        val keyVersions = keys.map(new DeleteObjectsRequest.KeyVersion(_))
+        val request     = new DeleteObjectsRequest(bucket).withKeys(keyVersions.asJava)
 
-      for {
-        _ <- IO(logger.debug(s"Deleting ${keys.head} + ${keys.tail.size} more keys..."))
-        _ <- IO(s3.deleteObjects(request))
-      } yield keys
+        for {
+          _ <- IO(logger.debug(s"Deleting ${keys.head} + ${keys.tail.size} more keys..."))
+          _ <- IO(s3.deleteObjects(request))
+        } yield keys
+      }
     }
 
     // all the delete operations can happen in parallel
@@ -146,7 +157,7 @@ final class AWS(config: BaseConfig) extends LazyLogging {
   /**
    * Every 20 seconds, send a request to the cluster to determine the state
    * of all the steps in the job. Only return once the state is one of the
-   * following:
+   * following for the last/current step:
    *
    *   StepState.COMPLETED
    *   StepState.FAILED
@@ -188,5 +199,26 @@ final class AWS(config: BaseConfig) extends LazyLogging {
         waitForJob(job)
       }
     }
+  }
+
+  /**
+   * Helper: runs a job and waits for the results to complete.
+   */
+  def runJobAndWait(steps: Seq[JobStep]): IO[Either[StepSummary, Unit]] = {
+    runJob(steps) >>= waitForJob
+  }
+
+  /**
+   * Helper: run a single step as a job.
+   */
+  def runStep(step: JobStep): IO[AddJobFlowStepsResult] = {
+    runJob(List(step))
+  }
+
+  /**
+   * Helper: run a single step and wait for it to complete.
+   */
+  def runStepAndWait(step: JobStep): IO[Either[StepSummary, Unit]] = {
+    runStep(step) >>= waitForJob
   }
 }
