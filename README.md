@@ -138,27 +138,15 @@ def main(args: Array[String]): Unit = {
  * the IO monad.
  */
 def process(consumer: Consumer, recs: Consumer#Records): IO[Unit] = {
-  val ios = for (rec <- recs.iterator.asScala) {
-    val io = IO {
-      println(s"Processed partition ${rec.partition} offset ${rec.offset}")
-    }
-
-    /* Since this record has been successfully processed, the
-     * consumer's state should be updated to reflect that so
-     * if the program is restarted the same records won't be
-     * processed again.
-     */
-    io >> consumer.updateState(rec)
+  val ios = for (rec <- recs.iterator.asScala) yield IO {
+    println(s"Processed partition ${rec.partition} offset ${rec.offset}")
   }
   
   /* It's critical that the records for each partition be processed 
    * IN ORDER! However, with a little extra work, records from 
    * different partitions can be run in parallel.
-   *
-   * Once the entire batch is done being processed, write the state
-   * to the database.
    */
-  ios.toList.sequence >> consumer.saveState()
+  ios.toList.sequence >> IO.unit
 }
 ```
 
@@ -169,9 +157,6 @@ In addition to a `Consumer`, there is a `Producer` class that can be used to sen
 ```scala
 def main(args: Array[String]): Unit = {
   val opts = new Opts[Config](args)
-  
-  // parse the command line arguments
-  opts.verify
 
   /* Create a kafka producer. It is always assumed that the key and
    * value are both Strings.
@@ -191,52 +176,51 @@ def main(args: Array[String]): Unit = {
 
 ## AWS Client (S3 + EMR)
 
-An Amazon Web Services ([AWS][aws]) object can be created, which will initialize both [S3][s3] and [EMR][emr] clients. The [S3][s3] client can be used to perform [CRUD][crud] actions on files stored in the Amazon cloud. And the [EMR][emr] client can be used to execute [mapreduce][mr] queries with [Hadoop][hadoop] on those files.
+An Amazon Web Services ([AWS][aws]) object can be created, which will initialize both [S3][s3] and [EMR][emr] clients. The [S3][s3] client can be used to perform [CRUD][crud] actions on files stored in the Amazon cloud. And the [EMR][emr] client can be used to execute jobs on the [Hadoop][hadoop] cluster.
+
+### Using S3
+
+There are some simple S3 file system functions available in the `AWS` object:
+
+* `exists(key)` - true if the key exists
+* `put(key, contents)` - writes a new key to the bucket 
+* `put(key, stream)` - uploads a new key to the bucket
+* `get(key)` - returns an `S3Object` for the given key (use `.read` to download)
+* `rm(key)` - deletes the key (if present)
+* `ls(key)` - recursively lists all keys within a given key
+* `rmdir(key)` - recursively delete all keys within a given key
+* `mkdir(key, metadata)` - create a new directory key with a `metadata` file in it
+
+_The implicit `bucket` parameter that is passed to all [S3][s3] and [EMR][emr] methods is the one found in the configuration file._
+
+### Spawning Jobs
+
+Jobs on the cluster consist of 1 or more "steps". The following `JobStep` instances exist:
+
+* `MapReduce` - a Hadoop [mapreduce][mr] JAR
+* `PySpark` - runs a Python3 script as a [Spark][spark] application
+* `Pig` - runs a [Pig][pig] script
+* `Script` - runs any shell script (e.g. Perl)
+
+Simply create a list of steps and call `runJob`:
 
 ```scala
-def main(args: Array[String]): Unit = {
-  val opts = new Opts[Config](args)
-  
-  // parse the command line arguments
-  opts.verify
-
-  /* Create an AWS object with both S3 and EMR clients.
-   */
-  val aws = new AWS(opts.config)
-
-  /* Add a file (key) to S3.
-   */
-  val ioPut = aws.put("key", "value")
-
-  /* Perform a mapreduce. This requires that the Java program being run
-   * is a JAR assembly stored on S3.
-   */
-  val ioMR = aws.runMR(
-    "s3://bucket/app.jar",      // location of mapreduce program
-    "main.Class",               // main class to execute
-    args = List(
-      "s3://bucket/path/",      // input path
-      "s3://bucket/out/path/",  // output path
-    )
+def doMultiStepJob(aws: AWS): IO[Unit] = {
+  val steps = List(
+    JobStep.PySpark(new URI("s3://bucket/path/to/script.py"), "arg", "arg"),
+    JobStep.Script(new URI("s3://bucket/path/to/script.pl"), "arg", "arg"),
+    JobStep.Pig(new URI("s3://bucket/path/to/script.pig", "key" -> "value")),
   )
 
-  // run the program
-  (ioPut >> ioMR).unsafeRunSync
+  // this starts the job and waits for it to complete (or fail)
+  val job = aws.runJob(steps) >>= aws.waitForJob
+
+  // assert that the job completed successfully
+  job.map(result => assert(result.isRight))
 }
 ```
 
-The following [S3][s3] "file system" methods are currently supported:
-
-* `put(key: String, value: String)`
-* `get(key: String)`
-* `ls(key: String, recursive: Boolean=true, pathSep: Char='/')`
-* `rm(keys: Seq[String])`
-
-The only [EMR][emr] method currently available is:
-
-* `runMR(jar: String, mainClass: String, args: List[String])`
-
-_The implicit `bucket` parameter that is passed to all [S3][s3] and [EMR][emr] methods is the one found in the configuration file._
+Waiting for a job to complete waits until either all the steps have completed or any of of the jobs failed, was cancelled, or otherwise interrupted.
 
 ## MySQL
 
@@ -255,3 +239,6 @@ TODO: Talk about [doobie][doobie], `config.mysql.newTransactor()` and running qu
 [emr]: https://aws.amazon.com/emr/
 [mysql]: https://www.mysql.com/
 [doobie]: https://tpolecat.github.io/doobie/
+[spark]: http://spark.apache.org/
+[pig]: http://pig.apache.org/
+[mr]: https://hadoop.apache.org/docs/current/hadoop-mapreduce-client/hadoop-mapreduce-client-core/MapReduceTutorial.html
