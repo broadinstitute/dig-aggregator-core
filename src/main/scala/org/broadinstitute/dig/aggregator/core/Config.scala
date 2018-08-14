@@ -17,6 +17,8 @@ import org.json4s.DefaultFormats
 import org.json4s.Formats
 import org.json4s.jackson.Serialization.read
 
+import org.neo4j.driver.v1._
+
 /**
  * Companion object with methods for loading configuration files.
  */
@@ -37,12 +39,17 @@ trait BaseConfig {
   val kafka: KafkaConfig
   val aws: AWSConfig
   val mysql: MySQLConfig
+  val neo4j: Neo4jConfig
 }
 
 /**
  * Configuration options for Kafka and AWS.
  */
-final case class Config(app: String, kafka: KafkaConfig, aws: AWSConfig, mysql: MySQLConfig)
+final case class Config(app: String,
+                        kafka: KafkaConfig,
+                        aws: AWSConfig,
+                        mysql: MySQLConfig,
+                        neo4j: Neo4jConfig)
     extends BaseConfig {
 
   /**
@@ -58,6 +65,9 @@ final case class Config(app: String, kafka: KafkaConfig, aws: AWSConfig, mysql: 
     logger.info(s"MySQL url=${mysql.url}")
     logger.info(s"MysQL user=${mysql.user}")
     logger.info(s"MySQL password=${mysql.password}")
+    logger.info(s"Neo4j url=${neo4j.url}")
+    logger.info(s"Neo4j user=${neo4j.user}")
+    logger.info(s"Neo4j password=${neo4j.password}")
   }
 }
 
@@ -116,4 +126,20 @@ final case class MySQLConfig(url: String,
       password,
     )
   }
+}
+
+/**
+ * Neo4j configuration settings.
+ */
+final case class Neo4jConfig(url: String, user: String, password: String) {
+
+  /**
+   * The authorization token used when instantiating a new driver connection.
+   */
+  val auth = AuthTokens.basic(user, password)
+
+  /**
+   * Create a new Neo4J driver connection.
+   */
+  def newDriver(): Driver = GraphDatabase.driver(url, auth)
 }

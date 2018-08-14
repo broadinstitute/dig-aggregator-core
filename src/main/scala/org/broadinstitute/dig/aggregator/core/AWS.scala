@@ -164,7 +164,7 @@ final class AWS(config: BaseConfig) extends LazyLogging {
    *   StepState.INTERRUPTED
    *   StepState.CANCELLED
    */
-  def waitForJob(job: AddJobFlowStepsResult): IO[Either[StepSummary, Unit]] = {
+  def waitForJob(job: AddJobFlowStepsResult): IO[Unit] = {
     import Implicits._
 
     val request = new ListStepsRequest()
@@ -186,12 +186,12 @@ final class AWS(config: BaseConfig) extends LazyLogging {
      * entire job is also considered failed, and return the failed step.
      */
     curStep.flatMap {
-      case None => IO(Right(()))
+      case None => IO.unit
 
       // the current step stopped for some reason
       case Some(step) if step.isStopped =>
         logger.error(s"Job failed: ${step.stopReason}")
-        IO(Left(step))
+        IO.fromEither(Left(new Throwable(step.stopReason)))
 
       // still waiting for the current step to complete
       case Some(step) => {
@@ -204,7 +204,7 @@ final class AWS(config: BaseConfig) extends LazyLogging {
   /**
    * Helper: runs a job and waits for the results to complete.
    */
-  def runJobAndWait(steps: Seq[JobStep]): IO[Either[StepSummary, Unit]] = {
+  def runJobAndWait(steps: Seq[JobStep]): IO[Unit] = {
     runJob(steps) >>= waitForJob
   }
 
@@ -218,7 +218,7 @@ final class AWS(config: BaseConfig) extends LazyLogging {
   /**
    * Helper: run a single step and wait for it to complete.
    */
-  def runStepAndWait(step: JobStep): IO[Either[StepSummary, Unit]] = {
+  def runStepAndWait(step: JobStep): IO[Unit] = {
     runStep(step) >>= waitForJob
   }
 }

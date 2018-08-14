@@ -9,6 +9,7 @@ The foundational code has the following features:
 * [Kafka][kafka] clients: consumers and producers;
 * [AWS][aws] clients: [S3][s3] and [EMR][emr];
 * [MySQL][mysql] client;
+* [Neo4j][neo4j] driver;
 
 It guarantees safety by running all actions through an [IO monad][io]. This ensures that the code - where applicable - can be run concurrently with other code and failures are handled gracefully.
 
@@ -66,6 +67,11 @@ The configuration class _must_ derive from the trait `BaseConfig` as this ensure
         "schema": "db",
         "user": "username",
         "password": "password"
+    },
+    "neo4j": {
+        "url": "xx.xx.rds.amazonaws.com:7687",
+        "user": "neo4j",
+        "password": "neo4j"
     }
 }
 ```
@@ -226,6 +232,10 @@ Waiting for a job to complete waits until either all the steps have completed or
 
 TODO: Talk about [doobie][doobie], `config.mysql.newTransactor()` and running queries.
 
+## Neo4j Driver
+
+TODO: Talk about [Neo4j][neo4j], `config.neo4j.newDriver()` and running queries.
+
 # fin.
 
 [scala]: https://scala-lang.org/
@@ -242,3 +252,4 @@ TODO: Talk about [doobie][doobie], `config.mysql.newTransactor()` and running qu
 [spark]: http://spark.apache.org/
 [pig]: http://pig.apache.org/
 [mr]: https://hadoop.apache.org/docs/current/hadoop-mapreduce-client/hadoop-mapreduce-client-core/MapReduceTutorial.html
+[neo4j]: https://neo4j.com

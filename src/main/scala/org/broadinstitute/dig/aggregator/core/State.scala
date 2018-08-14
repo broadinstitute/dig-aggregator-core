@@ -93,7 +93,7 @@ object State {
    * of the consumer.
    */
   def load(xa: Transactor[IO], app: String, topic: String): IO[Option[State]] = {
-    val q = sql"""SELECT   `partition`, `offset`
+    val q = sql"""SELECT   `partition`, `offset`+1 AS `offset`
                  |FROM     `offsets`
                  |WHERE    `app` = $app AND `topic` = $topic
                  |ORDER BY `partition`
@@ -119,7 +119,7 @@ object State {
                       |AND         `topic` = $topic
                       |""".stripMargin.update
 
-    val select = sql"""SELECT   `partition`, MAX(`offset`) AS `offset`
+    val select = sql"""SELECT   `partition`, MAX(`offset`)+1 AS `offset`
                       |FROM     `commits`
                       |WHERE    `topic` = $topic
                       |GROUP BY `partition`
