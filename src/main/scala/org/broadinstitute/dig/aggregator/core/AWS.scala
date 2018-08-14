@@ -193,7 +193,7 @@ final class AWS(config: BaseConfig) extends LazyLogging {
       // the current step stopped for some reason
       case Some(step) if step.isStopped =>
         logger.error(s"Job failed: ${step.stopReason}")
-        logger.error(s"View the logs from the master node of the cluster and running:")
+        logger.error(s"View output logs from the master node of the cluster by running:")
         logger.error(s"  yarn logs --applicationId <id>")
         IO.fromEither(Left(new Throwable(step.stopReason)))
 
