@@ -186,11 +186,15 @@ final class AWS(config: BaseConfig) extends LazyLogging {
      * entire job is also considered failed, and return the failed step.
      */
     curStep.flatMap {
-      case None => IO.unit
+      case None =>
+        logger.debug(s"Job complete")
+        IO.unit
 
       // the current step stopped for some reason
       case Some(step) if step.isStopped =>
         logger.error(s"Job failed: ${step.stopReason}")
+        logger.error(s"View the logs from the master node of the cluster and running:")
+        logger.error(s"  yarn logs --applicationId <id>")
         IO.fromEither(Left(new Throwable(step.stopReason)))
 
       // still waiting for the current step to complete
