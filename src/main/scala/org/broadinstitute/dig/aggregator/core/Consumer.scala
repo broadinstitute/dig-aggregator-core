@@ -159,7 +159,6 @@ final class Consumer(opts: Opts, topic: String) {
     for {
       ref   <- Ref[IO].of[Option[Records]](None)
       state <- assignPartitions()
-      _     <- state.save(xa)
 
       // create tasks to save the state and another to process the stream
       saveTask = updateState(state, ref)
