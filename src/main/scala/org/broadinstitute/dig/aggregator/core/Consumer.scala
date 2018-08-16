@@ -86,8 +86,8 @@ final class Consumer(opts: Opts, topic: String) {
     if (!StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")) {
       IO.raiseError(new Exception("state reset canceled"))
     } else {
-      State.reset(xa, opts.appName, topic, offsets.toMap).map {
-        new State(opts.appName, topic, _)
+      State.reset(xa, opts.appName, topic, offsets.toMap).map { offsets =>
+        new State(opts.appName, topic, offsets)
       }
     }
   }
@@ -159,6 +159,7 @@ final class Consumer(opts: Opts, topic: String) {
     for {
       ref   <- Ref[IO].of[Option[Records]](None)
       state <- assignPartitions()
+      _     <- state.save(xa)
 
       // create tasks to save the state and another to process the stream
       saveTask = updateState(state, ref)
