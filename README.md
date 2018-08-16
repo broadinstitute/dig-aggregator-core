@@ -92,7 +92,7 @@ This is where all "private" configuration settings should be kept, and **not** c
 The entire application is always run within a pure IO context. This context is handled for you via the `DigApp` abstract class that is intended to have a `run` method implemented in:
 
 ```scala
-object Main extends DigApp[Config] {
+object Main extends DigApp[Config]()(manifest[Config]) {
 
   /**
    * Entry point is automatically called by DigApp.
