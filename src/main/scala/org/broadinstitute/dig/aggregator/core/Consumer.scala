@@ -23,12 +23,12 @@ import scala.io.StdIn
 /**
  * Kafka JSON topic record consumer.
  */
-final class Consumer(config: BaseConfig, topic: String) {
+final class Consumer(opts: Opts, topic: String) {
 
   /**
-   *Create a connection to the database for writing state.
+   * Create a connection to the database for writing state.
    */
-  val xa = config.mysql.newTransactor()
+  val xa = opts.config.mysql.newTransactor()
 
   /**
    * Helper types since the template parameters are constant.
@@ -40,7 +40,7 @@ final class Consumer(config: BaseConfig, topic: String) {
    * Kafka connection properties.
    */
   private val props: Properties = Props(
-    ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG        -> config.kafka.brokerList,
+    ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG        -> opts.config.kafka.brokerList,
     ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG   -> classOf[serialization.StringDeserializer].getCanonicalName,
     ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> classOf[serialization.StringDeserializer].getCanonicalName
   )
@@ -60,7 +60,7 @@ final class Consumer(config: BaseConfig, topic: String) {
    * the latest offsets for each of those partitions from the commits table
    * and merge the results into a new state.
    */
-  private[this] def resetState(): IO[State] = {
+  private def resetState(): IO[State] = {
     val topicPartitions  = partitions.map(new TopicPartition(topic, _))
     val beginningOffsets = client.beginningOffsets(topicPartitions.asJava)
 
@@ -69,7 +69,9 @@ final class Consumer(config: BaseConfig, topic: String) {
       case (topicPartition, offset) => topicPartition.partition -> offset.toLong
     }
 
-    // BIG RED LETTERS FOR THE USER!
+    /*
+     * BIG RED LETTERS FOR THE USER!
+     */
     println("WARNING! The consumer state is being reset because either reset")
     println("         flag was passed on the command line or the commits")
     println("         database doesn't contain any partition offsets for this")
@@ -82,12 +84,11 @@ final class Consumer(config: BaseConfig, topic: String) {
 
     // terminate the entire application if the user doesn't answer "Y"
     if (!StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")) {
-      throw new Exception("Reset cancelled")
-    }
-
-    // create the state from a merge of the beginning offsets and the latest
-    State.reset(xa, config.app, topic, offsets.toMap).map {
-      new State(config.app, topic, _)
+      IO.raiseError(new Exception("state reset canceled"))
+    } else {
+      State.reset(xa, opts.appName, topic, offsets.toMap).map {
+        new State(opts.appName, topic, _)
+      }
     }
   }
 
@@ -96,9 +97,9 @@ final class Consumer(config: BaseConfig, topic: String) {
    * database for this topic. If the database doesn't actually contain any
    * partition offsets for this app + topic, then reset the state.
    */
-  private[this] def loadState(): IO[State] = {
-    State.load(xa, config.app, topic).flatMap {
-      case Some(s) => IO(s)
+  private def loadState(): IO[State] = {
+    State.load(xa, opts.appName, topic).flatMap {
+      case Some(s) => IO.pure(s)
       case None    => resetState()
     }
   }
@@ -110,8 +111,8 @@ final class Consumer(config: BaseConfig, topic: String) {
    * and forced, otherwise it attempts to load the last state from the
    * database with resetState used as a fallback.
    */
-  private[this] def assignPartitions(reset: Boolean): IO[State] = {
-    val getState = if (reset) resetState() else loadState()
+  private def assignPartitions(): IO[State] = {
+    val getState = if (opts.reset()) resetState() else loadState()
 
     // load or reset the state, then assign the partitions
     for (state <- getState) yield {
@@ -132,7 +133,7 @@ final class Consumer(config: BaseConfig, topic: String) {
    * and save to the database - a new state. If no new records are there,
    * just wait a little while before checking again.
    */
-  private[this] def updateState(state: State, ref: Ref[IO, Option[Records]]): IO[Unit] = {
+  private def updateState(state: State, ref: Ref[IO, Option[Records]]): IO[Unit] = {
     val wait = IO.sleep(10.seconds)
 
     /*
@@ -150,14 +151,14 @@ final class Consumer(config: BaseConfig, topic: String) {
    * Create a Stream that will continuously read from Kafka and pass the
    * records to a process function.
    */
-  def consume[A](reset: Boolean)(process: Records => IO[A]): IO[Unit] = {
+  def consume[A](process: Records => IO[A]): IO[Unit] = {
     val fetch = IO {
       client.poll(Long.MaxValue)
     }
 
     for {
       ref   <- Ref[IO].of[Option[Records]](None)
-      state <- assignPartitions(reset)
+      state <- assignPartitions()
 
       // create tasks to save the state and another to process the stream
       saveTask = updateState(state, ref)

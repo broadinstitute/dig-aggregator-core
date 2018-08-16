@@ -29,20 +29,20 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
  * AWS controller (S3 + EMR clients).
  */
-final class AWS(config: BaseConfig) extends LazyLogging {
+final class AWS(opts: Opts) extends LazyLogging {
   import Implicits._
 
   /**
    * The same region and bucket are used for all operations.
    */
-  val region: Regions = Regions.valueOf(config.aws.region)
-  val bucket          = config.aws.s3.bucket
+  val region: Regions = Regions.valueOf(opts.config.aws.region)
+  val bucket: String  = opts.config.aws.s3.bucket
 
   /**
    * AWS IAM credentials provider.
    */
   val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-    new BasicAWSCredentials(config.aws.key, config.aws.secret))
+    new BasicAWSCredentials(opts.config.aws.key, opts.config.aws.secret))
 
   /**
    * S3 client for storage.
@@ -149,7 +149,7 @@ final class AWS(config: BaseConfig) extends LazyLogging {
    */
   def runJob(steps: Seq[JobStep]): IO[AddJobFlowStepsResult] = {
     val request = new AddJobFlowStepsRequest()
-      .withJobFlowId(config.aws.emr.cluster)
+      .withJobFlowId(opts.config.aws.emr.cluster)
       .withSteps(steps.map(_.config).asJava)
 
     IO {
@@ -175,7 +175,7 @@ final class AWS(config: BaseConfig) extends LazyLogging {
     import Implicits._
 
     val request = new ListStepsRequest()
-      .withClusterId(config.aws.emr.cluster)
+      .withClusterId(opts.config.aws.emr.cluster)
       .withStepIds(job.getStepIds)
 
     // wait a little bit then request status

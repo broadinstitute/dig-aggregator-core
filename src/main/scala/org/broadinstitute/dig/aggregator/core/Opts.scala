@@ -2,15 +2,19 @@ package org.broadinstitute.dig.aggregator.core
 
 import java.io.File
 
+import org.json4s._
+import org.json4s.jackson.Serialization.read
+
 import org.rogach.scallop.ScallopConf
 import org.rogach.scallop.ScallopOption
 import org.rogach.scallop.exceptions.ScallopException
 
+import scala.io.Source
+
 /**
  * Command line and configuration file argument parsing.
  */
-class Opts[C <: BaseConfig](args: Array[String])(implicit m: Manifest[C])
-    extends ScallopConf(args) {
+class Opts(val appName: String, args: Array[String]) extends ScallopConf(args) {
   val configFile: ScallopOption[File] = opt("config", default = Some(new File("config.json")))
 
   /** Force Kafka consumption to process committed datasets and reset. */
@@ -39,7 +43,7 @@ class Opts[C <: BaseConfig](args: Array[String])(implicit m: Manifest[C])
   }
 
   /** Private (not in version control) configuration settings. */
-  lazy val config: C = configFile.toOption.map(Config.load[C]).get
+  lazy val config: Opts.Config = configFile.toOption.map(Opts.loadConfig).get
 
   /**
    * Outputs standard help from Scallop along with an additional message.
@@ -48,5 +52,30 @@ class Opts[C <: BaseConfig](args: Array[String])(implicit m: Manifest[C])
     printHelp()
     println()
     println(message)
+  }
+}
+
+/**
+ * Companion object with methods for loading configuration files.
+ */
+object Opts {
+  implicit val formats: Formats = DefaultFormats
+
+  /**
+   * Private configuration settings required by all aggregator applications.
+   */
+  final case class Config(
+      kafka: config.Kafka,
+      aws: config.AWS,
+      mysql: config.MySQL,
+      neo4j: config.Neo4j,
+      sendgrid: config.Sendgrid,
+  )
+
+  /**
+   * Load and parse a configuration file.
+   */
+  def loadConfig(file: File): Config = {
+    read[Config](Source.fromFile(file).mkString)
   }
 }

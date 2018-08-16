@@ -19,7 +19,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
  * The consumer state object tracks of what offset - for each partition in a
  * Kafka topic - an application has successfully processed through.
  */
-case class State(val app: String, val topic: String, var offsets: Map[Int, Long]) {
+case class State(app: String, topic: String, offsets: Map[Int, Long]) {
 
   /**
    * Return a new state with a updated partition offsets.

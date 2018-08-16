@@ -3,7 +3,7 @@ package org.broadinstitute.dig.aggregator.core
 import cats.effect._
 import cats.syntax.all._
 
-import com.typesafe.scalalogging.LazyLogging
+import com.typesafe.scalalogging.Logger
 
 import scala.util._
 
@@ -13,36 +13,59 @@ import scala.util._
  * of code so that - if it fails - error conditions will send out email
  * notifications.
  *
- *  object MyDigApp extends DigApp[Config] {
- *
- *    def run(opts: Opts[Config]): IO[ExitCode] = {
+ *  object Main extends DigApp {
+ *    def run(opts: Opts): IO[ExitCode] = {
  *      ...
  *    }
  *  }
  */
-abstract class DigApp[C <: BaseConfig](implicit m: Manifest[C]) extends IOApp with LazyLogging {
+class DigApp extends IOApp {
+
+  /**
+   * Use the class name as the application name, but strip out anything
+   * that is extraneous and would be identical to all DIG apps.
+   */
+  val applicationName = {
+    val name = getClass.getCanonicalName
+    val core = getClass.getSuperclass.getCanonicalName
+
+    // drop the final class name (only care about the package)
+    val domain = name.split('.').dropRight(1)
+
+    // zip with the core package, and drop everything identical
+    val dropped = domain.zip(core.split('.')).takeWhile {
+      case (a, b) => a == b
+    }
+
+    // everything left is the unique name
+    domain.drop(dropped.size).mkString(".")
+  }
+
+  /**
+   * Create a logger for this application.
+   */
+  val logger = Logger(applicationName)
 
   /**
    * Must be implemented by subclass object.
    */
-  def run(opts: Opts[C]): IO[ExitCode] = ???
+  def run(opts: Opts): IO[ExitCode] = ???
 
   /**
-   * Called from IOApp
+   * Called from IOApp.main.
    */
   def run(args: List[String]): IO[ExitCode] = {
-    val opts: Opts[C] = new Opts[C](args.toArray)
+    val opts: Opts = new Opts(applicationName, args.toArray)
 
-    logger.info(appVersionInfoString(opts.config.app))
+    logger.info(appVersionInfoString(opts))
     logger.info(aggregatorCoreVersionInfoString)
 
     if (opts.version()) {
       IO.pure(ExitCode.Success)
     } else {
       run(opts).guaranteeCase {
-        case ExitCase.Error(err) => fail(opts.config, err)
-        case ExitCase.Canceled   => IO(logger.error("Canceled"))
-        case ExitCase.Completed  => IO(logger.info("Done"))
+        case ExitCase.Error(err) => fail(opts, err)
+        case _                   => IO(logger.info("Done"))
       }
     }
   }
@@ -50,12 +73,12 @@ abstract class DigApp[C <: BaseConfig](implicit m: Manifest[C]) extends IOApp wi
   /**
    * Emails an error message out and returns failure.
    */
-  private def fail(config: BaseConfig, err: Throwable): IO[Unit] = {
-    val subject = s"${config.app} terminated!"
+  private def fail(opts: Opts, err: Throwable): IO[Unit] = {
+    val notifier = new Notifier(opts)
 
     for {
       _ <- IO(logger.error(err.getMessage))
-      _ <- config.sendgrid.notify(subject, err.getMessage)
+      _ <- notifier.send(s"${opts.appName} terminated!", err.getMessage)
     } yield ()
   }
 
@@ -74,8 +97,8 @@ abstract class DigApp[C <: BaseConfig](implicit m: Manifest[C]) extends IOApp wi
   /**
    * Returns the version information for this application.
    */
-  private def appVersionInfoString(app: String) = {
-    getVersionInfoString(s"$app-versionInfo.properties")
+  private def appVersionInfoString(opts: Opts) = {
+    getVersionInfoString(s"${opts.appName}-versionInfo.properties")
   }
 
   /**
