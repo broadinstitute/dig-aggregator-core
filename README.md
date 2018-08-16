@@ -6,6 +6,7 @@ The foundational code has the following features:
 
 * Command line parsing;
 * Configuration file loading;
+* Email notifications;
 * [Kafka][kafka] clients: consumers and producers;
 * [AWS][aws] clients: [S3][s3] and [EMR][emr];
 * [MySQL][mysql] client;
@@ -72,40 +73,43 @@ The configuration class _must_ derive from the trait `BaseConfig` as this ensure
         "url": "xx.xx.rds.amazonaws.com:7687",
         "user": "neo4j",
         "password": "neo4j"
+    },
+    "sendgrid": {
+      "key": "SG.g2l1uOvZQFakEqx4Dcvapw.i7q9pcY5i0eRoFyVmXr59utdVh78h36ob-bcN_9CqLU",
+      "from": "do-not-reply@broadinstitute.org",
+      "emails": [
+        "me@broadinstitute.org",
+        "someone@broadinstitute.org"
+      ]
     }
 }
 ```
 
 This is where all "private" configuration settings should be kept, and **not** committed to the repository.
 
-## Extending Options + Configuration File
+## Pure DigApp
 
-Since the `Opts` object is used by all the other classes to initialize and setup private data, it should be the first thing created:
+The entire application is always run within a pure IO context. This context is handled for you via the `DigApp` abstract class that is intended to have a `run` method implemented in:
 
 ```scala
-def main(args: Array[String]): Unit = {
-  val opts = new Opts[Config](args)
+object Main extends DigApp[Config] {
 
-  ...
+  /**
+   * Entry point is automatically called by DigApp.
+   */
+  override def run(opts: Opts[Config]): IO[ExitCode] = {
+    IO.pure(ExitCode.Success)
+  }
 }
 ```
 
-If you want to subclass `Config` to extend the JSON properties your application uses you can (hence the template parameter), but you can also extend the `Opt` class to add custom command line options as well.
+The `DigApp` class automatically handles failures and emailing application crashes to the appropriate individuals.
 
-```scala
-case class MyConfig(
-  app: String,          // required by BaseConfig
-  kafka: KafkaConfig,   // required by BaseConfig
-  aws: AWSConfig,       // required by BaseConfig
-  mysql: MySQLConfig,   // required by BaseConfig
-  
-  password: String,     // extended parameter
-) extends BaseConfig
+## Options + Configuration File
 
-class MyOpts() extends Opts[MyConfig] {
-  val myArg = opt[String]("my-arg")
-}
-```
+The command line options are automatically parsed by `DigApp`, but the configuration class used to run the program is passed in and parsed by `Opts` and sent to the `run` method.
+
+If you want to subclass `BaseConfig` to extend the JSON properties your application uses you can (hence the template parameter).
 
 Now you can use your custom options and configuration.
 
@@ -114,8 +118,7 @@ Now you can use your custom options and configuration.
 Use the `Opts` to create a `Consumer`, which can be used to consume all records from a given topic. Example Scala code:
 
 ```scala
-def main(args: Array[String]): Unit = {
-  val opts = new Opts[Config](args)
+override def run(opts: Opts[Config]): IO[ExitCode] = {
   
   /* Create a kafka consumer.
    *
@@ -132,18 +135,17 @@ def main(args: Array[String]): Unit = {
 
   /* Load the current state from the database (or reset to a known
    * good state) and begin consuming all records in the topic.
+   * 
+   * Technically this runs forever, but we return success.
    */
-  val io = consumer.consume(process)
-
-  // run the program
-  io.unsafeRunSync
+  consumer.consume(process(consumer)).as(ExitCode.Success)
 }
 
 /* This is where the code should do something with the records 
  * received from Kafka. All processing must be done from within
  * the IO monad.
  */
-def process(consumer: Consumer, recs: Consumer#Records): IO[Unit] = {
+def process(consumer: Consumer)(recs: Consumer#Records): IO[Unit] = {
   val ios = for (rec <- recs.iterator.asScala) yield IO {
     println(s"Processed partition ${rec.partition} offset ${rec.offset}")
   }
@@ -161,8 +163,7 @@ def process(consumer: Consumer, recs: Consumer#Records): IO[Unit] = {
 In addition to a `Consumer`, there is a `Producer` class that can be used to send messages to a topic. Example Scala code:
 
 ```scala
-def main(args: Array[String]): Unit = {
-  val opts = new Opts[Config](args)
+override def run(opts: Opts[Config]): IO[ExitCode] = {
 
   /* Create a kafka producer. It is always assumed that the key and
    * value are both Strings.
@@ -173,10 +174,7 @@ def main(args: Array[String]): Unit = {
    * IO monad so that it can be combined safely with consuming and other
    * operations (e.g. writing to a database, S3, ...).
    */
-  val io = producer.send("key", """{"key": "value"}""")
-
-  // run the program
-  io.unsafeRunSync
+  producer.send("key", """{"key": "value"}""").as(ExitCode.Success)
 }
 ```
 

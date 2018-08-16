@@ -1,6 +1,7 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats.effect.IO
+import cats.effect._
+import cats.implicits._
 
 import com.typesafe.scalalogging.Logger
 
@@ -11,13 +12,15 @@ import doobie.hikari._
 
 import java.io.File
 
-import scala.io.Source
-
 import org.json4s.DefaultFormats
 import org.json4s.Formats
 import org.json4s.jackson.Serialization.read
 
 import org.neo4j.driver.v1._
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.io.Source
+import scala.util.{Failure, Success, Try}
 
 /**
  * Companion object with methods for loading configuration files.
@@ -40,6 +43,7 @@ trait BaseConfig {
   val aws: AWSConfig
   val mysql: MySQLConfig
   val neo4j: Neo4jConfig
+  val sendgrid: SendgridConfig
 }
 
 /**
@@ -49,7 +53,8 @@ final case class Config(app: String,
                         kafka: KafkaConfig,
                         aws: AWSConfig,
                         mysql: MySQLConfig,
-                        neo4j: Neo4jConfig)
+                        neo4j: Neo4jConfig,
+                        sendgrid: SendgridConfig)
     extends BaseConfig {
 
   /**
@@ -142,4 +147,41 @@ final case class Neo4jConfig(url: String, user: String, password: String) {
    * Create a new Neo4J driver connection.
    */
   def newDriver(): Driver = GraphDatabase.driver(url, auth)
+}
+
+/**
+ * Sendgrid email configuration settings.
+ */
+final case class SendgridConfig(key: String, from: String, emails: List[String]) {
+  import com.sendgrid._
+
+  /**
+   * Sendgrid client.
+   */
+  private lazy val client = new SendGrid(key)
+
+  /**
+   * Send an email to to everyone in the configuration list.
+   */
+  def notify(subject: String, message: String): IO[Unit] = {
+    val fromEmail = new Email(from)
+    val content   = new Content("text/plain", message)
+
+    val ios = emails.map { to =>
+      val mail = new Mail(fromEmail, subject, new Email(to), content)
+      val req  = new Request()
+
+      IO {
+        req.setMethod(Method.POST)
+        req.setEndpoint("mail/send")
+        req.setBody(mail.build)
+
+        // send the email
+        client.api(req)
+      }
+    }
+
+    // send each of the emails in parallel
+    ios.toList.parSequence >> IO.unit
+  }
 }

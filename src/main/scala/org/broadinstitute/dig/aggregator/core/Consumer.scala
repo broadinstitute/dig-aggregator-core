@@ -82,7 +82,7 @@ final class Consumer(config: BaseConfig, topic: String) {
 
     // terminate the entire application if the user doesn't answer "Y"
     if (!StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")) {
-      System.exit(0)
+      throw new Exception("Reset cancelled")
     }
 
     // create the state from a merge of the beginning offsets and the latest
@@ -161,7 +161,8 @@ final class Consumer(config: BaseConfig, topic: String) {
 
       // create tasks to save the state and another to process the stream
       saveTask = updateState(state, ref)
-      streamTask = Stream.eval(fetch)
+      streamTask = Stream
+        .eval(fetch)
         .repeat
         .evalMap(rs => process(rs) >> ref.set(Some(rs)))
         .compile

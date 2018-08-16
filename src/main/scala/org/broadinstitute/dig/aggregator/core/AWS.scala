@@ -89,6 +89,13 @@ final class AWS(config: BaseConfig) extends LazyLogging {
   }
 
   /**
+   * Returns the canonical URL for a given key.
+   */
+  def getURL(key: String): String = {
+    s3.getUrl(bucket, key).toExternalForm
+  }
+
+  /**
    * Delete a key from S3.
    */
   def rm(key: String): IO[Unit] = IO {
