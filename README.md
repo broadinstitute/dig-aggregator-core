@@ -75,7 +75,7 @@ The configuration class _must_ derive from the trait `BaseConfig` as this ensure
         "password": "neo4j"
     },
     "sendgrid": {
-      "key": "SG.g2l1uOvZQFakEqx4Dcvapw.i7q9pcY5i0eRoFyVmXr59utdVh78h36ob-bcN_9CqLU",
+      "key": "SG.xxx",
       "from": "do-not-reply@broadinstitute.org",
       "emails": [
         "me@broadinstitute.org",
