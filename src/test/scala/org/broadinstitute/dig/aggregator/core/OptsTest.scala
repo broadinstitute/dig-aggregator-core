@@ -9,8 +9,8 @@ import org.rogach.scallop.exceptions.ScallopException
  */
 final class OptsTest extends FunSuite {
 
-  private def opts(commandLine: String): Opts[Config] = {
-    new Opts(commandLine.split("\\s+"))
+  private def opts(commandLine: String): Opts = {
+    new Opts("OptsTest", commandLine.split("\\s+"))
   }
 
   private val confFile = "src/test/resources/config.json"

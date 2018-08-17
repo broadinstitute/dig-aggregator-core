@@ -29,20 +29,20 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
  * AWS controller (S3 + EMR clients).
  */
-final class AWS(config: BaseConfig) extends LazyLogging {
+final class AWS(opts: Opts) extends LazyLogging {
   import Implicits._
 
   /**
    * The same region and bucket are used for all operations.
    */
-  val region: Regions = Regions.valueOf(config.aws.region)
-  val bucket          = config.aws.s3.bucket
+  val region: Regions = Regions.valueOf(opts.config.aws.region)
+  val bucket: String  = opts.config.aws.s3.bucket
 
   /**
    * AWS IAM credentials provider.
    */
   val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-    new BasicAWSCredentials(config.aws.key, config.aws.secret))
+    new BasicAWSCredentials(opts.config.aws.key, opts.config.aws.secret))
 
   /**
    * S3 client for storage.
@@ -86,6 +86,13 @@ final class AWS(config: BaseConfig) extends LazyLogging {
    */
   def get(key: String): IO[S3Object] = IO {
     s3.getObject(bucket, key)
+  }
+
+  /**
+   * Returns the canonical URL for a given key.
+   */
+  def getURL(key: String): String = {
+    s3.getUrl(bucket, key).toExternalForm
   }
 
   /**
@@ -142,7 +149,7 @@ final class AWS(config: BaseConfig) extends LazyLogging {
    */
   def runJob(steps: Seq[JobStep]): IO[AddJobFlowStepsResult] = {
     val request = new AddJobFlowStepsRequest()
-      .withJobFlowId(config.aws.emr.cluster)
+      .withJobFlowId(opts.config.aws.emr.cluster)
       .withSteps(steps.map(_.config).asJava)
 
     IO {
@@ -164,11 +171,11 @@ final class AWS(config: BaseConfig) extends LazyLogging {
    *   StepState.INTERRUPTED
    *   StepState.CANCELLED
    */
-  def waitForJob(job: AddJobFlowStepsResult): IO[Either[StepSummary, Unit]] = {
+  def waitForJob(job: AddJobFlowStepsResult): IO[Unit] = {
     import Implicits._
 
     val request = new ListStepsRequest()
-      .withClusterId(config.aws.emr.cluster)
+      .withClusterId(opts.config.aws.emr.cluster)
       .withStepIds(job.getStepIds)
 
     // wait a little bit then request status
@@ -186,12 +193,16 @@ final class AWS(config: BaseConfig) extends LazyLogging {
      * entire job is also considered failed, and return the failed step.
      */
     curStep.flatMap {
-      case None => IO(Right(()))
+      case None =>
+        logger.debug(s"Job complete")
+        IO.unit
 
       // the current step stopped for some reason
       case Some(step) if step.isStopped =>
         logger.error(s"Job failed: ${step.stopReason}")
-        IO(Left(step))
+        logger.error(s"View output logs from the master node of the cluster by running:")
+        logger.error(s"  yarn logs --applicationId <id>")
+        IO.fromEither(Left(new Throwable(step.stopReason)))
 
       // still waiting for the current step to complete
       case Some(step) => {
@@ -204,7 +215,7 @@ final class AWS(config: BaseConfig) extends LazyLogging {
   /**
    * Helper: runs a job and waits for the results to complete.
    */
-  def runJobAndWait(steps: Seq[JobStep]): IO[Either[StepSummary, Unit]] = {
+  def runJobAndWait(steps: Seq[JobStep]): IO[Unit] = {
     runJob(steps) >>= waitForJob
   }
 
@@ -218,7 +229,7 @@ final class AWS(config: BaseConfig) extends LazyLogging {
   /**
    * Helper: run a single step and wait for it to complete.
    */
-  def runStepAndWait(step: JobStep): IO[Either[StepSummary, Unit]] = {
+  def runStepAndWait(step: JobStep): IO[Unit] = {
     runStep(step) >>= waitForJob
   }
 }
