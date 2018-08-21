@@ -129,7 +129,7 @@ object State {
     val offsets = for {
       _ <- delete.run
       r <- select
-    } yield r.foldLeft(from)(_ + _)
+    } yield from ++ r
 
     // execute the queries
     offsets.transact(xa)

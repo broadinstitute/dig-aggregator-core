@@ -19,11 +19,12 @@ import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.io.StdIn
+import com.typesafe.scalalogging.LazyLogging
 
 /**
  * Kafka JSON topic record consumer.
  */
-final class Consumer(opts: Opts, topic: String) {
+final class Consumer(opts: Opts, topic: String) extends LazyLogging {
 
   /**
    * Create a connection to the database for writing state.
@@ -72,22 +73,22 @@ final class Consumer(opts: Opts, topic: String) {
     /*
      * BIG RED LETTERS FOR THE USER!
      */
-    println("WARNING! The consumer state is being reset because either reset")
-    println("         flag was passed on the command line or the commits")
-    println("         database doesn't contain any partition offsets for this")
-    println("         application + topic.")
-    println()
-    println("         If this is the desired course of action, answer 'Y' at")
-    println("         the prompt; any other response will exit the program")
-    println("         before any damage is done.")
-    println()
+    logger.error("WARNING! The consumer state is being reset because either reset")
+    logger.error("         flag was passed on the command line or the commits")
+    logger.error("         database doesn't contain any partition offsets for this")
+    logger.error("         application + topic.")
+    logger.error("")
+    logger.error("         If this is the desired course of action, answer 'Y' at")
+    logger.error("         the prompt; any other response will exit the program")
+    logger.error("         before any damage is done.")
+    logger.error("")
 
     // terminate the entire application if the user doesn't answer "Y"
     if (!StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")) {
       IO.raiseError(new Exception("state reset canceled"))
     } else {
       State.reset(xa, opts.appName, topic, offsets.toMap).map { offsets =>
-        new State(opts.appName, topic, offsets)
+        State(opts.appName, topic, offsets)
       }
     }
   }
