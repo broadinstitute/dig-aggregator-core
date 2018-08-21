@@ -1,27 +1,25 @@
 package org.broadinstitute.dig.aggregator.core
 
-import com.amazonaws.services.s3._
-import com.amazonaws.services.s3.model._
-import com.amazonaws.services.elasticmapreduce._
-import com.amazonaws.services.elasticmapreduce.model.StepState
-import com.amazonaws.services.elasticmapreduce.model.StepSummary
-
-import java.nio.file.Path
-import java.nio.file.Paths
 import java.net.URI
+import java.nio.file.Paths
 
 import scala.collection.JavaConverters._
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.io.Source
-import scala.util._
+import scala.util.Try
+
+import com.amazonaws.services.elasticmapreduce.model.StepState
+import com.amazonaws.services.elasticmapreduce.model.StepSummary
+import com.amazonaws.services.s3.AmazonS3
+import com.amazonaws.services.s3.model.GetObjectRequest
+import com.amazonaws.services.s3.model.ObjectListing
+import com.amazonaws.services.s3.model.S3Object
 
 object Implicits {
 
   /**
    * Helper functions for S3 objects.
    */
-  implicit class RichS3Object(val s3Object: S3Object) {
+  final implicit class RichS3Object(val s3Object: S3Object) extends AnyVal {
 
     /**
      * Stop downloading and close and S3 object to free resources.
@@ -35,18 +33,18 @@ object Implicits {
      * Read the entire contents of an S3 object as a string.
      */
     def read(): String = {
-      val contents = Source.fromInputStream(s3Object.getObjectContent).mkString
-
-      // when done reading, be sure and close
-      s3Object.close()
-      contents
+      try {
+        Source.fromInputStream(s3Object.getObjectContent).mkString
+      } finally {
+        dispose()
+      }
     }
   }
 
   /**
    * Helper functions for common S3 operations that are a little tricky.
    */
-  implicit class RichS3Client(val s3: AmazonS3) {
+  final implicit class RichS3Client(val s3: AmazonS3) extends AnyVal {
 
     /**
      * Test whether or not a key exists.
@@ -58,16 +56,17 @@ object Implicits {
       req.setRange(0, 0)
 
       // an assert indicates that the object doesn't exist
-      Try(s3.getObject(req)) match {
-        case Success(s3Object) => s3Object.dispose(); true
-        case Failure(_)        => false
-      }
+      Try(s3.getObject(req)).map { s3Object => 
+        s3Object.dispose()
+        
+        true 
+      }.getOrElse(false)
     }
 
     /**
      * List all the keys at a given location.
      */
-    def listKeys(bucket: String, key: String) = new Iterator[ObjectListing] {
+    def listingsIterator(bucket: String, key: String): Iterator[ObjectListing] = new Iterator[ObjectListing] {
       private[this] var listing: Option[ObjectListing] = Some(s3.listObjects(bucket, key))
 
       /**
@@ -90,39 +89,41 @@ object Implicits {
         curListing
       }
     }
+    
+    def listKeys(bucket: String, key: String): Seq[String] = listingsIterator(bucket, key).flatMap(_.keys).toList
   }
-
+  
   /**
    * RichS3Client.listKeys returns one of these...
    */
-  implicit class RichObjectListing(it: Iterator[ObjectListing]) {
-
+  final implicit class RichObjectListing(val listing: ObjectListing) extends AnyVal {
     /**
      * Extract all the object keys from an object listing iterator.
      */
-    def keys: List[String] = {
-      it.flatMap(_.getObjectSummaries.asScala.map(_.getKey)).toList
+    def keys: Iterable[String] = {
+      listing.getObjectSummaries.asScala.map(_.getKey).toList
     }
   }
-
+  
   /**
    * When dealing with S3 paths, it's often helpful to be able to get
    * just the final filename from a path.
+   * Will return the empty string if the URI doesn't have a path part, or if the path part is empty.
    */
-  implicit class RichURI(uri: URI) {
-    lazy val basename: String = {
+  final implicit class RichURI(val uri: URI) extends AnyVal {
+    def basename: String = {
       val path = Paths.get(uri.getPath)
 
       // extract just the final part of the path
-      path.getName(path.getNameCount - 1).toString
+      path.iterator.asScala.toSeq.lastOption.map(_.toString).getOrElse("")
     }
   }
 
   /**
    * Helper functions for a Hadoop job step.
    */
-  implicit class RichStepSummary(summary: StepSummary) {
-    lazy val state: StepState = StepState.valueOf(summary.getStatus.getState)
+  final implicit class RichStepSummary(val summary: StepSummary) extends AnyVal {
+    def state: StepState = StepState.valueOf(summary.getStatus.getState)
 
     /**
      * True if this step has successfully completed.
@@ -138,6 +139,7 @@ object Implicits {
      * If failed, this is the reason why.
      */
     def failureReason: Option[String] = {
+      //TODO: Could summary.getStatus return null?
       Option(summary.getStatus.getFailureDetails).flatMap { details =>
         Option(details.getMessage)
       }
@@ -156,7 +158,7 @@ object Implicits {
     /**
      * Return a reason for why this step was stopped.
      */
-    def stopReason: String =
+    def stopReason: String = {
       failureReason.getOrElse {
         state match {
           case StepState.INTERRUPTED => state.toString
@@ -164,5 +166,6 @@ object Implicits {
           case _                     => "Unknown"
         }
       }
+    }
   }
 }

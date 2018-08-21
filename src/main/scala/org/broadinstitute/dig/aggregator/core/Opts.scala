@@ -21,7 +21,7 @@ class Opts(val appName: String, args: Array[String]) extends ScallopConf(args) {
   val reset: ScallopOption[Boolean] = opt("reset", required = false)
 
   /** Continue from where this application last left off. */
-  val continue = reset.map(!_)
+  val continue: ScallopOption[Boolean] = reset.map(!_)
 
   /** Show version info and quit. */
   val version: ScallopOption[Boolean] = opt("version", required = false)
@@ -59,7 +59,7 @@ class Opts(val appName: String, args: Array[String]) extends ScallopConf(args) {
  * Companion object with methods for loading configuration files.
  */
 object Opts {
-  implicit val formats: Formats = DefaultFormats
+  private implicit val formats: Formats = DefaultFormats
 
   /**
    * Private configuration settings required by all aggregator applications.
