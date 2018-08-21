@@ -100,7 +100,7 @@ object Implicits {
     /**
      * Extract all the object keys from an object listing iterator.
      */
-    def keys: Iterable[String] = {
+    def keys: Seq[String] = {
       listing.getObjectSummaries.asScala.map(_.getKey).toList
     }
   }
