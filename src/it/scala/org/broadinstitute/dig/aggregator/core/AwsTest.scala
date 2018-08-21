@@ -13,9 +13,11 @@ import java.nio.charset.Charset
  */
 final class AwsTest extends AwsFunSuite {
   //Config file needs to be in place before this test will work.
-  private val opts = new Opts[Config](Array("--config", "src/it/resources/config.json"))
+  private val opts = new Opts(
+      appName = "dig-aggregator-core-integration-tests", 
+      args = Array("--config", "src/it/resources/config.json"))
   
-  override protected val aws = new AWS[Config](opts)
+  override protected val aws = new AWS(opts)
   
   /**
    * Put() an object, then get() it  
@@ -67,17 +69,24 @@ final class AwsTest extends AwsFunSuite {
   }
   
   /**
-   * Create 10 objects and delete them
+   * Create an object and delete it
    */
-  testWithPseudoDirIO("Rm10") { 
-    doRmTest(10) 
+  testWithPseudoDirIO("RmExists") { 
+    doRmTest 
   }
   
   /**
-   * Create 2500 objects and delete them
+   * Create 10 objects in a pseudo-dir and delete them
    */
-  testWithPseudoDirIO("Rm2500") {
-    doRmTest(2500)
+  testWithPseudoDirIO("RmDir10") { 
+    doRmDirTest(10) 
+  }
+  
+  /**
+   * Create 2500 objects in a pseudo-dir and delete them
+   */
+  testWithPseudoDirIO("RmDir2500") {
+    doRmDirTest(2500)
   }
 
   //Create one object and list it
@@ -118,8 +127,29 @@ final class AwsTest extends AwsFunSuite {
     }
   }
   
-  //Create n objects, then delete them
-  private def doRmTest(n: Int): String => IO[Unit] = { pseudoDirKey =>
+  //Create n objects in a pseudoDir, then delete them
+  private lazy val doRmTest: String => IO[Unit] = { pseudoDirKey =>
+
+    import cats.implicits._
+    
+    val key0 = s"$pseudoDirKey/foo"
+    val key1 = s"$pseudoDirKey/bar"
+    
+    for {
+      key0ExistsInitially <- aws.exists(key0)
+      _ <- aws.put(key0, "foo")
+      key0ExistsAfterPut <- aws.exists(key0)
+      _ <- aws.rm(key0)
+      key0ExistsAfterRm <- aws.exists(key0)
+    } yield {
+      assert(key0ExistsInitially == false)
+      assert(key0ExistsAfterPut)
+      assert(key0ExistsAfterRm == false)
+    }
+  }
+  
+  //Create n objects in a pseudoDir, then delete them
+  private def doRmDirTest(n: Int): String => IO[Unit] = { pseudoDirKey =>
 
     import cats.implicits._
     
@@ -130,7 +160,7 @@ final class AwsTest extends AwsFunSuite {
     for {
       _ <- (1 to n).toList.map(i => aws.put(toKey(i), i.toString)).sequence
       keysBeforeDeletion <- aws.ls(pseudoDirKeyWithSlash)
-      _ <- aws.rm(keysBeforeDeletion)
+      _ <- aws.rmdir(pseudoDirKeyWithSlash)
       keysAfterDeletion <- aws.ls(pseudoDirKeyWithSlash)
     } yield {
       val expectedBeforeDeletion = (1 to n).map(toKey)
@@ -140,8 +170,7 @@ final class AwsTest extends AwsFunSuite {
       
       //The "containing folder" was never never explicitly created, so it shouldn't exist
       val expectedAfterDeletion = Nil
-      
-      //Convert to sets to ignore ordering
+
       assert(keysAfterDeletion == expectedAfterDeletion)
     }
   }
@@ -189,12 +218,12 @@ final class AwsTest extends AwsFunSuite {
       assert(metadata0 == metadataContents0)
       
       //Convert to sets to ignore ordering
-      assert(contents0.toSet == Set(pseudoDirKeyWithSlash, s"${pseudoDirKey}/metadata"))
+      assert(contents0.toSet == Set(s"${pseudoDirKey}/metadata"))
       
       assert(metadata1 == metadataContents1)
       
       //Convert to sets to ignore ordering
-      assert(contents0.toSet == Set(pseudoDirKeyWithSlash, s"${pseudoDirKey}/metadata"))
+      assert(contents0.toSet == Set(s"${pseudoDirKey}/metadata"))
     }
   }
   
