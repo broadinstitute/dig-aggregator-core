@@ -112,7 +112,7 @@ final class AWS(opts: Opts) extends LazyLogging {
   /**
    * Delete (recursively) all the keys under a given key from S3.
    */
-  def rmdir(key: String): IO[List[String]] = {
+  def rmdir(key: String): IO[Seq[String]] = {
     val ios = for (listing <- s3.listingsIterator(bucket, key)) yield {
       if (listing.getObjectSummaries.isEmpty) {
         IO(Nil)
