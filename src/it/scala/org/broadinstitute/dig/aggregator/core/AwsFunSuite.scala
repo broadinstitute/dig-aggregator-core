@@ -11,22 +11,23 @@ import cats.effect.IO
  * Jul 27, 2018
  */
 trait AwsFunSuite extends FunSuite {
-  protected def aws: AWS[_]
+  protected def aws: AWS
   
   def testWithPseudoDir(name: String)(body: String => Any): Unit = {
     test(name) {
-      val mungedName = name.filter(_ != AWS.pathSep)
+      val mungedName = name.filter(_ != '/')
       
-      val pseudoDirKey = s"integrationTests${AWS.pathSep}${mungedName}"
+      val pseudoDirKey = s"integrationTests/${mungedName}"
       
-      val nukeTestDir = for {
-        keys <- aws.ls(s"${pseudoDirKey}${AWS.pathSep}")
-        _ <- aws.rm(keys)
-      } yield ()
+      def nukeTestDir() = aws.rmdir(s"${pseudoDirKey}/").unsafeRunSync()
       
-      nukeTestDir.unsafeRunSync()
+      nukeTestDir()
       
       body(pseudoDirKey)
+      
+      //Test dir will be deleted after successful runs, but will live until the next run
+      //if there's a failure.
+      nukeTestDir()
     }
   }
   
