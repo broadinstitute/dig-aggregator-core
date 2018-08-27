@@ -26,6 +26,11 @@ sealed trait JobStep {
 object JobStep {
   import Implicits._
 
+  def toJobName(uri: URI): String = uri.basename.trim match {
+    case "" => uri.toString
+    case nonEmpty => nonEmpty
+  }
+  
   /**
    * Create a new Map Reduce step given a JAR (S3 path) the main class to
    * run, and any command line arguments to pass along to the JAR.
@@ -73,7 +78,7 @@ object JobStep {
         .withArgs((script.toString :: args.toList).asJava)
 
       new StepConfig()
-        .withName(script.basename)
+        .withName(toJobName(script))
         .withActionOnFailure(ActionOnFailure.TERMINATE_CLUSTER)
         .withHadoopJarStep(jarConfig)
     }
@@ -94,7 +99,7 @@ object JobStep {
       )
 
       // use the basename of the file as the name of the step
-      CommandRunner(script.basename, commandRunnerArgs ++ args).config
+      CommandRunner(toJobName(script), commandRunnerArgs ++ args).config
     }
   }
 
@@ -119,7 +124,7 @@ object JobStep {
       val file = List("-f", script.toString)
 
       // use the basename of the script location as the name of the step
-      CommandRunner(script.basename, commandRunnerArgs ++ params ++ file).config
+      CommandRunner(toJobName(script), commandRunnerArgs ++ params ++ file).config
     }
   }
 }

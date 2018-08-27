@@ -4,8 +4,10 @@ import cats.effect._
 import cats.syntax.all._
 
 import com.typesafe.scalalogging.Logger
+import scala.util.Success
+import scala.util.Failure
+import java.util.Properties
 
-import scala.util._
 
 /**
  * This is the base class that all aggregator apps should derive from to
@@ -19,42 +21,52 @@ import scala.util._
  *    }
  *  }
  */
-class DigApp extends IOApp {
-
+abstract class DigApp extends IOApp {
+  
   /**
-   * Use the class name as the application name, but strip out anything
-   * that is extraneous and would be identical to all DIG apps.
+   * The (unique!) name of this application, retrieved from application.properties
+   * on the classpath, where it was written by SBT.
+   * 
+   * Note: projects that contain subclasses of `DigApp` _must_ make sure an application.properties
+   * file with a `name` property in it exists on the classpath.  This is easily accomplished by writing
+   * the info read by `Versions` to application.properties at the same time it's recorded elsewhere by 
+   * SBT.
    */
-  val applicationName = {
-    val name = getClass.getCanonicalName
-    val core = getClass.getSuperclass.getCanonicalName
-
-    // drop the final class name (only care about the package)
-    val domain = name.split('.').dropRight(1)
-
-    // zip with the core package, and drop everything identical
-    val dropped = domain.zip(core.split('.')).takeWhile {
-      case (a, b) => a == b
-    }
-
-    // everything left is the unique name
-    domain.drop(dropped.size).mkString(".")
+  private val applicationName: String = {
+    import Versions.Implicits._
+    
+    val propsFile = "application.properties"
+    
+    val propsAttempt = Versions.propsFrom(propsFile)
+    
+    val key = "name"
+    
+    val nameAttempt = for {
+      props <- propsAttempt
+      name <- props.tryGetProperty(key)
+    } yield name.trim
+    
+    val name = nameAttempt.get
+    
+    require(name.nonEmpty, s"'name' property in '$propsFile' must not be empty")
+    
+    name
   }
-
+  
   /**
    * Create a logger for this application.
    */
-  val logger = Logger(applicationName)
+  protected val logger: Logger = Logger(applicationName)
 
   /**
    * Must be implemented by subclass object.
    */
-  def run(opts: Opts): IO[ExitCode] = ???
+  def run(opts: Opts): IO[ExitCode]
 
   /**
    * Called from IOApp.main.
    */
-  def run(args: List[String]): IO[ExitCode] = {
+  override def run(args: List[String]): IO[ExitCode] = {
     val opts: Opts = new Opts(applicationName, args.toArray)
 
     logger.info(appVersionInfoString(opts))
@@ -97,14 +109,10 @@ class DigApp extends IOApp {
   /**
    * Returns the version information for this application.
    */
-  private def appVersionInfoString(opts: Opts) = {
-    getVersionInfoString(s"${opts.appName}-versionInfo.properties")
-  }
+  private def appVersionInfoString(opts: Opts) = getVersionInfoString(s"${opts.appName}-versionInfo.properties")
 
   /**
    * Returns the version information for the aggregator core.
    */
-  private def aggregatorCoreVersionInfoString = {
-    getVersionInfoString("dig-aggregator-core-versionInfo.properties")
-  }
+  private def aggregatorCoreVersionInfoString = getVersionInfoString("dig-aggregator-core-versionInfo.properties")
 }

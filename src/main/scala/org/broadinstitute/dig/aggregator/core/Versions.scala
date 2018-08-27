@@ -44,23 +44,33 @@ object Versions {
     val forAggregatorCore: String = "dig-aggregator-core-versionInfo.properties"
   }
   
-  def load(versionsPropsFile: String): Try[Versions] = {
-    val propStreamOption = Option(getClass.getClassLoader.getResourceAsStream(versionsPropsFile))
+  private[core] def propsFrom(propsFile: String): Try[Properties] = {
+    val propStreamOption = Option(getClass.getClassLoader.getResourceAsStream(propsFile))
     
-    val propStreamAttempt = toTry(propStreamOption)(s"Couldn't find '$versionsPropsFile' on the classpath")
+    val propStreamAttempt = toTry(propStreamOption)(s"Couldn't find '$propsFile' on the classpath")
     
     for {
       propStream <- propStreamAttempt
       reader <- Try(new InputStreamReader(propStream))
-      versions <- loadFrom(reader)
+      props <- toProps(reader)
+    } yield props
+  }
+  
+  def load(versionsPropsFile: String): Try[Versions] = {
+    for {
+      props <- propsFrom(versionsPropsFile)
+      versions <- loadFrom(props)
     } yield {
       versions
     }
   }
   
-  private[core] def loadFrom(reader: Reader): Try[Versions] = {
+  private[core] def loadFrom(reader: Reader): Try[Versions] = toProps(reader).flatMap(loadFrom)
+  
+  private[core] def loadFrom(props: Properties): Try[Versions] = {
+    import Implicits._
+    
     for {
-      props <- toProps(reader)
       name <- props.tryGetProperty("name")
       version <- props.tryGetProperty("version")
       branch <- props.tryGetProperty("branch")
@@ -73,14 +83,16 @@ object Versions {
     }
   }
   
-  private final implicit class PropertiesOps(val props: Properties) extends AnyVal {
-    def tryGetProperty(key: String): Try[String] = {
-      toTry(Option(props.getProperty(key)).map(_.trim).filter(_.nonEmpty)) {
-        import scala.collection.JavaConverters._
-        
-        val sortedPropKvPairs = props.asScala.toSeq.sortBy { case (k, _) => k }
-        
-        s"property key '$key' not found in $sortedPropKvPairs"
+  object Implicits {
+    final implicit class PropertiesOps(val props: Properties) extends AnyVal {
+      def tryGetProperty(key: String): Try[String] = {
+        toTry(Option(props.getProperty(key)).map(_.trim).filter(_.nonEmpty)) {
+          import scala.collection.JavaConverters._
+          
+          val sortedPropKvPairs = props.asScala.toSeq.sortBy { case (k, _) => k }
+          
+          s"property key '$key' not found in $sortedPropKvPairs"
+        }
       }
     }
   }
@@ -90,7 +102,7 @@ object Versions {
     case None => Failure(new Exception(messageIfNone))
   }
   
-  private def toProps(reader: Reader): Try[Properties] = Try {
+  private[core] def toProps(reader: Reader): Try[Properties] = Try {
     try {
       val props = new Properties
           

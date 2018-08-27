@@ -105,21 +105,21 @@ final class AWS(opts: Opts) extends LazyLogging {
   /**
    * List all the keys in a given S3 folder.
    */
-  def ls(key: String): IO[List[String]] = IO {
-    s3.listKeys(bucket, key).keys
+  def ls(key: String): IO[Seq[String]] = IO {
+    s3.listKeys(bucket, key).toSeq
   }
 
   /**
    * Delete (recursively) all the keys under a given key from S3.
    */
-  def rmdir(key: String): IO[List[String]] = {
-    val ios = for (listing <- s3.listKeys(bucket, key)) yield {
-      if (listing.getObjectSummaries.size == 0) {
+  def rmdir(key: String): IO[Seq[String]] = {
+    val ios = for (listing <- s3.listingsIterator(bucket, key)) yield {
+      if (listing.getObjectSummaries.isEmpty) {
         IO(Nil)
       } else {
-        val keys        = listing.getObjectSummaries.asScala.map(_.getKey)
+        val keys        = listing.keys
         val keyVersions = keys.map(new DeleteObjectsRequest.KeyVersion(_))
-        val request     = new DeleteObjectsRequest(bucket).withKeys(keyVersions.asJava)
+        val request     = new DeleteObjectsRequest(bucket).withKeys(keyVersions.toSeq.asJava)
 
         for {
           _ <- IO(logger.debug(s"Deleting ${keys.head} + ${keys.tail.size} more keys..."))
@@ -129,7 +129,7 @@ final class AWS(opts: Opts) extends LazyLogging {
     }
 
     // all the delete operations can happen in parallel
-    ios.toList.parSequence.map(_.foldLeft(List.empty[String])(_ ++ _))
+    ios.toList.parSequence.map(_.flatten)
   }
 
   /**
@@ -157,6 +157,7 @@ final class AWS(opts: Opts) extends LazyLogging {
 
       // show the job ID so it can be referenced in the AWS console
       logger.debug(s"Submitted job with ${steps.size} steps...")
+      
       job
     }
   }
