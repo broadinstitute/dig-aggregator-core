@@ -4,6 +4,7 @@ lazy val Versions = new {
   val CatsEffect     = "1.0.0-RC2"
   val Doobie         = "0.5.3"
   val Fs2            = "0.10.1"
+  val H2             = "1.4.197"
   val Hadoop         = "1.2.1"
   val Json4s         = "3.5.3"
   val Kafka          = "1.1.0"
@@ -51,7 +52,8 @@ lazy val mainDeps = Seq(
 )
 
 lazy val testDeps = Seq(
-  "org.scalatest" %% "scalatest" % Versions.ScalaTest % "it,test"
+  "org.scalatest" %% "scalatest" % Versions.ScalaTest % "it,test",
+  "com.h2database" % "h2" % Versions.H2 % "test"
 )
 
 lazy val root = (project in file("."))
