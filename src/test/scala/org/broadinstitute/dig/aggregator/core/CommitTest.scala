@@ -31,9 +31,9 @@ final class CommitTest extends DbFunSuite {
   }
   
   dbTest("datasets - no ignoreProcessedBy") {
-    val c0 = makeCommit(0, "x")
-    val c1 = makeCommit(1, "x")
-    val c2 = makeCommit(2, "y")
+    val c0 = makeCommit(0, topic = "x")
+    val c1 = makeCommit(1, topic = "x")
+    val c2 = makeCommit(2, topic = "y")
     
     insert(c0, c1, c2)
     
@@ -51,16 +51,41 @@ final class CommitTest extends DbFunSuite {
   }
   
   dbTest("datasets - with ignoreProcessedBy") {
-    fail("TODO")
+    val c0 = makeCommit(0, topic = "x", dataset = "fooSet")
+    val c1 = makeCommit(1, topic = "x", dataset = "fooSet")
+    val c2 = makeCommit(2, topic = "x", dataset = "barSet")
+    val c3 = makeCommit(3, topic = "y", dataset = "barSet")
+    
+    val d0 = Dataset(app = "fooApp", topic = "x", dataset = "fooSet", step = "asdf", commit = c0.commit)
+    val d1 = Dataset(app = "barApp", topic = "x", dataset = "fooSet", step = "asdf", commit = c1.commit)
+    val d2 = Dataset(app = "blergApp", topic = "x", dataset = "barSet", step = "asdf", commit = c2.commit)
+    val d3 = Dataset(app = "blergApp", topic = "y", dataset = "barSet", step = "asdf", commit = c3.commit)
+    
+    insert(c0, c1, c2, c3)
+    insert(d0, d1, d2, d3)
+    
+    val xs = Commit.datasets(xa, "x", ignoreProcessedBy = Some("fooApp")).unsafeRunSync()
+    
+    assert(xs.toSet == Set(c1, c2))
+    
+    val ys = Commit.datasets(xa, "y", ignoreProcessedBy = Some("fooApp")).unsafeRunSync()
+    
+    assert(ys == Seq(c3))
+    
+    assert(Commit.datasets(xa, "z", Some("fooApp")).unsafeRunSync().isEmpty)
+    assert(Commit.datasets(xa, "z", Some("barApp")).unsafeRunSync().isEmpty)
+    assert(Commit.datasets(xa, "z", Some("blergApp")).unsafeRunSync().isEmpty)
   }
 
-  private def makeCommit(i: Int, topic: String): Commit = Commit(
-    commit = 123L + i,
+  private def makeCommit(i: Int, topic: String, dataset: String): Commit = Commit(
+    commit = i,
     topic = topic,
-    partition = 456 + i,
-    offset = 999L + i,
-    dataset = s"foo-$i")
+    partition = 123 + i,
+    offset = 456L + i,
+    dataset = dataset)
+  
+  private def makeCommit(i: Int, topic: String): Commit = makeCommit(i, topic, dataset = s"foo-$i")
     
-  private def makeCommit(i: Int): Commit = makeCommit(i, s"asdf-$i")
+  private def makeCommit(i: Int): Commit = makeCommit(i, s"asdf-$i", s"foo-$i")
   
 }

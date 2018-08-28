@@ -139,7 +139,7 @@ object Commit {
     
     val where = fr"WHERE `commits`.`topic` = $topic"
       
-    def extraAnd = fr"`datasets`.`app` IS NULL"
+    def extraAnd = fr"AND `datasets`.`app` IS NULL"
     
     val orderBy = fr"ORDER BY `commits`.`commit`"
     
