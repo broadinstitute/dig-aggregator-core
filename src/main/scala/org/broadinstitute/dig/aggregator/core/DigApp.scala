@@ -1,4 +1,4 @@
-package org.broadinstitute.dig.aggregator.core.app
+package org.broadinstitute.dig.aggregator.core
 
 import cats.effect._
 import cats.syntax.all._

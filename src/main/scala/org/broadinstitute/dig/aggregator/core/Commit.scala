@@ -102,7 +102,7 @@ object Commit {
    * Parse a record from the `commits` topic into a Commit that can be
    * inserted into the database.
    */
-  def fromCommitRecord(record: Consumer.Record): Commit = {
+  def fromRecord(record: Consumer.Record): Commit = {
     require(record.topic.equals("commits"))
 
     val json = parse(record.value)

@@ -24,8 +24,7 @@ import com.typesafe.scalalogging.LazyLogging
 /**
  * Kafka JSON topic record consumer.
  */
-final class Consumer[A](opts: Opts, topic: String)(fromRecord: Consumer.Record => A)
-    extends LazyLogging {
+final class Consumer(opts: Opts, topic: String) extends LazyLogging {
 
   /**
    * Create a connection to the database for writing state.
@@ -101,13 +100,6 @@ final class Consumer[A](opts: Opts, topic: String)(fromRecord: Consumer.Record =
   }
 
   /**
-   * Convert all the records into the desired type for the process function.
-   */
-  private def deserializeRecords(records: Consumer.Records): Seq[A] = {
-    records.iterator.asScala.map(fromRecord).toSeq
-  }
-
-  /**
    * Constantly grab the last set of records processed and try to update -
    * and save to the database - a new state. If no new records are there,
    * just wait a little while before checking again.
@@ -153,7 +145,7 @@ final class Consumer[A](opts: Opts, topic: String)(fromRecord: Consumer.Record =
    * Create a Stream that will continuously read from Kafka and pass the
    * records to a process function.
    */
-  def consume[R](state: State, process: Seq[A] => IO[R]): IO[Unit] = {
+  def consume(state: State, process: Seq[Consumer.Record] => IO[_]): IO[Unit] = {
     val fetch = IO {
       client.poll(Long.MaxValue)
     }
@@ -166,7 +158,7 @@ final class Consumer[A](opts: Opts, topic: String)(fromRecord: Consumer.Record =
       streamTask = Stream
         .eval(fetch)
         .repeat
-        .evalMap(rs => process(deserializeRecords(rs)) >> ref.set(Some(rs)))
+        .evalMap(rs => process(rs.iterator.asScala.toSeq) >> ref.set(Some(rs)))
         .compile
         .drain
 
