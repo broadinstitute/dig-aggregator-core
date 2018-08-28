@@ -149,14 +149,5 @@ object Commit {
     }
     
     q.query[Commit].to[Seq].transact(xa)
-    
-    /*val q = sql"""SELECT   `commit`, `topic`, `partition`, `offset`, `dataset`
-                 |FROM     `commits`
-                 |WHERE    `commits`.`topic` = $topic
-                 |ORDER BY `commits`.`commit`
-                 |""".stripMargin.query[Commit].to[List]
-
-    // run the query
-    q.transact(xa)*/
   }
 }

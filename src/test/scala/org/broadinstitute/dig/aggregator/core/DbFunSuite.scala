@@ -49,8 +49,8 @@ object DbFunSuite {
     (table.drop, table.create).mapN(_ + _).transact(xa).unsafeRunSync()
   }
   
-  private trait Table {
-    def drop: ConnectionIO[Int]
+  private abstract class Table(name: String) {
+    val drop: ConnectionIO[Int] = (fr"DROP TABLE IF EXISTS " ++ Fragment.const(name)).update.run
     
     def create: ConnectionIO[Int]
   }
@@ -58,12 +58,8 @@ object DbFunSuite {
   private object Tables {
     val all: Seq[Table] = Seq(Commits, Datasets)
     
-    object Commits extends Table {
-      override val drop = sql"""
-        DROP TABLE IF EXISTS `commits`
-      """.update.run
-      
-      override val create = sql"""
+    object Commits extends Table("commits") {
+      override val create: ConnectionIO[Int] = sql"""
         CREATE TABLE `commits` (
         `ID` int(11) NOT NULL AUTO_INCREMENT,
         `commit` int(64) NOT NULL,
@@ -77,12 +73,8 @@ object DbFunSuite {
       )""".update.run 
     }
     
-    object Datasets extends Table {
-      override val drop = sql"""
-        DROP TABLE IF EXISTS `datasets`
-      """.update.run
-      
-      override val create = sql"""
+    object Datasets extends Table("datasets") {
+      override val create: ConnectionIO[Int] = sql"""
         CREATE TABLE `datasets` (
         `ID` int(11) NOT NULL AUTO_INCREMENT,
         `app` varchar(180) NOT NULL,
