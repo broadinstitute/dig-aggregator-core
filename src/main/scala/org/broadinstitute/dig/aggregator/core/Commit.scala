@@ -84,7 +84,7 @@ object Commit {
   /**
    * Create a new Commit message that can be sent to the `commits` topic.
    */
-  def message(record: Consumer#Record, dataset: String): String = {
+  def message(record: Consumer.Record, dataset: String): String = {
     require(!record.topic.equals("commits"))
 
     // cannot use Commit object here since `commit` offset doesn't exist yet
@@ -102,7 +102,7 @@ object Commit {
    * Parse a record from the `commits` topic into a Commit that can be
    * inserted into the database.
    */
-  def fromCommitRecord(record: Consumer#Record): Commit = {
+  def fromCommitRecord(record: Consumer.Record): Commit = {
     require(record.topic.equals("commits"))
 
     val json = parse(record.value)

@@ -24,18 +24,13 @@ import com.typesafe.scalalogging.LazyLogging
 /**
  * Kafka JSON topic record consumer.
  */
-final class Consumer(opts: Opts, topic: String) extends LazyLogging {
+final class Consumer[A](opts: Opts, topic: String)(fromRecord: Consumer.Record => A)
+    extends LazyLogging {
 
   /**
    * Create a connection to the database for writing state.
    */
   val xa = opts.config.mysql.newTransactor()
-
-  /**
-   * Helper types since the template parameters are constant.
-   */
-  type Record  = ConsumerRecord[String, String]
-  type Records = ConsumerRecords[String, String]
 
   /**
    * Kafka connection properties.
@@ -101,7 +96,33 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
   private def loadState(): IO[State] = {
     State.load(xa, opts.appName, topic).flatMap {
       case Some(s) => IO.pure(s)
-      case None    => resetState()
+      case None    => IO.raiseError(new Exception("failed to load state"))
+    }
+  }
+
+  /**
+   * Convert all the records into the desired type for the process function.
+   */
+  private def deserializeRecords(records: Consumer.Records): Seq[A] = {
+    records.iterator.asScala.map(fromRecord).toSeq
+  }
+
+  /**
+   * Constantly grab the last set of records processed and try to update -
+   * and save to the database - a new state. If no new records are there,
+   * just wait a little while before checking again.
+   */
+  private def updateState(state: State, ref: Ref[IO, Option[Consumer.Records]]): IO[Unit] = {
+    val wait = IO.sleep(10.seconds)
+
+    /*
+     * Wait a bit, then take - and return - whatever is in the ref (`_`) and
+     * replace it with `None`. If there were records in the ref, update the
+     * state and write it to the database. Then recurse.
+     */
+    wait >> ref.modify(None -> _).flatMap {
+      case Some(records) => (state ++ records).save(xa).flatMap(updateState(_, ref))
+      case None          => updateState(state, ref)
     }
   }
 
@@ -109,10 +130,9 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
    * Before the consumer can start consuming records it must seek to the
    * correct offset for each partition, which initializes the state. If
    * the reset flag was passed on the command line then `reset` is true
-   * and forced, otherwise it attempts to load the last state from the
-   * database with resetState used as a fallback.
+   * and forced, otherwise it attempts to load the last state from MySQL.
    */
-  private def assignPartitions(): IO[State] = {
+  def assignPartitions(): IO[State] = {
     val getState = if (opts.reset()) resetState() else loadState()
 
     // load or reset the state, then assign the partitions
@@ -130,43 +150,23 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
   }
 
   /**
-   * Constantly grab the last set of records processed and try to update -
-   * and save to the database - a new state. If no new records are there,
-   * just wait a little while before checking again.
-   */
-  private def updateState(state: State, ref: Ref[IO, Option[Records]]): IO[Unit] = {
-    val wait = IO.sleep(10.seconds)
-
-    /*
-     * Wait a bit, then take - and return - whatever is in the ref (`_`) and
-     * replace it with `None`. If there were records in the ref, update the
-     * state and write it to the database. Then recurse.
-     */
-    wait >> ref.modify(None -> _).flatMap {
-      case Some(records) => (state ++ records).save(xa).flatMap(updateState(_, ref))
-      case None          => updateState(state, ref)
-    }
-  }
-
-  /**
    * Create a Stream that will continuously read from Kafka and pass the
    * records to a process function.
    */
-  def consume[A](process: Records => IO[A]): IO[Unit] = {
+  def consume[R](state: State, process: Seq[A] => IO[R]): IO[Unit] = {
     val fetch = IO {
       client.poll(Long.MaxValue)
     }
 
     for {
-      ref   <- Ref[IO].of[Option[Records]](None)
-      state <- assignPartitions()
+      ref <- Ref[IO].of[Option[Consumer.Records]](None)
 
       // create tasks to save the state and another to process the stream
       saveTask = updateState(state, ref)
       streamTask = Stream
         .eval(fetch)
         .repeat
-        .evalMap(rs => process(rs) >> ref.set(Some(rs)))
+        .evalMap(rs => process(deserializeRecords(rs)) >> ref.set(Some(rs)))
         .compile
         .drain
 
@@ -179,4 +179,16 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
       _ <- saveFiber.join
     } yield ()
   }
+}
+
+/**
+ * Companion object.
+ */
+object Consumer {
+
+  /**
+   * Helper types since the template parameters are constant.
+   */
+  type Record  = ConsumerRecord[String, String]
+  type Records = ConsumerRecords[String, String]
 }

@@ -1,13 +1,16 @@
-package org.broadinstitute.dig.aggregator.core
+package org.broadinstitute.dig.aggregator.core.app
 
 import cats.effect._
 import cats.syntax.all._
 
 import com.typesafe.scalalogging.Logger
-import scala.util.Success
-import scala.util.Failure
+
 import java.util.Properties
 
+import org.broadinstitute.dig.aggregator.core._
+
+import scala.util.Success
+import scala.util.Failure
 
 /**
  * This is the base class that all aggregator apps should derive from to
@@ -22,37 +25,37 @@ import java.util.Properties
  *  }
  */
 abstract class DigApp extends IOApp {
-  
+
   /**
    * The (unique!) name of this application, retrieved from application.properties
    * on the classpath, where it was written by SBT.
-   * 
+   *
    * Note: projects that contain subclasses of `DigApp` _must_ make sure an application.properties
    * file with a `name` property in it exists on the classpath.  This is easily accomplished by writing
-   * the info read by `Versions` to application.properties at the same time it's recorded elsewhere by 
+   * the info read by `Versions` to application.properties at the same time it's recorded elsewhere by
    * SBT.
    */
   private val applicationName: String = {
     import Versions.Implicits._
-    
+
     val propsFile = "application.properties"
-    
+
     val propsAttempt = Versions.propsFrom(propsFile)
-    
+
     val key = "name"
-    
+
     val nameAttempt = for {
       props <- propsAttempt
-      name <- props.tryGetProperty(key)
+      name  <- props.tryGetProperty(key)
     } yield name.trim
-    
+
     val name = nameAttempt.get
-    
+
     require(name.nonEmpty, s"'name' property in '$propsFile' must not be empty")
-    
+
     name
   }
-  
+
   /**
    * Create a logger for this application.
    */
@@ -109,10 +112,12 @@ abstract class DigApp extends IOApp {
   /**
    * Returns the version information for this application.
    */
-  private def appVersionInfoString(opts: Opts) = getVersionInfoString(s"${opts.appName}-versionInfo.properties")
+  private def appVersionInfoString(opts: Opts) =
+    getVersionInfoString(s"${opts.appName}-versionInfo.properties")
 
   /**
    * Returns the version information for the aggregator core.
    */
-  private def aggregatorCoreVersionInfoString = getVersionInfoString("dig-aggregator-core-versionInfo.properties")
+  private def aggregatorCoreVersionInfoString =
+    getVersionInfoString("dig-aggregator-core-versionInfo.properties")
 }
