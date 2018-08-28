@@ -123,7 +123,7 @@ object Commit {
    * already been committed as well as the last commit offset so the processor
    * knows where to start consuming from.
    */
-  def datasets(xa: Transactor[IO], topic: String): IO[List[Commit]] = {
+  def datasets(xa: Transactor[IO], topic: String): IO[Seq[Commit]] = {
     val q = sql"""SELECT   `commit`, `topic`, `partition`, `offset`, `dataset`
                  |FROM     `commits`
                  |WHERE    `topic` = $topic
