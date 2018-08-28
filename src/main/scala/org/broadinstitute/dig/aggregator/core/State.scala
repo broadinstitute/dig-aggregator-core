@@ -74,18 +74,6 @@ object State {
   type OffsetMap = Map[Int, Long]
 
   /**
-   *
-   */
-  case class Commit(
-      commit: Long, // commits topic offset
-      topic: String, // dataset topic
-      partition: Int, // dataset topic partition
-      offset: Long, // dataset topic offset
-      dataset: String, // dataset name
-      version: Int // dataset version
-  )
-
-  /**
    * Load a ConsumerState from MySQL. This collects all the partition/offset
    * rows for a given app+topic and merges them together. If no partition
    * offsets exist in the database for this app+topic, then `None` is returned

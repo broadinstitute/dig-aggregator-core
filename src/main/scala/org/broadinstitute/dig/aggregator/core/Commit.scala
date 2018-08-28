@@ -39,13 +39,13 @@ case class Commit(
     partition: Int, // dataset topic partition
     offset: Long, // dataset topic offset
     dataset: String // dataset name
-) {
+) extends Insertable {
 
   /**
    * Insert this commit to the database, optionally updating if the
    * dataset+version already exists for this topic.
    */
-  def insert(xa: Transactor[IO]): IO[Int] = {
+  override def insert(xa: Transactor[IO]): IO[Int] = {
     val q = sql"""INSERT INTO `commits`
                  |  ( `commit`
                  |  , `topic`
@@ -89,10 +89,10 @@ object Commit {
 
     // cannot use Commit object here since `commit` offset doesn't exist yet
     val json =
-      ("topic"       -> record.topic) ~
-        ("partition" -> record.partition) ~
-        ("offset"    -> record.offset) ~
-        ("dataset"   -> dataset)
+      ("topic"     -> record.topic) ~
+      ("partition" -> record.partition) ~
+      ("offset"    -> record.offset) ~
+      ("dataset"   -> dataset)
 
     // convert the JSON object to a string for the commits topic
     compact(render(json))
@@ -123,14 +123,40 @@ object Commit {
    * already been committed as well as the last commit offset so the processor
    * knows where to start consuming from.
    */
-  def datasets(xa: Transactor[IO], topic: String): IO[Seq[Commit]] = {
-    val q = sql"""SELECT   `commit`, `topic`, `partition`, `offset`, `dataset`
+  def datasets(xa: Transactor[IO], topic: String, ignoreProcessedBy: Option[String]): IO[Seq[Commit]] = {
+    val select = fr"""|SELECT   `commits`.`commit`,
+                      |`commits`.`topic`,
+                      |`commits`.`partition`,
+                      |`commits`.`offset`,
+                      |`commits`.`dataset`
+                      |FROM     `commits`""".stripMargin
+      
+    def join(app: String) = fr"""|LEFT JOIN   `datasets`
+                                 |ON          `datasets`.`app` = $app
+                                 |AND         `datasets`.`topic` = `commits`.`topic`
+                                 |AND         `datasets`.`dataset` = `commits`.`dataset`
+                                 |AND         `datasets`.`commit` = `commits`.`commit`""".stripMargin
+    
+    val where = fr"WHERE `commits`.`topic` = $topic"
+      
+    def extraAnd = fr"`datasets`.`app` IS NULL"
+    
+    val orderBy = fr"ORDER BY `commits`.`commit`"
+    
+    val q = ignoreProcessedBy match {
+      case None => select ++ where ++ orderBy
+      case Some(app) => select ++ join(app) ++ where ++ extraAnd ++ orderBy
+    }
+    
+    q.query[Commit].to[Seq].transact(xa)
+    
+    /*val q = sql"""SELECT   `commit`, `topic`, `partition`, `offset`, `dataset`
                  |FROM     `commits`
-                 |WHERE    `topic` = $topic
-                 |ORDER BY `commit`
+                 |WHERE    `commits`.`topic` = $topic
+                 |ORDER BY `commits`.`commit`
                  |""".stripMargin.query[Commit].to[List]
 
     // run the query
-    q.transact(xa)
+    q.transact(xa)*/
   }
 }
