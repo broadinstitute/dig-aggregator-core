@@ -13,6 +13,7 @@ import cats.effect.IO
  * Aug 27, 2018
  */
 trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
+  
   def dbTest(name: String)(body: => Any): Unit = {
     test(name) {
       makeTables()
@@ -21,8 +22,22 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     }
   }
   
-  def insert(is: Insertable*): Unit = {
-    is.toList.map(_.insert(xa)).sequence.unsafeRunSync()
+  def insert[A](a: A, rest: A*)(implicit inserter: Insertable[A]): Unit = {
+    (a +: rest).toList.map(inserter.insert).sequence.unsafeRunSync()
+  }
+  
+  private sealed trait Insertable[A] {
+    def insert(a: A): IO[_]
+  }
+  
+  private object Insertable {
+    implicit object CommitsAreInsertable extends Insertable[Commit] {
+      override def insert(c: Commit): IO[_] = c.insert(xa)  
+    }
+    
+    implicit object DatasetsAreInsertable extends Insertable[Dataset] {
+      override def insert(d: Dataset): IO[_] = d.insert(xa)  
+    }
   }
   
   def allCommits: Seq[Commit] = { 
@@ -32,7 +47,7 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
   }
   
   def allDatasets: Seq[Dataset] = { 
-    val q = sql"SELECT `app`, `topic`, `dataset`, `step`, `commit` FROM `datasets`".query[Dataset].to[List]
+    val q = sql"SELECT `app`, `topic`, `dataset`, `commit` FROM `datasets`".query[Dataset].to[List]
 
     q.transact(xa).unsafeRunSync()
   }
@@ -80,7 +95,6 @@ object DbFunSuite {
         `app` varchar(180) NOT NULL,
         `topic` varchar(180) NOT NULL,
         `dataset` varchar(180) NOT NULL,
-        `step` varchar(180) NOT NULL,
         `commit` int(64) NOT NULL,
         PRIMARY KEY (`ID`),
         UNIQUE KEY `DATASET_IDX` (`app`,`topic`,`dataset`)

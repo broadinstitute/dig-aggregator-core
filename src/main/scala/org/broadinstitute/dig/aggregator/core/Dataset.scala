@@ -11,20 +11,18 @@ case class Dataset(
     app: String,
     topic: String,
     dataset: String,
-    step: String,
-    commit: Long) extends Insertable {
+    commit: Long) {
   
   /**
    * Insert this dataset to the database.
    */
-  override def insert(xa: Transactor[IO]): IO[Int] = {
+  def insert(xa: Transactor[IO]): IO[Int] = {
     import doobie.implicits._
     
     val q = sql"""|INSERT INTO `datasets`
                   |  ( `app`
                   |  , `topic`
                   |  , `dataset`
-                  |  , `step`
                   |  , `commit`
                   |  )
                   |
@@ -32,7 +30,6 @@ case class Dataset(
                   |  ( $app
                   |  , $topic
                   |  , $dataset
-                  |  , $step
                   |  , $commit
                   |  )
                   |""".stripMargin.update

@@ -6,9 +6,9 @@ package org.broadinstitute.dig.aggregator.core
  */
 final class DatasetTest extends DbFunSuite {
   dbTest("insert") {
-    val d0 = Dataset(app = "a0", topic = "t0", dataset = "d0", step = "s0", commit = 0L)
-    val d1 = Dataset(app = "a1", topic = "t1", dataset = "d1", step = "s1", commit = 1L)
-    val d2 = Dataset(app = "a2", topic = "t2", dataset = "d2", step = "s2", commit = 2L)
+    val d0 = Dataset(app = "a0", topic = "t0", dataset = "d0", commit = 0L)
+    val d1 = Dataset(app = "a1", topic = "t1", dataset = "d1", commit = 1L)
+    val d2 = Dataset(app = "a2", topic = "t2", dataset = "d2", commit = 2L)
     
     assert(allDatasets.isEmpty)
     

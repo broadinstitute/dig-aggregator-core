@@ -56,10 +56,10 @@ final class CommitTest extends DbFunSuite {
     val c2 = makeCommit(2, topic = "x", dataset = "barSet")
     val c3 = makeCommit(3, topic = "y", dataset = "barSet")
     
-    val d0 = Dataset(app = "fooApp", topic = "x", dataset = "fooSet", step = "asdf", commit = c0.commit)
-    val d1 = Dataset(app = "barApp", topic = "x", dataset = "fooSet", step = "asdf", commit = c1.commit)
-    val d2 = Dataset(app = "blergApp", topic = "x", dataset = "barSet", step = "asdf", commit = c2.commit)
-    val d3 = Dataset(app = "blergApp", topic = "y", dataset = "barSet", step = "asdf", commit = c3.commit)
+    val d0 = Dataset(app = "fooApp", topic = "x", dataset = "fooSet", commit = c0.commit)
+    val d1 = Dataset(app = "barApp", topic = "x", dataset = "fooSet", commit = c1.commit)
+    val d2 = Dataset(app = "blergApp", topic = "x", dataset = "barSet", commit = c2.commit)
+    val d3 = Dataset(app = "blergApp", topic = "y", dataset = "barSet", commit = c3.commit)
     
     insert(c0, c1, c2, c3)
     insert(d0, d1, d2, d3)

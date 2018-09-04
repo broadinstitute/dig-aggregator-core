@@ -39,13 +39,13 @@ case class Commit(
     partition: Int, // dataset topic partition
     offset: Long, // dataset topic offset
     dataset: String // dataset name
-) extends Insertable {
+) {
 
   /**
    * Insert this commit to the database, optionally updating if the
    * dataset+version already exists for this topic.
    */
-  override def insert(xa: Transactor[IO]): IO[Int] = {
+  def insert(xa: Transactor[IO]): IO[Int] = {
     val q = sql"""INSERT INTO `commits`
                  |  ( `commit`
                  |  , `topic`
