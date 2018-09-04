@@ -18,7 +18,9 @@ import scala.util.Failure
  * of code so that - if it fails - error conditions will send out email
  * notifications.
  *
- *  object Main extends DigApp("uniqueName") {
+ *  object Main extends DigApp {
+ *    val applicationName: String = "MyApp"
+ *
  *    def run(opts: Opts): IO[ExitCode] = {
  *      ...
  *    }
@@ -30,19 +32,14 @@ import scala.util.Failure
 abstract class DigApp extends IOApp {
 
   /**
-   * The name of the class that derives from `DigApp` is the name of this
-   * application. It _must_ be unique across all processor apps as it is
-   * used as a key in various database queries.
-   *
-   * If the default version won't produce a unique name (e.g. 'Main'), then
-   * it is recommended that this val be overridden.
+   * Define the unique name for this application.
    */
-  val applicationName = getClass.getName.split('.').last.stripSuffix("$")
+  val registeredApp: RegisteredApp
 
   /**
    * Create a logger for this application.
    */
-  val logger: Logger = Logger(applicationName)
+  lazy val logger: Logger = Logger(registeredApp.appName)
 
   /**
    * Must be implemented by subclass object.
@@ -53,10 +50,16 @@ abstract class DigApp extends IOApp {
    * Called from IOApp.main.
    */
   override def run(args: List[String]): IO[ExitCode] = {
-    assert(!List("", "Main", "DigApp").contains(applicationName))
+    val registeredClass = DigAppRegistry(registeredApp.appName)
+
+    // verify that the registered class exists and matches
+    registeredClass match {
+      case Some(c) => assert(c == getClass, s"${getClass.getName} != ${c.getName}!")
+      case None    => throw new Exception(s"${registeredApp.appName} is not a registered app!")
+    }
 
     // parse the command line options and load the configuration file
-    val opts: Opts = new Opts(applicationName, args.toArray)
+    val opts: Opts = new Opts(registeredApp.appName, args.toArray)
 
     logger.info(appVersionInfoString(opts))
     logger.info(aggregatorCoreVersionInfoString)

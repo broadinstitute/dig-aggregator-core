@@ -68,7 +68,7 @@ abstract class DatasetProcessor(opts: Opts, topic: String) extends CommitProcess
   /**
    * Database transactor for writing dataset rows and fetching commits.
    */
-  val xa = opts.config.mysql.newTransactor()
+  private val xa = opts.config.mysql.newTransactor()
 
   /**
    * If --reset was passed on the command line, then farm out to the database
