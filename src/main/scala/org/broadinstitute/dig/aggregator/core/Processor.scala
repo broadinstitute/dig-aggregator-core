@@ -84,13 +84,54 @@ abstract class DatasetProcessor(opts: Opts, topic: String) extends CommitProcess
    * the database.
    */
   override def processRecords(records: Seq[Consumer.Record]): IO[Unit] = {
-    super.processRecords(records) >> IO.unit // TODO: <--
+    super.processRecords(records) >> IO.unit // TODO: <-- insert datasets table
   }
 
   /**
    * First process all the old commits, then start reading from Kafka.
    */
   override def run(): IO[Unit] = {
-    (oldCommits >>= processCommits) >> super.run
+    val consumer = new Consumer(opts, topic)
+
+    /*
+     * TODO: It would be much safer if assigning the partitions and getting the
+     *       old commits were part of the same transaction. As it's coded now,
+     *       it's possible for the commits table to be updated immediately
+     *       after being queried, but immediately before the existing commits
+     *       are fetched, meaning that the new commits will be processed, and
+     *       then when the consumer begins those commits will be processed
+     *       again.
+     *
+     *       This is a rare case to fix and technically shouldn't hurt anything
+     *       but should be avoided if possible. There are two ways to solve it:
+     *
+     *       1. Get the state and commits in the same Transactor:
+     *
+     *          val transaction = for {
+     *            stateQuery       <- consumer.assignPartitions()
+     *            commitsQuery     <- Commit.datasets(topic)
+     *          } yield (state, commits)
+     *
+     *          transaction.transact(xa)
+     *
+     *       2. Get the state and then use the state to modify the datasets
+     *          query with a set of SQL fragments that limit the commit offset
+     *          allowed:
+     *
+     *          for {
+     *            state   <- consumer.assignPartitions()
+     *            commits <- Commit.datasets(topic, state)
+     *            _       <- ...
+     *          } yield ()
+     *
+     *       Either of these solutions will require a decent amount of work.
+     */
+
+    for {
+      state   <- consumer.assignPartitions() // first because of reset warning!
+      commits <- oldCommits
+      _       <- processCommits(commits)
+      _       <- consumer.consume(state, processRecords)
+    } yield ()
   }
 }

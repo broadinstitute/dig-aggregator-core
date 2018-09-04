@@ -18,48 +18,31 @@ import scala.util.Failure
  * of code so that - if it fails - error conditions will send out email
  * notifications.
  *
- *  object Main extends DigApp {
+ *  object Main extends DigApp("uniqueName") {
  *    def run(opts: Opts): IO[ExitCode] = {
  *      ...
  *    }
  *  }
+ *
+ * BN: The `applicationName` MUST BE UNIQUE ACROSS ALL DIG APPLICATIONS as
+ *     it is used as the key to many database queries!!
  */
 abstract class DigApp extends IOApp {
 
   /**
-   * The (unique!) name of this application, retrieved from application.properties
-   * on the classpath, where it was written by SBT.
+   * The name of the class that derives from `DigApp` is the name of this
+   * application. It _must_ be unique across all processor apps as it is
+   * used as a key in various database queries.
    *
-   * Note: projects that contain subclasses of `DigApp` _must_ make sure an application.properties
-   * file with a `name` property in it exists on the classpath.  This is easily accomplished by writing
-   * the info read by `Versions` to application.properties at the same time it's recorded elsewhere by
-   * SBT.
+   * If the default version won't produce a unique name (e.g. 'Main'), then
+   * it is recommended that this val be overridden.
    */
-  private val applicationName: String = {
-    import Versions.Implicits._
-
-    val propsFile = "application.properties"
-
-    val propsAttempt = Versions.propsFrom(propsFile)
-
-    val key = "name"
-
-    val nameAttempt = for {
-      props <- propsAttempt
-      name  <- props.tryGetProperty(key)
-    } yield name.trim
-
-    val name = nameAttempt.get
-
-    require(name.nonEmpty, s"'name' property in '$propsFile' must not be empty")
-
-    name
-  }
+  val applicationName = getClass.getName.split('.').last.stripSuffix("$")
 
   /**
    * Create a logger for this application.
    */
-  protected val logger: Logger = Logger(applicationName)
+  val logger: Logger = Logger(applicationName)
 
   /**
    * Must be implemented by subclass object.
@@ -70,6 +53,9 @@ abstract class DigApp extends IOApp {
    * Called from IOApp.main.
    */
   override def run(args: List[String]): IO[ExitCode] = {
+    assert(!List("", "Main", "DigApp").contains(applicationName))
+
+    // parse the command line options and load the configuration file
     val opts: Opts = new Opts(applicationName, args.toArray)
 
     logger.info(appVersionInfoString(opts))

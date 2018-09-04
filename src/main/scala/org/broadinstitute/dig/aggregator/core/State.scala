@@ -93,7 +93,7 @@ object State {
    * of the consumer.
    */
   def load(xa: Transactor[IO], app: String, topic: String): IO[Option[State]] = {
-    val q = sql"""SELECT   `partition`, `offset`+1 AS `offset`
+    val q = sql"""SELECT   `partition`, IF(`offset`=0, 0, `offset`+1) AS `offset`
                  |FROM     `offsets`
                  |WHERE    `app` = $app AND `topic` = $topic
                  |ORDER BY `partition`

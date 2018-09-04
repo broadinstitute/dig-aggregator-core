@@ -43,12 +43,37 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
   /**
    * The Kafka client used to receive variant JSON messages.
    */
-  private val client: KafkaConsumer[String, String] = new KafkaConsumer(props)
+  private val client: KafkaConsumer[String, String] = {
+    Thread.currentThread.setContextClassLoader(null)
+    new KafkaConsumer(props)
+  }
 
   /**
    * Get all the partitions for this topic.
    */
   private val partitions: Seq[Int] = client.partitionsFor(topic).asScala.map(_.partition)
+
+  /**
+   * Identity, but logs to output whether the state was reset or loaded,
+   * and what the various partitions/offsets are now.
+   *
+   * This is here because when starting a consumer, if no output is visible, it
+   * can be frustrating and seeing this output indicates what's going on.
+   */
+  private def logState(action: String, state: State): IO[State] = IO {
+    logger.info(s"${action.capitalize} consumer state for topic '${state.topic}'...")
+
+    // sort by partition and output all the current offsets
+    for ((partition, offset) <- state.offsets.toList.sortBy(_._1)) {
+      logger.info(s" - partition $partition at offset $offset")
+    }
+
+    // now show that consuming of the topic has begun
+    logger.info("Consuming...")
+
+    // just chain the state
+    state
+  }
 
   /**
    * Get the earliest offsets for each partition in this topic. Then load
@@ -67,23 +92,24 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
     /*
      * BIG RED LETTERS FOR THE USER!
      */
-    logger.error("WARNING! The consumer state is being reset because either reset")
-    logger.error("         flag was passed on the command line or the commits")
-    logger.error("         database doesn't contain any partition offsets for this")
-    logger.error("         application + topic.")
-    logger.error("")
-    logger.error("         If this is the desired course of action, answer 'Y' at")
-    logger.error("         the prompt; any other response will exit the program")
-    logger.error("         before any damage is done.")
-    logger.error("")
+    logger.warn("The consumer state is being reset because either reset")
+    logger.warn("flag was passed on the command line or the commits")
+    logger.warn("database doesn't contain any partition offsets for this")
+    logger.warn("application + topic.")
+    logger.warn("")
+    logger.warn("If this is the desired course of action, answer 'Y' at")
+    logger.warn("the prompt; any other response will exit the program")
+    logger.warn("before any damage is done.")
+    logger.warn("")
 
     // terminate the entire application if the user doesn't answer "Y"
     if (!StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")) {
       IO.raiseError(new Exception("state reset canceled"))
     } else {
-      State.reset(xa, opts.appName, topic, offsets.toMap).map { offsets =>
-        State(opts.appName, topic, offsets)
-      }
+      State
+        .reset(xa, opts.appName, topic, offsets.toMap)
+        .map(offsets => State(opts.appName, topic, offsets))
+        .flatMap(logState("resetting", _))
     }
   }
 
@@ -94,8 +120,8 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
    */
   private def loadState(): IO[State] = {
     State.load(xa, opts.appName, topic).flatMap {
-      case Some(s) => IO.pure(s)
-      case None    => IO.raiseError(new Exception("failed to load state"))
+      case Some(s) => logState("loading", s)
+      case None    => IO.raiseError(new Exception("Failed to load state, run with --reset"))
     }
   }
 
