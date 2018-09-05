@@ -12,7 +12,6 @@ import org.broadinstitute.dig.aggregator.core._
 import scala.util.Success
 import scala.util.Failure
 import org.slf4j.LoggerFactory
-import ch.qos.logback.classic.LoggerContext
 
 /**
  * This is the base class that all aggregator apps should derive from to
@@ -41,7 +40,16 @@ abstract class DigApp extends IOApp {
   /**
    * Create a logger for this application.
    */
-  lazy val logger: Logger = {
+  protected lazy val logger: Logger = {
+    //Don't Mix in LazyLogging or StrictLogging, since we want to defer Logger creation until after 
+    //this object is finished being constructed, and `registeredApp` is set.  This is so that  
+    //AGGREGATOR_CORE_REGISTERED_APPNAME sysprop can be set to appName, so that the Logger can use it.
+    //
+    //Also: we can't make `registeredApp` a constructor param without jumping through hoops, since 
+    //RegisteredApp instances will refer to DigApp subclasses, creating a cycle in the object graph.  
+    //Making `registeredApp` doesn't change the cycle, but it keeps it from blowing things up at init 
+    //time. :\
+    
     System.setProperty("AGGREGATOR_CORE_REGISTERED_APPNAME", registeredApp.appName)
     
     Logger(getClass)
@@ -117,7 +125,7 @@ abstract class DigApp extends IOApp {
    * Returns the version information for this application.
    */
   private def appVersionInfoString(opts: Opts) =
-    getVersionInfoString(s"${opts.appName}-versionInfo.properties")
+    getVersionInfoString(s"versionInfo.properties")
 
   /**
    * Returns the version information for the aggregator core.
