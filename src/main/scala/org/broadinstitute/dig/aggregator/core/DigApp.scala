@@ -11,6 +11,8 @@ import org.broadinstitute.dig.aggregator.core._
 
 import scala.util.Success
 import scala.util.Failure
+import org.slf4j.LoggerFactory
+import ch.qos.logback.classic.LoggerContext
 
 /**
  * This is the base class that all aggregator apps should derive from to
@@ -39,7 +41,11 @@ abstract class DigApp extends IOApp {
   /**
    * Create a logger for this application.
    */
-  lazy val logger: Logger = Logger(registeredApp.appName)
+  lazy val logger: Logger = {
+    System.setProperty("AGGREGATOR_CORE_REGISTERED_APPNAME", registeredApp.appName)
+    
+    Logger(getClass)
+  }
 
   /**
    * Must be implemented by subclass object.
@@ -50,13 +56,8 @@ abstract class DigApp extends IOApp {
    * Called from IOApp.main.
    */
   override def run(args: List[String]): IO[ExitCode] = {
-    val registeredClass = DigAppRegistry(registeredApp.appName)
-
     // verify that the registered class exists and matches
-    registeredClass match {
-      case Some(c) => require(c == getClass, s"${getClass.getName} != ${c.getName}!")
-      case None    => throw new Exception(s"${registeredApp.appName} is not a registered app!")
-    }
+    checkRegisteredClass()
 
     // parse the command line options and load the configuration file
     val opts: Opts = new Opts(registeredApp.appName, args.toArray)
@@ -72,6 +73,20 @@ abstract class DigApp extends IOApp {
         case _                   => IO(logger.info("Done"))
       }
     }
+  }
+  
+  /**
+   * Throw if our app name is NOT registered, or if the registered class is NOT this class.
+   */
+  private def checkRegisteredClass(): Unit = {
+    
+    val registeredClassOpt = DigAppRegistry(registeredApp.appName)
+    
+    require(registeredClassOpt.isDefined, s"${registeredApp.appName} is not a registered app!")
+    
+    val registeredClass = registeredClassOpt.get
+    
+    require(registeredClass == getClass, s"${getClass.getName} != ${registeredClass.getName}!")
   }
 
   /**
