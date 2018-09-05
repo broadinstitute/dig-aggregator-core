@@ -24,7 +24,7 @@ case class State(app: String, topic: String, offsets: Map[Int, Long]) {
   /**
    * Return a new state with a updated partition offsets.
    */
-  def +(record: Consumer#Record): State = {
+  def +(record: Consumer.Record): State = {
     require(record.topic == topic, "ConsumerRecord topic doesn't match $topic!")
 
     // update the offsets map
@@ -34,7 +34,7 @@ case class State(app: String, topic: String, offsets: Map[Int, Long]) {
   /**
    * Return a new state with a updated partition offsets.
    */
-  def ++(records: Consumer#Records): State = {
+  def ++(records: Consumer.Records): State = {
     records.iterator.asScala.foldLeft(this)(_ + _)
   }
 
@@ -93,7 +93,7 @@ object State {
    * of the consumer.
    */
   def load(xa: Transactor[IO], app: String, topic: String): IO[Option[State]] = {
-    val q = sql"""SELECT   `partition`, `offset`+1 AS `offset`
+    val q = sql"""SELECT   `partition`, IF(`offset`=0, 0, `offset`+1) AS `offset`
                  |FROM     `offsets`
                  |WHERE    `app` = $app AND `topic` = $topic
                  |ORDER BY `partition`

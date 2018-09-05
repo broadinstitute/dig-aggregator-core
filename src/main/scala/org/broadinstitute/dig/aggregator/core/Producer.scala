@@ -32,7 +32,10 @@ final class Producer(opts: Opts, topic: String) {
   /**
    * The Kafka producer client to sent variant messages to.
    */
-  private val client: KafkaProducer[String, String] = new KafkaProducer(props)
+  private val client: KafkaProducer[String, String] = {
+    Thread.currentThread.setContextClassLoader(null)
+    new KafkaProducer(props)
+  }
 
   /**
    * Send a JSON message to the Kafka queue to a given topic.
