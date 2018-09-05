@@ -11,7 +11,6 @@ import org.broadinstitute.dig.aggregator.core._
 
 import scala.util.Success
 import scala.util.Failure
-import org.slf4j.LoggerFactory
 
 /**
  * This is the base class that all aggregator apps should derive from to
