@@ -37,13 +37,15 @@ final object DigAppRegistry {
    * Add a new application to the registry.
    */
   def +=(app: (String, Class[_ <: DigApp])): String = synchronized {
-    val name = app._1
+    val name       = app._1
+    val registered = registeredApps.get(name)
 
     // make sure it's not already registered
-    registeredApps.get(name) match {
-      case Some(c) => throw new Exception(s"$name already registered to ${c.getName}")
-      case None    => registeredApps += app; name
-    }
+    require(registered.isEmpty, s"$name already registered to ${registered.get}")
+
+    // register, return the name
+    registeredApps += app
+    name
   }
 }
 

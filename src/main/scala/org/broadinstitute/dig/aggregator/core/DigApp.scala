@@ -54,7 +54,7 @@ abstract class DigApp extends IOApp {
 
     // verify that the registered class exists and matches
     registeredClass match {
-      case Some(c) => assert(c == getClass, s"${getClass.getName} != ${c.getName}!")
+      case Some(c) => require(c == getClass, s"${getClass.getName} != ${c.getName}!")
       case None    => throw new Exception(s"${registeredApp.appName} is not a registered app!")
     }
 
