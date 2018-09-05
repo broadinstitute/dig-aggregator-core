@@ -32,6 +32,8 @@ case class Dataset(
                   |  , $dataset
                   |  , $commit
                   |  )
+                  |ON DUPLICATE KEY UPDATE
+                  |  `commit`    = VALUES(`commit`)
                   |""".stripMargin.update
 
     q.run.transact(xa)

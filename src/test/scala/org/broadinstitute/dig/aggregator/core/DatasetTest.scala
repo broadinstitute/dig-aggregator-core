@@ -20,4 +20,19 @@ final class DatasetTest extends DbFunSuite {
     
     assert(allDatasets.toSet == Set(d0, d1, d2))
   }
+  
+  dbTest("insert - on duplicate key update") {
+    val d0 = Dataset(app = "a0", topic = "t0", dataset = "d0", commit = 0L)
+    val d1 = Dataset(app = d0.app, topic = d0.topic, dataset = d0.dataset, commit = 1L)
+    
+    assert(allDatasets.isEmpty)
+    
+    insert(d0)
+    
+    assert(allDatasets == Seq(d0))
+    
+    insert(d1)
+    
+    assert(allDatasets.toSet == Set(d1))
+  }
 }

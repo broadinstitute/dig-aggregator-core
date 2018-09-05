@@ -21,13 +21,31 @@ final class CommitTest extends DbFunSuite {
     
     insert(c0)
     
-    assert(allCommits.size == 1)
-    assert(allCommits.head == c0)
+    assert(allCommits == Seq(c0))
     
     insert(c1, c2)
     
-    assert(allCommits.size == 3)
     assert(allCommits.toSet == Set(c0, c1, c2))
+  }
+  
+  dbTest("insert - on duplicate key update") {
+    val c0 = makeCommit(0)
+    val c1 = Commit(
+        commit = c0.commit + 1, 
+        topic = c0.topic, 
+        partition = c0.partition + 1,
+        offset = c0.offset + 1,
+        dataset = c0.dataset)
+
+    assert(allCommits.isEmpty)
+    
+    insert(c0)
+    
+    assert(allCommits == Seq(c0))
+    
+    insert(c1)
+    
+    assert(allCommits == Seq(c1))
   }
   
   dbTest("datasets - no ignoreProcessedBy") {
