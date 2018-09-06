@@ -30,7 +30,6 @@ import scala.util.Failure
  *     it is used as the key to many database queries!!
  */
 abstract class DigApp extends IOApp {
-
   /**
    * Define the unique name for this application.
    */
