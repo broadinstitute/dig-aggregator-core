@@ -73,26 +73,56 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
   }
 
   /**
-   * Before the consumer can start consuming records it must seek to the
-   * correct offset for each partition, which initializes the state. If
-   * the reset flag was passed on the command line then `reset` is true
-   * and forced, otherwise it attempts to load the last state from MySQL.
+   * The state that is loaded from the database may not actually contain all
+   * partitions for a given topic. For that reason, we have to ask Kafka for
+   * all the partitions and their beginning offsets, then overwrite those
+   * with updated ones from the State.
    */
-  private def assignPartitions(state: State): IO[Unit] = IO {
-    client.assign(state.offsets.keys.map(new TopicPartition(topic, _)).toList.asJava)
+  private def mergeStateOffsets(state: State): State = {
+    val topicPartitions  = partitions.map(new TopicPartition(topic, _))
+    val beginningOffsets = client.beginningOffsets(topicPartitions.asJava)
 
-    // advance the partitions to the correct offsets
-    for ((partition, offset) <- state.offsets) {
+    // create a map of offsets from Kafka
+    val offsets = beginningOffsets.asScala.map {
+      case (topicPartition, offset) => topicPartition.partition -> offset.toLong
+    }
+
+    // override the beginning offsets with the state offsets loaded
+    state.copy(offsets = offsets.toMap ++ state.offsets)
+  }
+
+  /**
+   * Before the consumer can start consuming records it must seek to the
+   * correct offset for each partition, which initializes the state.
+   *
+   * The state that was loaded may not contain all the partitions because it
+   * either isn't there in the database or the number of partitions changed
+   * in Kafka. So, we first find all the
+   */
+  private def assignPartitions(state: State): IO[State] = IO {
+    val updatedState = mergeStateOffsets(state)
+    val topicPartitions = updatedState.offsets.keys.map {
+      new TopicPartition(topic, _)
+    }
+
+    // assign all the partitions
+    client.assign(topicPartitions.toList.asJava)
+
+    // seek to the correct offsets
+    for ((partition, offset) <- updatedState.offsets) {
       client.seek(new TopicPartition(topic, partition), offset)
     }
 
     // log the partition information being consumed
-    logger.info(s"Consuming for topic '${state.topic}' from...")
+    logger.info(s"Consuming for topic '${updatedState.topic}' from...")
 
     // sort by partition and output all the current offsets
-    for ((partition, offset) <- state.offsets.toList.sortBy(_._1)) {
+    for ((partition, offset) <- updatedState.offsets.toList.sortBy(_._1)) {
       logger.info(s"...partition $partition at offset $offset")
     }
+
+    // return the state with all the offsets
+    updatedState
   }
 
   /**
@@ -107,17 +137,17 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
     for {
       ref <- Ref[IO].of[Option[Consumer.Records]](None)
 
+      // assign all the partitions before consuming
+      latestState <- assignPartitions(state)
+
       // create tasks to save the state and another to process the stream
-      saveTask = updateState(state, ref)
+      saveTask = updateState(latestState, ref)
       streamTask = Stream
         .eval(fetch)
         .repeat
         .evalMap(rs => process(rs.iterator.asScala.toSeq) >> ref.set(Some(rs)))
         .compile
         .drain
-
-      // assign all the partitions before consuming
-      _ <- assignPartitions(state)
 
       // run each task asynchronously in a fiber
       streamFiber <- streamTask.start

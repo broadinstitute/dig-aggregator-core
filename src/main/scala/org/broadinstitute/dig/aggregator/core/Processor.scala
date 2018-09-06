@@ -149,7 +149,7 @@ abstract class DatasetProcessor(opts: Opts, sourceTopic: String)
    * and query the commits table for a record of all datasets already committed
    * for this topic that need to be processed by this application.
    */
-  val oldCommits = {
+  val oldCommits: IO[Seq[Commit]] = {
     if (opts.reset()) Commit.datasets(xa, sourceTopic) else IO.pure(Nil)
   }
 
