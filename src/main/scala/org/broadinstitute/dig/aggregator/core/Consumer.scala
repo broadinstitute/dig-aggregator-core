@@ -91,7 +91,7 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
 
     // sort by partition and output all the current offsets
     for ((partition, offset) <- state.offsets.toList.sortBy(_._1)) {
-      logger.info(s" ..partition $partition at offset $offset")
+      logger.info(s"...partition $partition at offset $offset")
     }
   }
 
