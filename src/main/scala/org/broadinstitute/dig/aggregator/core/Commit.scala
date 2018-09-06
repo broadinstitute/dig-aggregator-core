@@ -84,7 +84,7 @@ object Commit {
   /**
    * Create a new Commit message that can be sent to the `commits` topic.
    */
-  def message(record: Consumer#Record, dataset: String): String = {
+  def message(record: Consumer.Record, dataset: String): String = {
     require(!record.topic.equals("commits"))
 
     // cannot use Commit object here since `commit` offset doesn't exist yet
@@ -102,7 +102,7 @@ object Commit {
    * Parse a record from the `commits` topic into a Commit that can be
    * inserted into the database.
    */
-  def fromCommitRecord(record: Consumer#Record): Commit = {
+  def fromRecord(record: Consumer.Record): Commit = {
     require(record.topic.equals("commits"))
 
     val json = parse(record.value)
@@ -123,7 +123,7 @@ object Commit {
    * already been committed as well as the last commit offset so the processor
    * knows where to start consuming from.
    */
-  def datasets(xa: Transactor[IO], topic: String, ignoreProcessedBy: Option[String]): IO[Seq[Commit]] = {
+  def datasetCommits(xa: Transactor[IO], topic: String, ignoreProcessedBy: Option[String]): IO[Seq[Commit]] = {
     val select = fr"""|SELECT   `commits`.`commit`,
                       |`commits`.`topic`,
                       |`commits`.`partition`,
