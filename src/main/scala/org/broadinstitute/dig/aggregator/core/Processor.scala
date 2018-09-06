@@ -8,7 +8,7 @@ import cats.implicits._
  * A Processor will consume records from a given topic and call a process
  * function to-be-implemented by a subclass.
  */
-abstract class Processor(opts: Opts, topic: String) {
+abstract class Processor(val opts: Opts, val topic: String) {
 
   /**
    * Subclass resposibility.
@@ -63,7 +63,7 @@ abstract class CommitProcessor(opts: Opts) extends Processor(opts, "commits") {
  * example: the "variants" topic. Any commit record not from this topic will
  * be ignored.
  */
-abstract class DatasetProcessor(opts: Opts, topic: String) extends CommitProcessor(opts) {
+abstract class DatasetProcessor(opts: Opts, val sourceTopic: String) extends CommitProcessor(opts) {
 
   /**
    * Database transactor for writing dataset rows and fetching commits.
@@ -76,15 +76,22 @@ abstract class DatasetProcessor(opts: Opts, topic: String) extends CommitProcess
    * for this topic that need to be processed by this application.
    */
   val oldCommits = {
-    if (opts.reset()) Commit.datasets(xa, topic) else IO.pure(Nil)
+    if (opts.reset()) Commit.datasets(xa, sourceTopic) else IO.pure(Nil)
   }
 
   /**
-   * After processing the records, log the processing of the dataset(s) to
-   * the database.
+   * Filter the commit records by the source topic before processing.
+   */
+  def filterRecords(records: Seq[Consumer.Record]): Seq[Commit] = {
+    records.map(Commit.fromRecord).filter(_.topic == sourceTopic)
+  }
+
+  /**
+   * Filter the commit records by the sourceTopic and after processing them
+   * log the processing of the dataset(s) to the database.
    */
   override def processRecords(records: Seq[Consumer.Record]): IO[Unit] = {
-    super.processRecords(records) >> IO.unit // TODO: <-- insert datasets table
+    processCommits(filterRecords(records)) >> IO.unit // TODO: <-- insert datasets table
   }
 
   /**
@@ -109,7 +116,7 @@ abstract class DatasetProcessor(opts: Opts, topic: String) extends CommitProcess
      *
      *          val transaction = for {
      *            stateQuery       <- consumer.assignPartitions()
-     *            commitsQuery     <- Commit.datasets(topic)
+     *            commitsQuery     <- Commit.datasets(sourceTopic)
      *          } yield (state, commits)
      *
      *          transaction.transact(xa)
@@ -120,7 +127,7 @@ abstract class DatasetProcessor(opts: Opts, topic: String) extends CommitProcess
      *
      *          for {
      *            state   <- consumer.assignPartitions()
-     *            commits <- Commit.datasets(topic, state)
+     *            commits <- Commit.datasets(sourceTopic, state)
      *            _       <- ...
      *          } yield ()
      *
