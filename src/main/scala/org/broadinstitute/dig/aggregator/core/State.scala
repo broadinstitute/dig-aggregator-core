@@ -6,14 +6,15 @@ import cats.implicits._
 
 import doobie._
 import doobie.implicits._
+import doobie.util._
 
 import java.io.File
 import java.io.PrintWriter
 
+import org.apache.kafka.clients.consumer.ConsumerRecord
+
 import scala.collection.JavaConverters._
 import scala.io.Source
-
-import org.apache.kafka.clients.consumer.ConsumerRecord
 
 /**
  * The consumer state object tracks of what offset - for each partition in a
@@ -71,19 +72,6 @@ case class State(app: String, topic: String, offsets: Map[Int, Long]) {
  * Companion object for creating, loading, and saving ConsumerState instances.
  */
 object State {
-  type OffsetMap = Map[Int, Long]
-
-  /**
-   *
-   */
-  case class Commit(
-      commit: Long, // commits topic offset
-      topic: String, // dataset topic
-      partition: Int, // dataset topic partition
-      offset: Long, // dataset topic offset
-      dataset: String, // dataset name
-      version: Int // dataset version
-  )
 
   /**
    * Load a ConsumerState from MySQL. This collects all the partition/offset
@@ -92,7 +80,7 @@ object State {
    * and it is expected that `State.latest` will be used to reset the state
    * of the consumer.
    */
-  def load(xa: Transactor[IO], app: String, topic: String): IO[Option[State]] = {
+  def load(xa: Transactor[IO], app: String, topic: String): IO[State] = {
     val q = sql"""SELECT   `partition`, IF(`offset`=0, 0, `offset`+1) AS `offset`
                  |FROM     `offsets`
                  |WHERE    `app` = $app AND `topic` = $topic
@@ -102,8 +90,12 @@ object State {
     // TODO: should this function take beginning as well and verify # partitions?
 
     // fetch all the offsets for every partition on this topic for this app
-    q.transact(xa).map { offsets =>
-      if (offsets.isEmpty) None else Some(new State(app, topic, offsets.toMap))
+    q.transact(xa).flatMap { offsets =>
+      if (offsets.isEmpty) {
+        IO.raiseError(new Exception("Load state failed; run with --reset"))
+      } else {
+        IO(new State(app, topic, offsets.toMap))
+      }
     }
   }
 
@@ -113,7 +105,7 @@ object State {
    * data type processors. If a type processor needs to reset its state, it
    * can get the map of partitions and offsets to seek to here.
    */
-  def reset(xa: Transactor[IO], app: String, topic: String, from: OffsetMap): IO[OffsetMap] = {
+  def reset(xa: Transactor[IO], app: String, topic: String): IO[State] = {
     val delete = sql"""DELETE FROM `offsets`
                       |WHERE       `app` = $app
                       |AND         `topic` = $topic
@@ -129,9 +121,32 @@ object State {
     val offsets = for {
       _ <- delete.run
       r <- select
-    } yield from ++ r
+    } yield r.toMap
 
-    // execute the queries
-    offsets.transact(xa)
+    // execute the queries and build the state
+    offsets.transact(xa).map(offsets => State(app, topic, offsets))
+  }
+
+  /**
+   * A CommitProcessor, only needs to get the last commit offset from the
+   * commits table for an optional source topic. If no source topic is given
+   * then the latest commit from ALL source topics will be returned.
+   */
+  def lastCommit(xa: Transactor[IO], app: String, sourceTopic: Option[String]): IO[State] = {
+    val select    = fr"SELECT IFNULL(MAX(`commit`)+1, 0) FROM `commits`"
+    val order     = fr"ORDER BY `commit` DESC"
+    val limit     = fr"LIMIT 1"
+    val condition = sourceTopic.map(topic => fr"`topic` = $topic")
+
+    // combine the select and optional filter
+    val query = select ++ Fragments.whereAndOpt(condition) ++ order ++ limit
+
+    // the commit topic only has a single partition
+    val offsets = query.query[Long].unique.map(offset => Map(0 -> offset))
+
+    // execute the query and create the state
+    offsets.transact(xa).map {
+      State(app, "commits", _)
+    }
   }
 }
