@@ -4,7 +4,7 @@ import cats._
 import cats.effect._
 import cats.implicits._
 
-import com.typesafe.scalalogging.LazyLogging
+import com.typesafe.scalalogging.Logger
 
 import scala.io.StdIn
 
@@ -12,7 +12,12 @@ import scala.io.StdIn
  * A Processor will consume records from a given topic and call a process
  * function to-be-implemented by a subclass.
  */
-abstract class Processor(opts: Opts, val topic: String) extends LazyLogging {
+abstract class Processor(opts: Opts, val topic: String) {
+
+  /**
+   * Application logger for this processor.
+   */
+  val logger = Logger(opts.appName)
 
   /**
    * Database transactor for loading state, etc.
