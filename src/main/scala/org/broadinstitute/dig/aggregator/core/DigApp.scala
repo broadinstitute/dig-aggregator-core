@@ -1,16 +1,17 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats.effect._
-import cats.syntax.all._
+import scala.util.Failure
+import scala.util.Success
+
+import org.slf4j.LoggerFactory
 
 import com.typesafe.scalalogging.Logger
 
-import java.util.Properties
-
-import org.broadinstitute.dig.aggregator.core._
-
-import scala.util.Success
-import scala.util.Failure
+import cats.effect.ExitCase
+import cats.effect.ExitCode
+import cats.effect.IO
+import cats.effect.IOApp
+import ch.qos.logback.classic.LoggerContext
 
 /**
  * This is the base class that all aggregator apps should derive from to
@@ -19,7 +20,7 @@ import scala.util.Failure
  * notifications.
  *
  *  object Main extends DigApp {
- *    val applicationName: String = "MyApp"
+ *    val registeredApp: RegisteredApp = RegisteredApps.MyApp 
  *
  *    def run(opts: Opts): IO[ExitCode] = {
  *      ...
@@ -41,16 +42,18 @@ abstract class DigApp extends IOApp {
   protected lazy val logger: Logger = {
     //Don't Mix in LazyLogging or StrictLogging, since we want to defer Logger creation until after 
     //this object is finished being constructed, and `registeredApp` is set.  This is so that  
-    //AGGREGATOR_CORE_REGISTERED_APPNAME sysprop can be set to appName, so that the Logger can use it.
+    //AGGREGATOR_CORE_REGISTERED_APPNAME property can be set to appName, so that the Logger can use it.
     //
     //Also: we can't make `registeredApp` a constructor param without jumping through hoops, since 
     //RegisteredApp instances will refer to DigApp subclasses, creating a cycle in the object graph.  
-    //Making `registeredApp` doesn't change the cycle, but it keeps it from blowing things up at init 
-    //time. :\
+    //Making `registeredApp` a val doesn't change the cycle, but it keeps it from blowing things up 
+    //at init time. :\
     
-    System.setProperty("AGGREGATOR_CORE_REGISTERED_APPNAME", registeredApp.appName)
+    val lc = LoggerFactory.getILoggerFactory.asInstanceOf[LoggerContext]
     
-    Logger(getClass)
+    lc.putProperty("AGGREGATOR_CORE_REGISTERED_APPNAME", registeredApp.appName)
+    
+    Logger(lc.getLogger(getClass))
   }
 
   /**
