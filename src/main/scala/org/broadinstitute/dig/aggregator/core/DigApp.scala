@@ -1,16 +1,17 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats.effect._
-import cats.syntax.all._
+import scala.util.Failure
+import scala.util.Success
+
+import org.slf4j.LoggerFactory
 
 import com.typesafe.scalalogging.Logger
 
-import java.util.Properties
-
-import org.broadinstitute.dig.aggregator.core._
-
-import scala.util.Success
-import scala.util.Failure
+import cats.effect.ExitCase
+import cats.effect.ExitCode
+import cats.effect.IO
+import cats.effect.IOApp
+import ch.qos.logback.classic.LoggerContext
 
 /**
  * This is the base class that all aggregator apps should derive from to
@@ -19,7 +20,7 @@ import scala.util.Failure
  * notifications.
  *
  *  object Main extends DigApp {
- *    val applicationName: String = "MyApp"
+ *    val registeredApp: RegisteredApp = RegisteredApps.MyApp 
  *
  *    def run(opts: Opts): IO[ExitCode] = {
  *      ...
@@ -30,7 +31,6 @@ import scala.util.Failure
  *     it is used as the key to many database queries!!
  */
 abstract class DigApp extends IOApp {
-
   /**
    * Define the unique name for this application.
    */
@@ -39,7 +39,22 @@ abstract class DigApp extends IOApp {
   /**
    * Create a logger for this application.
    */
-  lazy val logger: Logger = Logger(registeredApp.appName)
+  protected lazy val logger: Logger = {
+    //Don't Mix in LazyLogging or StrictLogging, since we want to defer Logger creation until after 
+    //this object is finished being constructed, and `registeredApp` is set.  This is so that  
+    //AGGREGATOR_CORE_REGISTERED_APPNAME property can be set to appName, so that the Logger can use it.
+    //
+    //Also: we can't make `registeredApp` a constructor param without jumping through hoops, since 
+    //RegisteredApp instances will refer to DigApp subclasses, creating a cycle in the object graph.  
+    //Making `registeredApp` a val doesn't change the cycle, but it keeps it from blowing things up 
+    //at init time. :\
+    
+    val lc = LoggerFactory.getILoggerFactory.asInstanceOf[LoggerContext]
+    
+    lc.putProperty("AGGREGATOR_CORE_REGISTERED_APPNAME", registeredApp.appName)
+    
+    Logger(lc.getLogger(getClass))
+  }
 
   /**
    * Must be implemented by subclass object.
@@ -50,13 +65,8 @@ abstract class DigApp extends IOApp {
    * Called from IOApp.main.
    */
   override def run(args: List[String]): IO[ExitCode] = {
-    val registeredClass = DigAppRegistry(registeredApp.appName)
-
     // verify that the registered class exists and matches
-    registeredClass match {
-      case Some(c) => require(c == getClass, s"${getClass.getName} != ${c.getName}!")
-      case None    => throw new Exception(s"${registeredApp.appName} is not a registered app!")
-    }
+    checkRegisteredClass()
 
     // parse the command line options and load the configuration file
     val opts: Opts = new Opts(registeredApp.appName, args.toArray)
@@ -72,6 +82,20 @@ abstract class DigApp extends IOApp {
         case _                   => IO(logger.info("Done"))
       }
     }
+  }
+  
+  /**
+   * Throw if our app name is NOT registered, or if the registered class is NOT this class.
+   */
+  private def checkRegisteredClass(): Unit = {
+    
+    val registeredClassOpt = DigAppRegistry(registeredApp.appName)
+    
+    require(registeredClassOpt.isDefined, s"${registeredApp.appName} is not a registered app!")
+    
+    val registeredClass = registeredClassOpt.get
+    
+    require(registeredClass == getClass, s"${getClass.getName} != ${registeredClass.getName}!")
   }
 
   /**
@@ -102,7 +126,7 @@ abstract class DigApp extends IOApp {
    * Returns the version information for this application.
    */
   private def appVersionInfoString(opts: Opts) =
-    getVersionInfoString(s"${opts.appName}-versionInfo.properties")
+    getVersionInfoString(s"versionInfo.properties")
 
   /**
    * Returns the version information for the aggregator core.

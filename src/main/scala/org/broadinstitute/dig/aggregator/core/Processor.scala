@@ -1,33 +1,27 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats._
-import cats.effect._
-import cats.implicits._
-
-import com.typesafe.scalalogging.Logger
-
 import scala.io.StdIn
+
+import com.typesafe.scalalogging.LazyLogging
+
+import cats.effect.IO
+import doobie.util.transactor.Transactor
 
 /**
  * A Processor will consume records from a given topic and call a process
  * function to-be-implemented by a subclass.
  */
-abstract class Processor(opts: Opts, val topic: String) {
-
-  /**
-   * Application logger for this processor.
-   */
-  val logger = Logger(opts.appName)
+abstract class Processor(opts: Opts, val topic: String) extends LazyLogging {
 
   /**
    * Database transactor for loading state, etc.
    */
-  protected val xa = opts.config.mysql.newTransactor()
+  protected val xa: Transactor[IO] = opts.config.mysql.newTransactor()
 
   /**
    * The Kafka topic consumer.
    */
-  protected val consumer = new Consumer(opts, topic)
+  protected val consumer: Consumer = new Consumer(opts, topic)
 
   /**
    * Subclass responsibility.

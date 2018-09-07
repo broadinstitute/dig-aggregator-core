@@ -45,6 +45,7 @@ final object DigAppRegistry {
 
     // register, return the name
     registeredApps += app
+    
     name
   }
 }
