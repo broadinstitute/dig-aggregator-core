@@ -19,7 +19,7 @@ final case class MySQL(
    * Query parameters to the connection string URL.
    */
   val qs = List("useCursorFetch" -> true, "useSSL" -> false)
-    .map(p => s"${p._1}=${p._2}")
+    .map { case (key, value) => s"${key}=${value}" }
     .mkString("&")
 
   /**
