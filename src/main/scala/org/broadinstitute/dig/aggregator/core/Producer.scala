@@ -12,11 +12,8 @@ import cats.effect.IO
  */
 final class Producer(opts: Opts, topic: String) {
 
-  /**
-   * Helper type alias since template parameters are fixed.
-   */
-  type Record = ProducerRecord[String, String]
-
+  import Producer.Record
+  
   /**
    * Kafka connection properties.
    */
@@ -45,4 +42,11 @@ final class Producer(opts: Opts, topic: String) {
       client.send(new Record(topic, key, value)).get
     }
   }
+}
+
+object Producer {
+  /**
+   * Helper type alias since template parameters are fixed.
+   */
+  type Record = ProducerRecord[String, String]
 }

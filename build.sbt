@@ -91,6 +91,10 @@ buildInfoTask := {
 
   val file = dir / s"${n}-versionInfo.properties"
 
+  val log = streams.value.log
+
+  log.info(s"Writing version info to '$file'")
+
   val contents =
     s"name=${n}\nversion=${v}\nbranch=${branch}\nlastCommit=${lastCommit.getOrElse("")}\nuncommittedChanges=${anyUncommittedChanges}\ndescribedVersion=${describedVersion
       .getOrElse("")}\nbuildDate=${buildDate}\n"
