@@ -9,8 +9,10 @@ import org.rogach.scallop.exceptions.ScallopException
  */
 final class OptsTest extends FunSuite {
 
+  private val appName = "OptsTest"
+  
   private def opts(commandLine: String): Opts = {
-    new Opts("OptsTest", commandLine.split("\\s+"))
+    new Opts(appName, commandLine.split("\\s+"))
   }
 
   private val confFile = "src/test/resources/config.json"
@@ -20,16 +22,38 @@ final class OptsTest extends FunSuite {
       val o = opts(s"--version --config $confFile")
 
       assert(o.version() === true)
-      assert(o.continue() === true)
-      assert(o.reset() === false)
+      assert(o.reprocess() === false)
+      assert(o.reprocessAll() === false)
     }
 
     {
-      val o = opts(s"--reset --config $confFile")
+      val o = opts(s"--reprocess --config $confFile")
 
       assert(o.version() === false)
-      assert(o.continue() === false)
-      assert(o.reset() === true)
+      assert(o.reprocess() === true)
+      assert(o.reprocessAll() === false)
     }
+    
+    {
+      val o = opts(s"--reprocess --reprocess-all --config $confFile")
+
+      assert(o.version() === false)
+      assert(o.reprocess() === true)
+      assert(o.reprocessAll() === true)
+    }
+    
+    //--reprocess-all can't be alone
+    intercept[Exception] {
+      opts(s"--reprocess-all --config $confFile")
+    }
+  }
+  
+  test("ignoreProcessedBy") {
+    val appNameOpt = Option(appName)
+    
+    assert(opts(s"--version --config $confFile").ignoreProcessedBy === appNameOpt)
+    assert(opts(s"--reprocess --config $confFile").ignoreProcessedBy === appNameOpt)
+    
+    assert(opts(s"--reprocess --reprocess-all --config $confFile").ignoreProcessedBy === None)
   }
 }
