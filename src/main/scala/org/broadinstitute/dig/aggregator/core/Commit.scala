@@ -131,22 +131,23 @@ object Commit {
                       |`commits`.`dataset`
                       |FROM     `commits`""".stripMargin
       
-    def join(app: String) = fr"""|LEFT JOIN   `datasets`
-                                 |ON          `datasets`.`app` = $app
-                                 |AND         `datasets`.`topic` = `commits`.`topic`
-                                 |AND         `datasets`.`dataset` = `commits`.`dataset`
-                                 |AND         `datasets`.`commit` = `commits`.`commit`""".stripMargin
+    def makeJoin(app: String) = fr"""|LEFT JOIN   `datasets`
+                                     |ON          `datasets`.`app` = $app
+                                     |AND         `datasets`.`topic` = `commits`.`topic`
+                                     |AND         `datasets`.`dataset` = `commits`.`dataset`
+                                     |AND         `datasets`.`commit` = `commits`.`commit`""".stripMargin
     
-    val where = fr"WHERE `commits`.`topic` = $topic"
-      
-    def extraAnd = fr"AND `datasets`.`app` IS NULL"
+    val whereCommitsTopic = fr"`commits`.`topic` = $topic"
+    def whereDatasetsApp = fr"`datasets`.`app` IS NULL"
     
     val orderBy = fr"ORDER BY `commits`.`commit`"
     
-    val q = ignoreProcessedBy match {
-      case None => select ++ where ++ orderBy
-      case Some(app) => select ++ join(app) ++ where ++ extraAnd ++ orderBy
+    val (join, wheres) = ignoreProcessedBy match {
+      case None =>      Fragment.empty -> Seq(whereCommitsTopic)
+      case Some(app) => makeJoin(app) -> Seq(whereCommitsTopic, whereDatasetsApp)
     }
+    
+    val q = select ++ join ++ Fragments.whereAnd(wheres: _*) ++ orderBy
     
     q.query[Commit].to[Seq].transact(xa)
   }
