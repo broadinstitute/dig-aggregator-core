@@ -49,16 +49,18 @@ object DbType {
     }
   }
   
-  private val ser: PartialFunction[JValue, DbType] = {
-    case JString(n) if n == MySql.name => MySql
-    case JString(n) if n == H2.name => H2
-  }
+  val serializer: Serializer[DbType] = new CustomSerializer[DbType](formats => {
+    val ser: PartialFunction[JValue, DbType] = {
+      case JString(n) if n == MySql.name => MySql
+      case JString(n) if n == H2.name => H2
+    }
     
-  private val deser: PartialFunction[Any, JValue] = {
-    case dbType: DbType => JString(dbType.name)
-  }
-  
-  val serializer: Serializer[DbType] = new CustomSerializer[DbType](formats => (ser, deser))
+    val deser: PartialFunction[Any, JValue] = {
+      case dbType: DbType => JString(dbType.name)
+    }
+    
+    (ser, deser)
+  })
   
   implicit val formats: Formats = DefaultFormats + serializer
 }
