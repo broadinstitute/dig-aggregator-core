@@ -89,10 +89,10 @@ object Commit {
 
     // cannot use Commit object here since `commit` offset doesn't exist yet
     val json =
-      ("topic"       -> record.topic) ~
-        ("partition" -> record.partition) ~
-        ("offset"    -> record.offset) ~
-        ("dataset"   -> dataset)
+      ("topic"     -> record.topic) ~
+      ("partition" -> record.partition) ~
+      ("offset"    -> record.offset) ~
+      ("dataset"   -> dataset)
 
     // convert the JSON object to a string for the commits topic
     compact(render(json))
@@ -123,14 +123,32 @@ object Commit {
    * already been committed as well as the last commit offset so the processor
    * knows where to start consuming from.
    */
-  def datasets(xa: Transactor[IO], topic: String): IO[List[Commit]] = {
-    val q = sql"""SELECT   `commit`, `topic`, `partition`, `offset`, `dataset`
-                 |FROM     `commits`
-                 |WHERE    `topic` = $topic
-                 |ORDER BY `commit`
-                 |""".stripMargin.query[Commit].to[List]
-
-    // run the query
-    q.transact(xa)
+  def datasetCommits(xa: Transactor[IO], topic: String, ignoreProcessedBy: Option[String]): IO[Seq[Commit]] = {
+    val select = fr"""|SELECT   `commits`.`commit`,
+                      |`commits`.`topic`,
+                      |`commits`.`partition`,
+                      |`commits`.`offset`,
+                      |`commits`.`dataset`
+                      |FROM     `commits`""".stripMargin
+      
+    def makeJoin(app: String) = fr"""|LEFT JOIN   `datasets`
+                                     |ON          `datasets`.`app` = $app
+                                     |AND         `datasets`.`topic` = `commits`.`topic`
+                                     |AND         `datasets`.`dataset` = `commits`.`dataset`
+                                     |AND         `datasets`.`commit` = `commits`.`commit`""".stripMargin
+    
+    val whereCommitsTopic = fr"`commits`.`topic` = $topic"
+    def whereDatasetsApp = fr"`datasets`.`app` IS NULL"
+    
+    val orderBy = fr"ORDER BY `commits`.`commit`"
+    
+    val (join, wheres) = ignoreProcessedBy match {
+      case None =>      Fragment.empty -> Seq(whereCommitsTopic)
+      case Some(app) => makeJoin(app) -> Seq(whereCommitsTopic, whereDatasetsApp)
+    }
+    
+    val q = select ++ join ++ Fragments.whereAnd(wheres: _*) ++ orderBy
+    
+    q.query[Commit].to[Seq].transact(xa)
   }
 }
