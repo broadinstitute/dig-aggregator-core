@@ -16,7 +16,7 @@ abstract class Processor(opts: Opts, val topic: String) extends LazyLogging {
   /**
    * Database transactor for loading state, etc.
    */
-  protected val xa: Transactor[IO] = opts.config.mysql.newTransactor()
+  protected val xa: Transactor[IO] = opts.config.db.newTransactor
 
   /**
    * The Kafka topic consumer.

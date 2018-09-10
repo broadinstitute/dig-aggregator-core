@@ -50,7 +50,7 @@ class Opts(val appName: String, args: Array[String]) extends ScallopConf(args) {
   }
 
   /** Private (not in version control) configuration settings. */
-  lazy val config: Opts.Config = configFile.toOption.map(Opts.loadConfig).get
+  lazy val config: Config = Config.fromJson(configFile())
 
   /**
    * Outputs standard help from Scallop along with an additional message.
@@ -59,30 +59,5 @@ class Opts(val appName: String, args: Array[String]) extends ScallopConf(args) {
     printHelp()
     println()
     println(message)
-  }
-}
-
-/**
- * Companion object with methods for loading configuration files.
- */
-object Opts {
-  private implicit val formats: Formats = DefaultFormats
-
-  /**
-   * Private configuration settings required by all aggregator applications.
-   */
-  final case class Config(
-      kafka: config.Kafka,
-      aws: config.AWS,
-      mysql: config.MySQL,
-      neo4j: config.Neo4j,
-      sendgrid: config.Sendgrid,
-  )
-
-  /**
-   * Load and parse a configuration file.
-   */
-  def loadConfig(file: File): Config = {
-    read[Config](Source.fromFile(file).mkString)
   }
 }

@@ -32,17 +32,19 @@ import scala.concurrent.ExecutionContext.Implicits.global
 final class AWS(opts: Opts) extends LazyLogging {
   import Implicits._
 
+  private def config: Config = opts.config
+  
   /**
    * The same region and bucket are used for all operations.
    */
-  val region: Regions = Regions.valueOf(opts.config.aws.region)
-  val bucket: String  = opts.config.aws.s3.bucket
+  val region: Regions = Regions.valueOf(config.aws.region)
+  val bucket: String  = config.aws.s3.bucket
 
   /**
    * AWS IAM credentials provider.
    */
   val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-    new BasicAWSCredentials(opts.config.aws.key, opts.config.aws.secret))
+    new BasicAWSCredentials(config.aws.key, config.aws.secret))
 
   /**
    * S3 client for storage.
@@ -149,7 +151,7 @@ final class AWS(opts: Opts) extends LazyLogging {
    */
   def runJob(steps: Seq[JobStep]): IO[AddJobFlowStepsResult] = {
     val request = new AddJobFlowStepsRequest()
-      .withJobFlowId(opts.config.aws.emr.cluster)
+      .withJobFlowId(config.aws.emr.cluster)
       .withSteps(steps.map(_.config).asJava)
 
     IO {
@@ -176,7 +178,7 @@ final class AWS(opts: Opts) extends LazyLogging {
     import Implicits._
 
     val request = new ListStepsRequest()
-      .withClusterId(opts.config.aws.emr.cluster)
+      .withClusterId(config.aws.emr.cluster)
       .withStepIds(job.getStepIds)
 
     // wait a little bit then request status
