@@ -47,7 +47,7 @@ abstract class Processor(opts: Opts, val topic: String) extends LazyLogging {
    * database and return the correct operation to execute.
    */
   def getState: IO[State] = {
-    if (opts.reset()) {
+    if (opts.reprocess()) {
       val warning = IO {
         logger.warn("The consumer state is being reset because either reset")
         logger.warn("flag was passed on the command line or the commits")
@@ -144,7 +144,8 @@ abstract class DatasetProcessor(opts: Opts, sourceTopic: String)
    * for this topic that need to be processed by this application.
    */
   val oldCommits: IO[Seq[Commit]] = {
-    if (opts.reset()) Commit.datasets(xa, sourceTopic) else IO.pure(Nil)
+    if (opts.reprocess()) { Commit.datasetCommits(xa, sourceTopic, opts.ignoreProcessedBy) }
+    else { IO.pure(Nil) }
   }
 
   /**
