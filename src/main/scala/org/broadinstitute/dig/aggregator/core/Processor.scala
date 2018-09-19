@@ -1,11 +1,14 @@
 package org.broadinstitute.dig.aggregator.core
 
-import scala.io.StdIn
+import cats._
+import cats.effect._
+import cats.implicits._
 
 import com.typesafe.scalalogging.LazyLogging
 
-import cats.effect.IO
 import doobie.util.transactor.Transactor
+
+import scala.io.StdIn
 
 /**
  * A Processor will consume records from a given topic and call a process
@@ -144,8 +147,29 @@ abstract class DatasetProcessor(opts: Opts, sourceTopic: String)
    * for this topic that need to be processed by this application.
    */
   val oldCommits: IO[Seq[Commit]] = {
-    if (opts.reprocess()) { Commit.datasetCommits(xa, sourceTopic, opts.ignoreProcessedBy) }
-    else { IO.pure(Nil) }
+    if (opts.reprocess()) { 
+      Commit.datasetCommits(xa, sourceTopic, opts.ignoreProcessedBy) 
+    } else {
+      IO.pure(Nil)
+    }
+  }
+
+  /**
+   * Subclass resposibility.
+   */
+  def processDatasets(datasets: Seq[Dataset]): IO[_]
+
+  /**
+   * Convert Commit objects to Dataset objects, process them, and then write
+   * to the database that they have been processed successfully.
+   */
+  override def processCommits(commits: Seq[Commit]): IO[Unit] = {
+    val datasets = commits.map(Dataset.fromCommit(opts.appName))
+
+    for {
+      _ <- processDatasets(datasets)
+      _ <- datasets.map(_.insert(xa)).toList.sequence
+    } yield ()
   }
 
   /**
