@@ -89,10 +89,10 @@ object Commit {
 
     // cannot use Commit object here since `commit` offset doesn't exist yet
     val json =
-      ("topic"     -> record.topic) ~
-      ("partition" -> record.partition) ~
-      ("offset"    -> record.offset) ~
-      ("dataset"   -> dataset)
+      ("topic"       -> record.topic) ~
+        ("partition" -> record.partition) ~
+        ("offset"    -> record.offset) ~
+        ("dataset"   -> dataset)
 
     // convert the JSON object to a string for the commits topic
     compact(render(json))
@@ -103,7 +103,7 @@ object Commit {
    * inserted into the database.
    */
   def fromRecord(record: Consumer.Record): Commit = {
-    require(record.topic.equals("commits"))
+    require(record.topic == "commits", "Cannot create Commit from topic other than `commits`")
 
     val json = parse(record.value)
 
@@ -130,25 +130,25 @@ object Commit {
                       |`commits`.`offset`,
                       |`commits`.`dataset`
                       |FROM     `commits`""".stripMargin
-      
+
     def makeJoin(app: String) = fr"""|LEFT JOIN   `datasets`
                                      |ON          `datasets`.`app` = $app
                                      |AND         `datasets`.`topic` = `commits`.`topic`
                                      |AND         `datasets`.`dataset` = `commits`.`dataset`
                                      |AND         `datasets`.`commit` = `commits`.`commit`""".stripMargin
-    
+
     val whereCommitsTopic = fr"`commits`.`topic` = $topic"
-    def whereDatasetsApp = fr"`datasets`.`app` IS NULL"
-    
+    def whereDatasetsApp  = fr"`datasets`.`app` IS NULL"
+
     val orderBy = fr"ORDER BY `commits`.`commit`"
-    
+
     val (join, wheres) = ignoreProcessedBy match {
-      case None =>      Fragment.empty -> Seq(whereCommitsTopic)
-      case Some(app) => makeJoin(app) -> Seq(whereCommitsTopic, whereDatasetsApp)
+      case None      => Fragment.empty -> Seq(whereCommitsTopic)
+      case Some(app) => makeJoin(app)  -> Seq(whereCommitsTopic, whereDatasetsApp)
     }
-    
+
     val q = select ++ join ++ Fragments.whereAnd(wheres: _*) ++ orderBy
-    
+
     q.query[Commit].to[Seq].transact(xa)
   }
 }
