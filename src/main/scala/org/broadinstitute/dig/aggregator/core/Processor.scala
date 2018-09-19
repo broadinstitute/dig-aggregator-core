@@ -16,7 +16,7 @@ abstract class Processor(opts: Opts, val topic: String) extends LazyLogging {
   /**
    * Database transactor for loading state, etc.
    */
-  protected val xa: Transactor[IO] = opts.config.db.newTransactor
+  protected val xas: Xas = opts.config.newTransactors
 
   /**
    * The Kafka topic consumer.
@@ -32,7 +32,7 @@ abstract class Processor(opts: Opts, val topic: String) extends LazyLogging {
    * IO to load this consumer's state from the database.
    */
   def loadState: IO[State] = {
-    State.load(xa, opts.appName, topic)
+    State.load(xas.read, opts.appName, topic)
   }
 
   /**

@@ -24,7 +24,7 @@ sealed trait DbType {
 
 object DbType {
   object MySql extends DbType {
-    override def name = "mysql"
+    override def name: String = "mysql"
     
     override val driver: String = "com.mysql.jdbc.Driver"
     
@@ -40,7 +40,7 @@ object DbType {
   }
   
   object H2 extends DbType {
-    override def name = "h2"
+    override def name: String = "h2"
     
     override val driver: String = "org.h2.Driver"
    

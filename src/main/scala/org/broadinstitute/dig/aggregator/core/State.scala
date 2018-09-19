@@ -105,7 +105,7 @@ object State {
    * data type processors. If a type processor needs to reset its state, it
    * can get the map of partitions and offsets to seek to here.
    */
-  def reset(xa: Transactor[IO], app: String, topic: String): IO[State] = {
+  def reset(xas: Xas, app: String, topic: String): IO[State] = {
     val delete = sql"""DELETE FROM `offsets`
                       |WHERE       `app` = $app
                       |AND         `topic` = $topic

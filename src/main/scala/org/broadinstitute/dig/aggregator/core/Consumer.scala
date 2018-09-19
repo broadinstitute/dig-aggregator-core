@@ -29,7 +29,7 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
   /**
    * Create a connection to the database for writing state.
    */
-  private val xa = opts.config.db.newTransactor
+  private val xa = opts.config.writeDb.newTransactor
 
   /**
    * Kafka connection properties.
