@@ -49,7 +49,7 @@ object Dataset {
    * inserted into the database.
    */
   def fromRecord(app: String)(record: Consumer.Record): Dataset = {
-    require(record.topic == "commits", "Cannot create Dataset from topic other than `commits`")
+    require(record.topic == "commits", "Cannot create Dataset from topic `${record.topic}`")
 
     val json = parse(record.value)
 
