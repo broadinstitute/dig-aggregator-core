@@ -147,7 +147,9 @@ abstract class DatasetProcessor(opts: Opts, sourceTopic: String)
    * for this topic that need to be processed by this application.
    */
   val oldCommits: IO[Seq[Commit]] = {
-    if (opts.reprocess()) { Commit.datasetCommits(xa, sourceTopic, opts.ignoreProcessedBy) } else {
+    if (opts.reprocess()) { 
+      Commit.datasetCommits(xa, sourceTopic, opts.ignoreProcessedBy) 
+    } else {
       IO.pure(Nil)
     }
   }
