@@ -52,8 +52,8 @@ lazy val mainDeps = Seq(
 )
 
 lazy val testDeps = Seq(
-  "org.scalatest" %% "scalatest" % Versions.ScalaTest % "it,test",
-  "com.h2database" % "h2" % Versions.H2 % "test"
+  "org.scalatest"  %% "scalatest" % Versions.ScalaTest % "it,test",
+  "com.h2database" % "h2"         % Versions.H2        % "test"
 )
 
 lazy val root = (project in file("."))
@@ -98,8 +98,14 @@ buildInfoTask := {
   log.info(s"Writing version info to '$file'")
 
   val contents =
-    s"name=${n}\nversion=${v}\nbranch=${branch}\nlastCommit=${lastCommit.getOrElse("")}\nuncommittedChanges=${anyUncommittedChanges}\ndescribedVersion=${describedVersion
-      .getOrElse("")}\nbuildDate=${buildDate}\n"
+    s"""name=${n}
+       |version=${v}
+       |branch=${branch}
+       |lastCommit=${lastCommit.getOrElse("")}
+       |uncommittedChanges=${anyUncommittedChanges}
+       |describedVersion=${describedVersion.getOrElse("")}
+       |buildDate=${buildDate}
+       |""".stripMargin
 
   IO.write(file, contents)
 

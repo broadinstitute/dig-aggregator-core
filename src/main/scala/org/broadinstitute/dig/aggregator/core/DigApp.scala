@@ -1,17 +1,18 @@
 package org.broadinstitute.dig.aggregator.core
 
-import scala.util.Failure
-import scala.util.Success
-
-import org.slf4j.LoggerFactory
-
 import com.typesafe.scalalogging.Logger
 
 import cats.effect.ExitCase
 import cats.effect.ExitCode
 import cats.effect.IO
 import cats.effect.IOApp
+
 import ch.qos.logback.classic.LoggerContext
+
+import org.slf4j.LoggerFactory
+
+import scala.util.Failure
+import scala.util.Success
 
 /**
  * This is the base class that all aggregator apps should derive from to
@@ -20,7 +21,7 @@ import ch.qos.logback.classic.LoggerContext
  * notifications.
  *
  *  object Main extends DigApp {
- *    val registeredApp: RegisteredApp = RegisteredApps.MyApp 
+ *    val registeredApp: RegisteredApp = RegisteredApps.MyApp
  *
  *    def run(opts: Opts): IO[ExitCode] = {
  *      ...
@@ -31,6 +32,7 @@ import ch.qos.logback.classic.LoggerContext
  *     it is used as the key to many database queries!!
  */
 abstract class DigApp extends IOApp {
+
   /**
    * Define the unique name for this application.
    */
@@ -40,19 +42,19 @@ abstract class DigApp extends IOApp {
    * Create a logger for this application.
    */
   protected lazy val logger: Logger = {
-    //Don't Mix in LazyLogging or StrictLogging, since we want to defer Logger creation until after 
-    //this object is finished being constructed, and `registeredApp` is set.  This is so that  
+    //Don't Mix in LazyLogging or StrictLogging, since we want to defer Logger creation until after
+    //this object is finished being constructed, and `registeredApp` is set.  This is so that
     //AGGREGATOR_CORE_REGISTERED_APPNAME property can be set to appName, so that the Logger can use it.
     //
-    //Also: we can't make `registeredApp` a constructor param without jumping through hoops, since 
-    //RegisteredApp instances will refer to DigApp subclasses, creating a cycle in the object graph.  
-    //Making `registeredApp` a val doesn't change the cycle, but it keeps it from blowing things up 
+    //Also: we can't make `registeredApp` a constructor param without jumping through hoops, since
+    //RegisteredApp instances will refer to DigApp subclasses, creating a cycle in the object graph.
+    //Making `registeredApp` a val doesn't change the cycle, but it keeps it from blowing things up
     //at init time. :\
-    
+
     val lc = LoggerFactory.getILoggerFactory.asInstanceOf[LoggerContext]
-    
+
     lc.putProperty("AGGREGATOR_CORE_REGISTERED_APPNAME", registeredApp.appName)
-    
+
     Logger(lc.getLogger(getClass))
   }
 
@@ -83,18 +85,18 @@ abstract class DigApp extends IOApp {
       }
     }
   }
-  
+
   /**
    * Throw if our app name is NOT registered, or if the registered class is NOT this class.
    */
   private def checkRegisteredClass(): Unit = {
-    
+
     val registeredClassOpt = DigAppRegistry(registeredApp.appName)
-    
+
     require(registeredClassOpt.isDefined, s"${registeredApp.appName} is not a registered app!")
-    
+
     val registeredClass = registeredClassOpt.get
-    
+
     require(registeredClass == getClass, s"${getClass.getName} != ${registeredClass.getName}!")
   }
 
@@ -104,10 +106,12 @@ abstract class DigApp extends IOApp {
   private def fail(opts: Opts, err: Throwable): IO[Unit] = {
     val notifier = new Notifier(opts)
 
-    for {
-      _ <- IO(logger.error(err.getMessage))
-      _ <- notifier.send(s"${opts.appName} terminated!", err.getMessage)
-    } yield ()
+    if (opts.noWrite()) IO.unit
+    else
+      for {
+        _ <- IO(logger.error(err.getMessage))
+        _ <- notifier.send(s"${opts.appName} terminated!", err.getMessage)
+      } yield ()
   }
 
   /**
@@ -126,7 +130,7 @@ abstract class DigApp extends IOApp {
    * Returns the version information for this application.
    */
   private def appVersionInfoString(opts: Opts) =
-    getVersionInfoString(s"versionInfo.properties")
+    getVersionInfoString("versionInfo.properties")
 
   /**
    * Returns the version information for the aggregator core.

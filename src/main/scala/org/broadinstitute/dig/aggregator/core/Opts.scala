@@ -22,23 +22,26 @@ class Opts(val appName: String, args: Array[String]) extends ScallopConf(args) {
 
   /** Force Kafka consumption to process committed datasets and reset. */
   val reprocessAll: ScallopOption[Boolean] = opt("reprocess-all", required = false)
-  
+
   /** Show version info and quit. */
   val version: ScallopOption[Boolean] = opt("version", required = false)
+
+  /** Run in a mode where no DB or Kafka producer writes take place. */
+  val noWrite: ScallopOption[Boolean] = opt("no-write", required = false)
 
   // ensure the configuration file exists if provided
   validateFileExists(configFile)
 
   dependsOnAll(reprocessAll, List(reprocess))
-  
+
   // parse arguments
   verify()
 
   /**
    * The app name - if any - to ignore datasets processed by
    */
-  def ignoreProcessedBy: Option[String] = if(reprocessAll()) None else Option(appName)
-  
+  def ignoreProcessedBy: Option[String] = if (reprocessAll()) None else Option(appName)
+
   /*
    * By default, Scallop will terminate the JVM on any ScallopExceptions, which
    * is very bad for testing. Provide new behavior, where ScallopExceptions

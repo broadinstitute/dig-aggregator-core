@@ -74,6 +74,19 @@ case class State(app: String, topic: String, offsets: Map[Int, Long]) {
 object State {
 
   /**
+   * Fetches the most recent offsets for every partition from a Consumer's
+   * Kafka client and returns a State for it.
+   */
+  def fromEnd(app: String, consumer: Consumer): IO[State] = IO {
+    val offsets = consumer.endOffsets.map {
+      case (topicPartition, offset) => topicPartition.partition -> offset.toLong
+    }
+
+    // create a state starting from the latest offsets
+    State(app, consumer.topic, offsets.toMap)
+  }
+
+  /**
    * Load a ConsumerState from MySQL. This collects all the partition/offset
    * rows for a given app+topic and merges them together. If no partition
    * offsets exist in the database for this app+topic, then `None` is returned

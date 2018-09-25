@@ -10,10 +10,10 @@ import cats.effect.IO
 /**
  * Kafka JSON topic record producer.
  */
-final class Producer(opts: Opts, topic: String) {
+final class Producer(opts: Opts, val topic: String) {
 
   import Producer.Record
-  
+
   /**
    * Kafka connection properties.
    */
@@ -44,7 +44,11 @@ final class Producer(opts: Opts, topic: String) {
   }
 }
 
+/**
+ * Companion object.
+ */
 object Producer {
+
   /**
    * Helper type alias since template parameters are fixed.
    */
