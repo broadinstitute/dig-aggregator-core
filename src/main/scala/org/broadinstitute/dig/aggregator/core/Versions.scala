@@ -15,29 +15,6 @@ import scala.util.Success
  * 
  * Based on the Versions class from LoamStream, created Oct 28, 2016.
  */
-<<<<<<< Updated upstream
-final case class Versions(
-    name: String, 
-    version: String, 
-    branch: String, 
-    lastCommit: Option[String], 
-    anyUncommittedChanges: Boolean,
-    describedVersion: Option[String],
-    buildDate: Instant) {
-  
-  override def toString: String = {
-    val isDirtyPhrase = if(anyUncommittedChanges) " (PLUS uncommitted changes!) " else " "
-    
-    val branchPhrase = s"branch: $branch"
-      
-    val describedVersionPhrase = describedVersion.getOrElse("UNKNOWN")
-    
-    val commitPhrase = s"commit: ${lastCommit.getOrElse("UNKNOWN")}"
-    
-    val buildDatePhrase = s"built on: $buildDate"
-      
-    s"$name $version ($describedVersionPhrase) $branchPhrase $commitPhrase$isDirtyPhrase$buildDatePhrase"
-=======
 final case class Versions(name: String,
                           version: String,
                           branch: String,
@@ -61,7 +38,6 @@ final case class Versions(name: String,
     val remoteUrlPart = s"from ${remoteUrl.getOrElse("UNKNOWN origin")}"
 
     s"$name $version ($describedVersionPart) $branchPart ${commitPart}${isDirtyPart}${buildDatePart}${remoteUrlPart}"
->>>>>>> Stashed changes
   }
 }
 
