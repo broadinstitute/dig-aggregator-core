@@ -15,6 +15,7 @@ import scala.util.Success
  * 
  * Based on the Versions class from LoamStream, created Oct 28, 2016.
  */
+<<<<<<< Updated upstream
 final case class Versions(
     name: String, 
     version: String, 
@@ -36,6 +37,31 @@ final case class Versions(
     val buildDatePhrase = s"built on: $buildDate"
       
     s"$name $version ($describedVersionPhrase) $branchPhrase $commitPhrase$isDirtyPhrase$buildDatePhrase"
+=======
+final case class Versions(name: String,
+                          version: String,
+                          branch: String,
+                          lastCommit: Option[String],
+                          anyUncommittedChanges: Boolean,
+                          describedVersion: Option[String],
+                          buildDate: Instant,
+                          remoteUrl: Option[String]) {
+
+  override def toString: String = {
+    val isDirtyPart = if (anyUncommittedChanges) " (PLUS uncommitted changes!) " else " "
+
+    val branchPart = s"branch: $branch"
+
+    val describedVersionPart = describedVersion.getOrElse("UNKNOWN")
+
+    val commitPart = s"commit: ${lastCommit.getOrElse("UNKNOWN")}"
+
+    val buildDatePart = s"built on: $buildDate "
+    
+    val remoteUrlPart = s"from ${remoteUrl.getOrElse("UNKNOWN origin")}"
+
+    s"$name $version ($describedVersionPart) $branchPart ${commitPart}${isDirtyPart}${buildDatePart}${remoteUrlPart}"
+>>>>>>> Stashed changes
   }
 }
 
@@ -78,8 +104,9 @@ object Versions {
       anyUncommittedChanges <- props.tryGetProperty("uncommittedChanges").map(_.toBoolean)
       describedVersion = props.tryGetProperty("describedVersion").toOption
       buildDate <- props.tryGetProperty("buildDate").map(Instant.parse)
+      remoteUrl = props.tryGetProperty("remoteUrl").toOption
     } yield {
-      Versions(name, version, branch, lastCommit, anyUncommittedChanges, describedVersion, buildDate)
+      Versions(name, version, branch, lastCommit, anyUncommittedChanges, describedVersion, buildDate, remoteUrl)
     }
   }
   
