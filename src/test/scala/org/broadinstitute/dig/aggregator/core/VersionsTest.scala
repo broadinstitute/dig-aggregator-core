@@ -28,10 +28,10 @@ final class VersionsTest extends FunSuite {
     assert(versions.anyUncommittedChanges === true)
     assert(versions.describedVersion === Some("nuh"))
     assert(versions.buildDate === oct28th)
-    assert(versions.remoteUrl === Some("https://github.com/broadinstitute/dig-aggregator-core"))
+    assert(versions.remoteUrl === Some("https://example.com/broadinstitute/dig-aggregator-core"))
     
     val expected = s"foo bar (nuh) branch: baz commit: blerg (PLUS uncommitted changes!) built on: $oct28th " + 
-                    "from https://github.com/broadinstitute/dig-aggregator-core"
+                    "from https://example.com/broadinstitute/dig-aggregator-core"
     
     assert(versions.toString === expected)
   }

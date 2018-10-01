@@ -44,6 +44,8 @@ final case class Versions(name: String,
 object Versions {
   object DefaultPropsFileNames {
     val forAggregatorCore: String = "dig-aggregator-core-versionInfo.properties"
+    
+    val forDownstreamApps: String = "versionInfo.properties"
   }
   
   private[core] def propsFrom(propsFile: String): Try[Properties] = {
