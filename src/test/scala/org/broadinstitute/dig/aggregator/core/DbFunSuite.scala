@@ -38,16 +38,26 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     implicit object DatasetsAreInsertable extends Insertable[Dataset] {
       override def insert(d: Dataset): IO[_] = d.insert(xa)  
     }
+    
+    implicit object RunsAreInsertable extends Insertable[Run] {
+      override def insert(r: Run): IO[_] = r.insert(xa) 
+    }
   }
   
   def allCommits: Seq[Commit] = { 
-    val q = sql"SELECT `commit`,`topic`,`partition`,`offset`,`dataset` FROM `commits`".query[Commit].to[List]
+    val q = sql"SELECT `commit`,`topic`,`partition`,`offset`,`dataset` FROM `commits`".query[Commit].to[Seq]
 
     q.transact(xa).unsafeRunSync()
   }
   
   def allDatasets: Seq[Dataset] = { 
-    val q = sql"SELECT `app`, `topic`, `dataset`, `commit` FROM `datasets`".query[Dataset].to[List]
+    val q = sql"SELECT `app`, `topic`, `dataset`, `commit` FROM `datasets`".query[Dataset].to[Seq]
+
+    q.transact(xa).unsafeRunSync()
+  }
+  
+  def allRuns: Seq[Run] = { 
+    val q = sql"SELECT `app`, `timestamp`, `data` FROM `runs`".query[Run].to[Seq]
 
     q.transact(xa).unsafeRunSync()
   }
@@ -71,7 +81,7 @@ object DbFunSuite {
   }
   
   private object Tables {
-    val all: Seq[Table] = Seq(Commits, Datasets)
+    val all: Seq[Table] = Seq(Commits, Datasets, Runs)
     
     object Commits extends Table("commits") {
       override val create: ConnectionIO[Int] = sql"""
@@ -98,6 +108,18 @@ object DbFunSuite {
         `commit` int(64) NOT NULL,
         PRIMARY KEY (`ID`),
         UNIQUE KEY `DATASET_IDX` (`app`,`topic`,`dataset`)
+      )""".update.run
+    }
+    
+    object Runs extends Table("runs") {
+      override val create: ConnectionIO[Int] = sql"""
+        CREATE TABLE `runs` (
+        `ID` int(11) NOT NULL AUTO_INCREMENT,
+        `app` varchar(180) NOT NULL,
+        `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        `data` text NOT NULL,
+        PRIMARY KEY (`ID`),
+        UNIQUE KEY `RUNS_APP_IDX` (`app`)
       )""".update.run
     }
   }
