@@ -103,7 +103,7 @@ object Commit {
    * inserted into the database.
    */
   def fromRecord(record: Consumer.Record): Commit = {
-    require(record.topic.equals("commits"))
+    require(record.topic == "commits", "Cannot create Commit from topic `${record.topic}`")
 
     val json = parse(record.value)
 
