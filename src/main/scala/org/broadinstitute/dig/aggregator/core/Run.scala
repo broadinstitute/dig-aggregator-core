@@ -7,6 +7,9 @@ import cats.effect.IO
 /**
  * @author clint
  * Oct 1, 2018
+ * 
+ * Stores the time a particular processor finished processing its inputs, along
+ * with processor-specific data about that run in the `data` field.
  */
 case class Run(app: String, timestamp: Instant, data: String) {
   /**
