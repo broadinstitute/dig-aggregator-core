@@ -88,6 +88,7 @@ buildInfoTask := {
   val lastCommit            = git.gitHeadCommit.value
   val describedVersion      = git.gitDescribedVersion.value
   val anyUncommittedChanges = git.gitUncommittedChanges.value
+  val remoteUrl             = (scmInfo in ThisBuild).value.map(_.browseUrl.toString)
 
   val buildDate = java.time.Instant.now
 
@@ -98,8 +99,15 @@ buildInfoTask := {
   log.info(s"Writing version info to '$file'")
 
   val contents =
-    s"name=${n}\nversion=${v}\nbranch=${branch}\nlastCommit=${lastCommit.getOrElse("")}\nuncommittedChanges=${anyUncommittedChanges}\ndescribedVersion=${describedVersion
-      .getOrElse("")}\nbuildDate=${buildDate}\n"
+    s"""name=${n}
+       |version=${v}
+       |branch=${branch}
+       |lastCommit=${lastCommit.getOrElse("")}
+       |uncommittedChanges=${anyUncommittedChanges}
+       |describedVersion=${describedVersion.getOrElse("")}
+       |buildDate=${buildDate}
+       |remoteUrl=${remoteUrl.getOrElse("")}
+       |""".stripMargin
 
   IO.write(file, contents)
 
