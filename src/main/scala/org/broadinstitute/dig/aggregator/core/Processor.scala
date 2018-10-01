@@ -145,10 +145,9 @@ abstract class DatasetProcessor(opts: Opts, sourceTopic: String)
    */
   val oldCommits: IO[Seq[Commit]] = {
     if (opts.reprocess()) {
-      if (opts.reprocessAll()) {
-        Commit.committedDatasets(xa, sourceTopic)
-      } else {
-        Commit.committedDatasets(xa, sourceTopic, opts.appName)
+      opts.ignoreProcessedBy match {
+        case Some(app) => Commit.committedDatasets(xa, sourceTopic, app)
+        case None      => Commit.committedDatasets(xa, sourceTopic)
       }
     } else {
       IO.pure(Nil)
