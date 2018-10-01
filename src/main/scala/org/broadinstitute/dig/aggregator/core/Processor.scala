@@ -142,13 +142,16 @@ abstract class DatasetProcessor(opts: Opts, sourceTopic: String)
     extends CommitProcessor(opts, Some(sourceTopic)) {
 
   /**
-   * If --reset was passed on the command line, then farm out to the database
+   * If --reprocess was passed on the command line, then farm out to the database
    * and query the commits table for a record of all datasets already committed
    * for this topic that need to be processed by this application.
    */
   val oldCommits: IO[Seq[Commit]] = {
-    if (opts.reprocess()) { 
-      Commit.datasetCommits(xa, sourceTopic, opts.ignoreProcessedBy) 
+    if (opts.reprocess()) {
+      opts.ignoreProcessedBy match {
+        case Some(app) => Commit.committedDatasets(xa, sourceTopic, app)
+        case None      => Commit.committedDatasets(xa, sourceTopic)
+      }
     } else {
       IO.pure(Nil)
     }

@@ -7,9 +7,7 @@ import java.time.Instant
  * @author clint
  * Oct 1, 2018
  */
-final class AnalysisProvenanceTest extends FunSuite {
-  import Analysis.Provenance
-
+final class ProvenanceTest extends FunSuite {
   test("apply - no args") {
     val p = Provenance()
     
