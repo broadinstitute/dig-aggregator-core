@@ -70,13 +70,31 @@ object Analysis {
       source: String,
       branch: String,
       commit: String
-  ) {
-    def this(v: Versions) = this(v.remoteUrl, v.branch, v.lastCommit.get)
-
+  )
+  
+  object Provenance {
+    def apply(v: Versions): Provenance = {
+      require(v.remoteUrl.isDefined, s"Versions missing remote url: '$v'")
+      require(v.lastCommit.isDefined, s"Versions missing last commit: '$v'")
+      
+      Provenance(v.remoteUrl.get, v.branch, v.lastCommit.get)
+    }
+    
     /**
      * Default constructor will load the version information in the JAR.
      */
-    def this() = this(Versions.load("versionInfo.properties").get)
+    def apply(): Provenance = {
+      //Note that we want the version info for the downstream app that depends on us, not this lib.
+      val propsFileName = Versions.DefaultPropsFileNames.forDownstreamApps
+
+      val versionsAttempt = Versions.load(propsFileName)
+      
+      def failureThrowable = versionsAttempt.failed.get
+      
+      require(versionsAttempt.isSuccess, s"Couldn't load version info from '${propsFileName}': ${failureThrowable}")
+      
+      apply(versionsAttempt.get)
+    }
   }
 
   /**
