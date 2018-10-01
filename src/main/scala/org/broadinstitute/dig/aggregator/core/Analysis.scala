@@ -103,7 +103,7 @@ object Analysis {
       if (n > 0) {
         deleteAnalysis(driver, app, name)
       } else {
-        val delete = s"MATCH (n:Analysis {name: '$app/$name'}) DELETE n"
+        val delete = s"MATCH (n:Analysis {name: '$app/$name'}) DETACH DELETE n"
 
         for {
           _ <- IO(driver.session.run(q))
