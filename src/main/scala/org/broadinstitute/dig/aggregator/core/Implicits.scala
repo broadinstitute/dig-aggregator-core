@@ -56,47 +56,52 @@ object Implicits {
       req.setRange(0, 0)
 
       // an assert indicates that the object doesn't exist
-      Try(s3.getObject(req)).map { s3Object => 
-        s3Object.dispose()
-        
-        true 
-      }.getOrElse(false)
+      Try(s3.getObject(req))
+        .map { s3Object =>
+          s3Object.dispose()
+
+          true
+        }
+        .getOrElse(false)
     }
 
     /**
      * List all the keys at a given location.
      */
-    def listingsIterator(bucket: String, key: String): Iterator[ObjectListing] = new Iterator[ObjectListing] {
-      private[this] var listing: Option[ObjectListing] = Some(s3.listObjects(bucket, key))
+    def listingsIterator(bucket: String, key: String): Iterator[ObjectListing] =
+      new Iterator[ObjectListing] {
+        private[this] var listing: Option[ObjectListing] = Some(s3.listObjects(bucket, key))
 
-      /**
-       * True if the listing was truncated and another listing can be fetched.
-       */
-      override def hasNext: Boolean = listing.isDefined
+        /**
+         * True if the listing was truncated and another listing can be fetched.
+         */
+        override def hasNext: Boolean = listing.isDefined
 
-      /**
-       * Return the current object listing and fetch the next one.
-       */
-      override def next(): ObjectListing = {
-        val curListing = listing.get
+        /**
+         * Return the current object listing and fetch the next one.
+         */
+        override def next(): ObjectListing = {
+          val curListing = listing.get
 
-        // fetch the next listing (if it's truncated)
-        listing = curListing.isTruncated match {
-          case true  => Some(s3.listNextBatchOfObjects(curListing))
-          case false => None
+          // fetch the next listing (if it's truncated)
+          listing = curListing.isTruncated match {
+            case true  => Some(s3.listNextBatchOfObjects(curListing))
+            case false => None
+          }
+
+          curListing
         }
-
-        curListing
       }
-    }
-    
-    def listKeys(bucket: String, key: String): Seq[String] = listingsIterator(bucket, key).flatMap(_.keys).toList
+
+    def listKeys(bucket: String, key: String): Seq[String] =
+      listingsIterator(bucket, key).flatMap(_.keys).toList
   }
-  
+
   /**
    * RichS3Client.listKeys returns one of these...
    */
   final implicit class RichObjectListing(val listing: ObjectListing) extends AnyVal {
+
     /**
      * Extract all the object keys from an object listing iterator.
      */
@@ -104,7 +109,7 @@ object Implicits {
       listing.getObjectSummaries.asScala.map(_.getKey).toList
     }
   }
-  
+
   /**
    * When dealing with S3 paths, it's often helpful to be able to get
    * just the final filename from a path.
@@ -124,6 +129,13 @@ object Implicits {
    */
   final implicit class RichStepSummary(val summary: StepSummary) extends AnyVal {
     def state: StepState = StepState.valueOf(summary.getStatus.getState)
+
+    /**
+     * True if this step matches another step and the state hasn't changed.
+     */
+    def matches(step: StepSummary): Boolean = {
+      summary.getId == step.getId && summary.state == step.state
+    }
 
     /**
      * True if this step has successfully completed.

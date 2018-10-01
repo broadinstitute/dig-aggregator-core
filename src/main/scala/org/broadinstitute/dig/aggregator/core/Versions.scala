@@ -15,33 +15,37 @@ import scala.util.Success
  * 
  * Based on the Versions class from LoamStream, created Oct 28, 2016.
  */
-final case class Versions(
-    name: String, 
-    version: String, 
-    branch: String, 
-    lastCommit: Option[String], 
-    anyUncommittedChanges: Boolean,
-    describedVersion: Option[String],
-    buildDate: Instant) {
-  
+final case class Versions(name: String,
+                          version: String,
+                          branch: String,
+                          lastCommit: Option[String],
+                          anyUncommittedChanges: Boolean,
+                          describedVersion: Option[String],
+                          buildDate: Instant,
+                          remoteUrl: Option[String]) {
+
   override def toString: String = {
-    val isDirtyPhrase = if(anyUncommittedChanges) " (PLUS uncommitted changes!) " else " "
+    val isDirtyPart = if (anyUncommittedChanges) " (PLUS uncommitted changes!) " else " "
+
+    val branchPart = s"branch: $branch"
+
+    val describedVersionPart = describedVersion.getOrElse("UNKNOWN")
+
+    val commitPart = s"commit: ${lastCommit.getOrElse("UNKNOWN")}"
+
+    val buildDatePart = s"built on: $buildDate "
     
-    val branchPhrase = s"branch: $branch"
-      
-    val describedVersionPhrase = describedVersion.getOrElse("UNKNOWN")
-    
-    val commitPhrase = s"commit: ${lastCommit.getOrElse("UNKNOWN")}"
-    
-    val buildDatePhrase = s"built on: $buildDate"
-      
-    s"$name $version ($describedVersionPhrase) $branchPhrase $commitPhrase$isDirtyPhrase$buildDatePhrase"
+    val remoteUrlPart = s"from ${remoteUrl.getOrElse("UNKNOWN origin")}"
+
+    s"$name $version ($describedVersionPart) $branchPart ${commitPart}${isDirtyPart}${buildDatePart}${remoteUrlPart}"
   }
 }
 
 object Versions {
   object DefaultPropsFileNames {
     val forAggregatorCore: String = "dig-aggregator-core-versionInfo.properties"
+    
+    val forDownstreamApps: String = "versionInfo.properties"
   }
   
   private[core] def propsFrom(propsFile: String): Try[Properties] = {
@@ -78,8 +82,9 @@ object Versions {
       anyUncommittedChanges <- props.tryGetProperty("uncommittedChanges").map(_.toBoolean)
       describedVersion = props.tryGetProperty("describedVersion").toOption
       buildDate <- props.tryGetProperty("buildDate").map(Instant.parse)
+      remoteUrl = props.tryGetProperty("remoteUrl").toOption
     } yield {
-      Versions(name, version, branch, lastCommit, anyUncommittedChanges, describedVersion, buildDate)
+      Versions(name, version, branch, lastCommit, anyUncommittedChanges, describedVersion, buildDate, remoteUrl)
     }
   }
   

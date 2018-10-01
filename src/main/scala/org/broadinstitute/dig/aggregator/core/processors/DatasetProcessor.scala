@@ -29,7 +29,12 @@ abstract class DatasetProcessor(opts: Opts, sourceTopic: String)
    * for this topic that need to be processed by this application.
    */
   val oldCommits: IO[Seq[Commit]] = {
-    if (opts.reprocess()) { Commit.datasetCommits(xa, sourceTopic, opts.ignoreProcessedBy) } else {
+    if (opts.reprocess()) {
+      opts.ignoreProcessedBy match {
+        case Some(app) => Commit.committedDatasets(xa, sourceTopic, app)
+        case None      => Commit.committedDatasets(xa, sourceTopic)
+      }
+    } else {
       IO.pure(Nil)
     }
   }
