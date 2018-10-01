@@ -157,7 +157,7 @@ final class AWS(opts: Opts) extends LazyLogging {
 
       // show the job ID so it can be referenced in the AWS console
       logger.debug(s"Submitted job with ${steps.size} steps...")
-      
+
       job
     }
   }
@@ -172,7 +172,7 @@ final class AWS(opts: Opts) extends LazyLogging {
    *   StepState.INTERRUPTED
    *   StepState.CANCELLED
    */
-  def waitForJob(job: AddJobFlowStepsResult): IO[Unit] = {
+  def waitForJob(job: AddJobFlowStepsResult, prevStep: Option[StepSummary]=None): IO[Unit] = {
     import Implicits._
 
     val request = new ListStepsRequest()
@@ -180,7 +180,7 @@ final class AWS(opts: Opts) extends LazyLogging {
       .withStepIds(job.getStepIds)
 
     // wait a little bit then request status
-    val req = for (_ <- IO.sleep(20.seconds)) yield emr.listSteps(request)
+    val req = for (_ <- IO.sleep(5.seconds)) yield emr.listSteps(request)
 
     /*
      * The step summaries are returned in reverse order. The job is complete
@@ -206,10 +206,19 @@ final class AWS(opts: Opts) extends LazyLogging {
         IO.fromEither(Left(new Throwable(step.stopReason)))
 
       // still waiting for the current step to complete
-      case Some(step) => {
-        logger.debug(s"...${step.getName} (${step.getId}): ${step.getStatus.getState}")
-        waitForJob(job)
-      }
+      case Some(step) =>
+        val changed = prevStep match {
+          case Some(prev) => !step.matches(prev)
+          case None       => true
+        }
+
+        // if the step/state has changed, log the change
+        if (changed) {
+          logger.debug(s"...${step.getName} (${step.getId}): ${step.getStatus.getState}")
+        }
+
+        // continue waiting
+        waitForJob(job, Some(step))
     }
   }
 
@@ -217,7 +226,7 @@ final class AWS(opts: Opts) extends LazyLogging {
    * Helper: runs a job and waits for the results to complete.
    */
   def runJobAndWait(steps: Seq[JobStep]): IO[Unit] = {
-    runJob(steps) >>= waitForJob
+    runJob(steps).flatMap(waitForJob(_))
   }
 
   /**
@@ -231,6 +240,6 @@ final class AWS(opts: Opts) extends LazyLogging {
    * Helper: run a single step and wait for it to complete.
    */
   def runStepAndWait(step: JobStep): IO[Unit] = {
-    runStep(step) >>= waitForJob
+    runStep(step).flatMap(waitForJob(_))
   }
 }
