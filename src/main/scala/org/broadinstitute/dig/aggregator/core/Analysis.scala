@@ -14,10 +14,7 @@ import org.neo4j.driver.v1.StatementResult
  * The name is something that must be unique per application (e.g. phenotype),
  * as it is used to uniquely identify it within the database.
  */
-final case class Analysis(app: String,
-                          name: String,
-                          typ: Analysis.Type,
-                          provenance: Analysis.Provenance) {
+final case class Analysis(app: String, name: String, typ: Analysis.Type, provenance: Provenance) {
 
   /**
    * Create an analysis node in the graph. This returned the unique, internal
@@ -60,42 +57,6 @@ object Analysis {
    */
   final case object Computation extends Type
   final case object Experiment  extends Type
-
-  /**
-   * Provenance is a simple data class used for an Analysis node so that given
-   * any result node in the database, the analysis that produced it can be
-   * found online and inspected.
-   */
-  final case class Provenance(
-      source: String,
-      branch: String,
-      commit: String
-  )
-  
-  object Provenance {
-    def apply(v: Versions): Provenance = {
-      require(v.remoteUrl.isDefined, s"Versions missing remote url: '$v'")
-      require(v.lastCommit.isDefined, s"Versions missing last commit: '$v'")
-      
-      Provenance(v.remoteUrl.get, v.branch, v.lastCommit.get)
-    }
-    
-    /**
-     * Default constructor will load the version information in the JAR.
-     */
-    def apply(): Provenance = {
-      //Note that we want the version info for the downstream app that depends on us, not this lib.
-      val propsFileName = Versions.DefaultPropsFileNames.forDownstreamApps
-
-      val versionsAttempt = Versions.load(propsFileName)
-      
-      def failureThrowable = versionsAttempt.failed.get
-      
-      require(versionsAttempt.isSuccess, s"Couldn't load version info from '${propsFileName}': ${failureThrowable}")
-      
-      apply(versionsAttempt.get)
-    }
-  }
 
   /**
    * Detatch and delete all nodes produced by a given :Analysis node and -
