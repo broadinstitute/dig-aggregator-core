@@ -89,10 +89,10 @@ object Commit {
 
     // cannot use Commit object here since `commit` offset doesn't exist yet
     val json =
-      ("topic"     -> record.topic) ~
-      ("partition" -> record.partition) ~
-      ("offset"    -> record.offset) ~
-      ("dataset"   -> dataset)
+      ("topic"       -> record.topic) ~
+        ("partition" -> record.partition) ~
+        ("offset"    -> record.offset) ~
+        ("dataset"   -> dataset)
 
     // convert the JSON object to a string for the commits topic
     compact(render(json))
@@ -117,38 +117,51 @@ object Commit {
   }
 
   /**
-   * In the commits table are all the datasets that have been committed for
-   * a given source topic. When a new dataset processor app is created (or
-   * needs to start over), this function can get all the datasets that have
-   * already been committed as well as the last commit offset so the processor
-   * knows where to start consuming from.
+   * Get all the datasets committed for a given topic.
    */
-  def datasetCommits(xa: Transactor[IO], topic: String, ignoreProcessedBy: Option[String]): IO[Seq[Commit]] = {
-    val select = fr"""|SELECT   `commits`.`commit`,
-                      |`commits`.`topic`,
-                      |`commits`.`partition`,
-                      |`commits`.`offset`,
-                      |`commits`.`dataset`
-                      |FROM     `commits`""".stripMargin
-      
-    def makeJoin(app: String) = fr"""|LEFT JOIN   `datasets`
-                                     |ON          `datasets`.`app` = $app
-                                     |AND         `datasets`.`topic` = `commits`.`topic`
-                                     |AND         `datasets`.`dataset` = `commits`.`dataset`
-                                     |AND         `datasets`.`commit` = `commits`.`commit`""".stripMargin
-    
-    val whereCommitsTopic = fr"`commits`.`topic` = $topic"
-    def whereDatasetsApp = fr"`datasets`.`app` IS NULL"
-    
-    val orderBy = fr"ORDER BY `commits`.`commit`"
-    
-    val (join, wheres) = ignoreProcessedBy match {
-      case None =>      Fragment.empty -> Seq(whereCommitsTopic)
-      case Some(app) => makeJoin(app) -> Seq(whereCommitsTopic, whereDatasetsApp)
-    }
-    
-    val q = select ++ join ++ Fragments.whereAnd(wheres: _*) ++ orderBy
-    
-    q.query[Commit].to[Seq].transact(xa)
+  def committedDatasets(xa: Transactor[IO], topic: String): IO[Seq[Commit]] = {
+    val q = sql"""|SELECT    `commit`,
+                  |          `topic`,
+                  |          `partition`,
+                  |          `offset`,
+                  |          `dataset`
+                  |
+                  |FROM      `commits`
+                  |
+                  |WHERE     `topic` = $topic
+                  |
+                  |ORDER BY  `commit`
+                  |""".stripMargin.query[Commit].to[Seq]
+
+    q.transact(xa)
+  }
+
+  /**
+   * Get all datasets committed for a given topic not yet processed by an app.
+   */
+  def committedDatasets(xa: Transactor[IO],
+                        topic: String,
+                        notProcessedBy: String): IO[Seq[Commit]] = {
+    val q = sql"""|SELECT           c.`commit`,
+                  |                 c.`topic`,
+                  |                 c.`partition`,
+                  |                 c.`offset`,
+                  |                 c.`dataset`
+                  |
+                  |FROM             `commits` AS c
+                  |
+                  |LEFT OUTER JOIN  `datasets` AS d
+                  |ON               d.`app` = $notProcessedBy
+                  |AND              d.`topic` = c.`topic`
+                  |AND              d.`dataset` = c.`dataset`
+                  |AND              d.`commit` = c.`commit`
+                  |
+                  |WHERE            c.`topic` = $topic
+                  |AND              d.`app` IS NULL
+                  |
+                  |ORDER BY         c.`commit`
+                  |""".stripMargin.query[Commit].to[Seq]
+
+    q.transact(xa)
   }
 }
