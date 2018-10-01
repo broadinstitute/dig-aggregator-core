@@ -28,13 +28,42 @@ final class VersionsTest extends FunSuite {
     assert(versions.anyUncommittedChanges === true)
     assert(versions.describedVersion === Some("nuh"))
     assert(versions.buildDate === oct28th)
+    assert(versions.remoteUrl === Some("https://github.com/broadinstitute/dig-aggregator-core"))
     
-    val expected = s"foo bar (nuh) branch: baz commit: blerg (PLUS uncommitted changes!) built on: $oct28th"
+    val expected = s"foo bar (nuh) branch: baz commit: blerg (PLUS uncommitted changes!) built on: $oct28th " + 
+                    "from https://github.com/broadinstitute/dig-aggregator-core"
     
     assert(versions.toString === expected)
   }
   
   test("happy path - uncommittedChanges is false") {
+    val data = new StringReader("""
+      name=foo
+      version=bar
+      branch=baz
+      lastCommit=blerg
+      uncommittedChanges=false
+      describedVersion=nuh
+      buildDate=2016-10-29T18:52:40.889Z
+      remoteUrl=https://example.com/blah""")
+    
+    val versions = Versions.loadFrom(data).get
+    
+    assert(versions.name === "foo")
+    assert(versions.version === "bar")
+    assert(versions.branch === "baz")
+    assert(versions.lastCommit === Some("blerg"))
+    assert(versions.anyUncommittedChanges === false)
+    assert(versions.describedVersion === Some("nuh"))
+    assert(versions.buildDate === oct29th)
+    assert(versions.remoteUrl === Some("https://example.com/blah"))
+    
+    val expected = s"foo bar (nuh) branch: baz commit: blerg built on: $oct29th from https://example.com/blah"
+    
+    assert(versions.toString === expected)
+  }
+  
+  test("happy path - no remoteUrl") {
     val data = new StringReader("""
       name=foo
       version=bar
@@ -53,8 +82,9 @@ final class VersionsTest extends FunSuite {
     assert(versions.anyUncommittedChanges === false)
     assert(versions.describedVersion === Some("nuh"))
     assert(versions.buildDate === oct29th)
+    assert(versions.remoteUrl === None)
     
-    val expected = s"foo bar (nuh) branch: baz commit: blerg built on: $oct29th"
+    val expected = s"foo bar (nuh) branch: baz commit: blerg built on: $oct29th from UNKNOWN origin"
     
     assert(versions.toString === expected)
   }
@@ -67,7 +97,8 @@ final class VersionsTest extends FunSuite {
       lastCommit=
       uncommittedChanges=true
       describedVersion=nuh
-      buildDate=2016-10-28T18:52:40.889Z""")
+      buildDate=2016-10-28T18:52:40.889Z
+      remoteUrl=https://example.com/blah""")
     
     val versions = Versions.loadFrom(data).get
     
@@ -78,21 +109,24 @@ final class VersionsTest extends FunSuite {
     assert(versions.anyUncommittedChanges === true)
     assert(versions.describedVersion === Some("nuh"))
     assert(versions.buildDate === oct28th)
+    assert(versions.remoteUrl === Some("https://example.com/blah"))
     
-    val expected = s"foo bar (nuh) branch: baz commit: UNKNOWN (PLUS uncommitted changes!) built on: $oct28th"
+    val expected = s"foo bar (nuh) branch: baz commit: UNKNOWN (PLUS uncommitted changes!) built on: $oct28th " +
+                    "from https://example.com/blah"
     
     assert(versions.toString === expected)
   }
   
   test("no described version") {
-    val data = new StringReader("""
+    val data = new StringReader(""".stripMargin
       name=foo
       version=bar
       branch=baz
       lastCommit=blerg
       uncommittedChanges=true
       describedVersion=
-      buildDate=2016-10-28T18:52:40.889Z""")
+      buildDate=2016-10-28T18:52:40.889Z
+      remoteUrl=https://example.com/blah""")
     
     val versions = Versions.loadFrom(data).get
     
@@ -103,8 +137,10 @@ final class VersionsTest extends FunSuite {
     assert(versions.anyUncommittedChanges === true)
     assert(versions.describedVersion === None)
     assert(versions.buildDate === oct28th)
+    assert(versions.remoteUrl === Some("https://example.com/blah"))
     
-    val expected = s"foo bar (UNKNOWN) branch: baz commit: blerg (PLUS uncommitted changes!) built on: $oct28th"
+    val expected = s"foo bar (UNKNOWN) branch: baz commit: blerg (PLUS uncommitted changes!) built on: $oct28th " +
+                    "from https://example.com/blah"
     
     assert(versions.toString === expected)
   }
@@ -128,8 +164,10 @@ final class VersionsTest extends FunSuite {
     assert(versions.anyUncommittedChanges === true)
     assert(versions.describedVersion === None)
     assert(versions.buildDate === oct28th)
+    assert(versions.remoteUrl === None)
     
-    val expected = s"foo bar (UNKNOWN) branch: baz commit: UNKNOWN (PLUS uncommitted changes!) built on: $oct28th"
+    val expected = s"foo bar (UNKNOWN) branch: baz commit: UNKNOWN (PLUS uncommitted changes!) built on: $oct28th " +
+                    "from UNKNOWN origin"
     
     assert(versions.toString === expected)
   }
@@ -142,7 +180,8 @@ final class VersionsTest extends FunSuite {
       lastCommit=
       uncommittedChanges=true
       describedVersion=
-      buildDate=2016-10-28T18:52:40.889Z""")
+      buildDate=2016-10-28T18:52:40.889Z
+      remoteUrl=https://example.com/blah""")
     
     assert(Versions.loadFrom(data).isFailure)
   }
