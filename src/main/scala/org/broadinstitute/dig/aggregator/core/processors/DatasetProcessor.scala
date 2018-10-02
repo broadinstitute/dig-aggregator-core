@@ -32,7 +32,13 @@ import org.broadinstitute.dig.aggregator.core._
  *  `runOnce` - skips reading from Kafka, determines the set of datasets that
  *              need to be processed, does so, and then exits
  */
-abstract class DatasetProcessor(opts: Opts, topic: String, dep: Option[String]) extends Processor(opts, "analyses") {
+abstract class DatasetProcessor[A](opts: Opts, topic: String, dep: Option[String]) extends Processor(opts, "analyses") {
+
+  /**
+   * Whenever this processor runs, it will send what work was done to the
+   * analyses topic.
+   */
+  val analyses: Producer = new Producer(opts, "analyses")
 
   /**
    * Process a series of datasets that have yet to be processed by this app.
@@ -40,7 +46,7 @@ abstract class DatasetProcessor(opts: Opts, topic: String, dep: Option[String]) 
    * Note: it is possible for the same dataset to be represented multiple times
    *       within th `datasets` argument.
    */
-  def processDatasets(datasets: Seq[Dataset]): IO[_]
+  def processDatasets[A](datasets: Seq[Dataset]): IO[A]
 
   /**
    * The `analyses` is just for dataset processors to send a quick message
@@ -73,8 +79,9 @@ abstract class DatasetProcessor(opts: Opts, topic: String, dep: Option[String]) 
   }
 
   /**
-   * Determine the list of datasets that need processing, process them, and
-   * then write to the database that they were processed.
+   * Determine the list of datasets that need processing, process them, write
+   * to the database that they were processed, and send a message to the
+   * analyses topic.
    *
    * When this processor is running in "process" mode (consuming from Kafka),
    * this is called whenever the analyses topic has a message sent to it.
@@ -104,8 +111,10 @@ abstract class DatasetProcessor(opts: Opts, topic: String, dep: Option[String]) 
 
     for {
       datasets <- datasetsToProcess
-      _        <- processDatasets(datasets)
+      data     <- processDatasets(datasets)
       _        <- writeDatasets(datasets)
+
+      // TODO: send to analyses topic, maybe write a run entry?
     } yield ()
   }
 

@@ -28,7 +28,7 @@ final case class Analysis(app: String, name: String, typ: Analysis.Type, provena
                 |  source: ${provenance.source},
                 |  branch: ${provenance.branch},
                 |  commit: ${provenance.commit},
-                |  created: timestamp(),
+                |  created: timestamp()
                 |})
                 |
                 |// return the ID of the node created
