@@ -36,8 +36,8 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
       override def insert(c: Commit): IO[_] = c.insert(xa)
     }
 
-    implicit object DatasetsAreInsertable extends Insertable[Dataset] {
-      override def insert(d: Dataset): IO[_] = d.insert(xa)
+    implicit object RunsAreInsertable extends Insertable[Run] {
+      override def insert(r: Run): IO[_] = r.insert(xa)
     }
   }
 
@@ -47,8 +47,8 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     q.transact(xa).unsafeRunSync()
   }
 
-  def allDatasets: Seq[Dataset] = {
-    val q = sql"SELECT `app`, `topic`, `dataset`, `commit` FROM `datasets`".query[Dataset].to[List]
+  def allRuns: Seq[Run] = {
+    val q = sql"SELECT `run`, `app`,`input`,`output` FROM `runs`".query[Run].to[List]
 
     q.transact(xa).unsafeRunSync()
   }
@@ -73,7 +73,7 @@ object DbFunSuite {
   }
 
   private object Tables {
-    val all: Seq[Table] = Seq(Commits, Datasets)
+    val all: Seq[Table] = Seq(Commits, Runs)
 
     object Commits extends Table("commits") {
       override val create: ConnectionIO[Int] = sql"""
@@ -90,17 +90,18 @@ object DbFunSuite {
       )""".update.run
     }
 
-    object Datasets extends Table("datasets") {
+    object Runs extends Table("runs") {
       override val create: ConnectionIO[Int] = sql"""
-        CREATE TABLE `datasets` (
-        `ID` int(11) NOT NULL AUTO_INCREMENT,
-        `app` varchar(180) NOT NULL,
-        `topic` varchar(180) NOT NULL,
-        `dataset` varchar(180) NOT NULL,
-        `commit` int(64) NOT NULL,
-        PRIMARY KEY (`ID`),
-        UNIQUE KEY `DATASET_IDX` (`app`,`topic`,`dataset`)
-      )""".update.run
+        CREATE TABLE `runs` (
+          `ID` int(11) NOT NULL AUTO_INCREMENT,
+          `run` int(11) NOT NULL,
+          `app` varchar(180) NOT NULL,
+          `input` varchar(800) NOT NULL,
+          `output` varchar(800) NOT NULL,
+          `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (`ID`),
+          UNIQUE KEY `RUN_IDX` (`app`,`input`)
+        )""".update.run
     }
   }
 }

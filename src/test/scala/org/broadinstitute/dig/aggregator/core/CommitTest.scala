@@ -46,7 +46,7 @@ final class CommitTest extends DbFunSuite {
     assert(allCommits == Seq(c1))
   }
 
-  dbTest("datasetCommits - no ignoreProcessedBy") {
+  dbTest("commits - no ignoreProcessedBy") {
     val c0 = makeCommit(0, topic = "x")
     val c1 = makeCommit(1, topic = "x")
     val c2 = makeCommit(2, topic = "y")
@@ -66,31 +66,27 @@ final class CommitTest extends DbFunSuite {
     assert(zs.isEmpty)
   }
 
-  dbTest("datasetCommits - with ignoreProcessedBy") {
+  dbTest("commits - with ignoreProcessedBy") {
     val c0 = makeCommit(0, topic = "x", dataset = "fooSet")
-    val c1 = makeCommit(1, topic = "x", dataset = "fooSet")
-    val c2 = makeCommit(2, topic = "x", dataset = "barSet")
-    val c3 = makeCommit(3, topic = "y", dataset = "barSet")
+    val c1 = makeCommit(1, topic = "x", dataset = "barSet")
 
-    val d0 = Dataset(app = Some("fooApp"), topic = "x", dataset = "fooSet", commit = c0.commit)
-    val d1 = Dataset(app = Some("barApp"), topic = "x", dataset = "fooSet", commit = c1.commit)
-    val d2 = Dataset(app = Some("blergApp"), topic = "x", dataset = "barSet", commit = c2.commit)
-    val d3 = Dataset(app = Some("blergApp"), topic = "y", dataset = "barSet", commit = c3.commit)
+    val r0 = Run(run = 0, app = "fooApp", input = "fooSet", output = "fooSet-output")
+    val r1 = Run(run = 1, app = "barApp", input = "barSet", output = "barSet-output")
 
-    insert(c0, c1, c2, c3)
-    insert(d0, d1, d2, d3)
+    insert(c0, c1)
+    insert(r0, r1)
 
+    // fooApp already processed fooSet, so only barSet needs processed
     val xs = Commit.commits(xa, "x", "fooApp").unsafeRunSync()
+    assert(xs.toSet == Set(c1))
 
-    assert(xs.toSet == Set(c1, c2))
+    // barApp already processed barSet, so only needs fooSet
+    val ys = Commit.commits(xa, "x", "barApp").unsafeRunSync()
+    assert(ys == Seq(c0))
 
-    val ys = Commit.commits(xa, "y", "fooApp").unsafeRunSync()
-
-    assert(ys == Seq(c3))
-
+    // test against empty topic
     assert(Commit.commits(xa, "z", "fooApp").unsafeRunSync().isEmpty)
     assert(Commit.commits(xa, "z", "barApp").unsafeRunSync().isEmpty)
-    assert(Commit.commits(xa, "z", "blergApp").unsafeRunSync().isEmpty)
   }
 
   private def makeCommit(i: Int, topic: String, dataset: String): Commit =

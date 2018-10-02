@@ -148,14 +148,13 @@ object Commit {
                   |
                   |FROM             `commits` AS c
                   |
-                  |LEFT OUTER JOIN  `datasets` AS d
-                  |ON               d.`app` = $notProcessedBy
-                  |AND              d.`topic` = c.`topic`
-                  |AND              d.`dataset` = c.`dataset`
-                  |AND              d.`commit` = c.`commit`
+                  |LEFT OUTER JOIN  `runs` AS r
+                  |ON               r.`app` = $notProcessedBy
+                  |AND              r.`input` = c.`dataset`
+                  |AND              r.`timestamp` > c.`timestamp`
                   |
                   |WHERE            c.`topic` = $topic
-                  |AND              d.`app` IS NULL
+                  |AND              r.`app` IS NULL
                   |
                   |ORDER BY         c.`commit`
                   |""".stripMargin.query[Commit].to[Seq]
