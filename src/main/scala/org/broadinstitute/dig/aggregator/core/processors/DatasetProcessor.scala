@@ -1,87 +1,125 @@
 package org.broadinstitute.dig.aggregator.core.processors
 
-import cats.effect.IO
+import cats._
+import cats.effect._
+import cats.implicits._
 
 import org.broadinstitute.dig.aggregator.core._
 
 /**
- * A DatasetProcessor is a CommitProcessor that - for each dataset committed -
- * processes the dataset. This is processor is treated specially for 2 reasons:
+ * A DatasetProcessor is a Processor that can discern the set of datasets that
+ * are new and it hasn't processed yet, process them, and update the database
+ * that it has done that work.
  *
- *  1. The --reset flag means that existing datasets already committed to the
- *     database need to have their commits reprocessed.
+ * Each DatasetProcessor can have an optional application that it is dependent
+ * on (`dep`).
  *
- *  2. After each dataset is processed, they need to be written to the database
- *     so that a future --reset won't (necessarily) reprocess them and so that
- *     there is a log of what processes have been run on which datasets for
- *     the end-user.
+ * If it does, then it will look for all the datasets that its dependency has
+ * processed, but it has not yet processed to determine the set of work that it
+ * has to do.
  *
- * The `topic` parameter is the source of the commit records to filter on. For
- * example: the "variants" topic. Any commit record not from this topic will
- * be ignored.
+ * If it does NOT have a dependency, then the set of work needing to be done
+ * is the datasets committed for the given source `topic` that have not yet
+ * been processed by this processor.
+ *
+ * When a DatasetProcessor is created, it can be launched with one of two
+ * methods:
+ *
+ *  `run`     - like any other processor, it waits for messages from Kafka on
+ *              the analyses topic and - upon receiving them - determines the
+ *              set of datasets that it needs to process and processes them
+ *
+ *  `runOnce` - skips reading from Kafka, determines the set of datasets that
+ *              need to be processed, does so, and then exits
  */
-abstract class DatasetProcessor(opts: Opts, sourceTopic: String)
-    extends CommitProcessor(opts, Some(sourceTopic)) {
+abstract class DatasetProcessor(opts: Opts, topic: String, dep: Option[String]) extends Processor(opts, "analyses") {
 
   /**
-   * If --reset was passed on the command line, then farm out to the database
-   * and query the commits table for a record of all datasets already committed
-   * for this topic that need to be processed by this application.
+   * Process a series of datasets that have yet to be processed by this app.
+   *
+   * Note: it is possible for the same dataset to be represented multiple times
+   *       within th `datasets` argument.
    */
-  val oldCommits: IO[Seq[Commit]] = {
-    if (opts.reprocess()) {
-      opts.ignoreProcessedBy match {
-        case Some(app) => Commit.committedDatasets(xa, sourceTopic, app)
-        case None      => Commit.committedDatasets(xa, sourceTopic)
-      }
-    } else {
-      IO.pure(Nil)
-    }
+  def processDatasets(datasets: Seq[Dataset]): IO[_]
+
+  /**
+   * The `analyses` is just for dataset processors to send a quick message
+   * indicating that they have done work. They are not intended to carry any
+   * data about the work to be used by downstream processors.
+   *
+   * For this reason, when a dataset processor gets a message that work has
+   * been done (by anyone), they can simply go to the database, check to see
+   * what work it needs to do, and do it.
+   */
+  override def processRecords(records: Seq[Consumer.Record]): IO[Unit] = {
+    runOnce
   }
 
   /**
-   * First process all the old commits, then start reading from Kafka.
+   * Dataset processors should always start consuming from the end of the topic
+   * since they are transient messages. For this reason, the processor should
+   * run once, then start consuming.
+   *
+   * Note: it may take a while to runOnce the first time. For this reason, it
+   *       is best to get the state first, as messages may come in while data
+   *       is being processed indicating that it should run again.
    */
   override def run(): IO[Unit] = {
-    /*
-     * TODO: It would be much safer if assigning the partitions and getting the
-     *       old commits were part of the same transaction. As it's coded now,
-     *       it's possible for the commits table to be updated immediately
-     *       after being queried, but immediately before the existing commits
-     *       are fetched, meaning that the new commits will be processed, and
-     *       then when the consumer begins those commits will be processed
-     *       again.
-     *
-     *       This is a rare case to fix and technically shouldn't hurt anything
-     *       but should be avoided if possible. There are two ways to solve it:
-     *
-     *       1. Get the state and commits in the same Transactor:
-     *
-     *          val transaction = for {
-     *            stateQuery       <- consumer.assignPartitions()
-     *            commitsQuery     <- Commit.datasets(sourceTopic)
-     *          } yield (state, commits)
-     *
-     *          transaction.transact(xa)
-     *
-     *       2. Get the state and then use the state to modify the datasets
-     *          query with a set of SQL fragments that limit the commit offset
-     *          allowed:
-     *
-     *          for {
-     *            state   <- consumer.assignPartitions()
-     *            commits <- Commit.datasets(sourceTopic, state)
-     *            _       <- ...
-     *          } yield ()
-     *
-     *       Either of these solutions will require a decent amount of work.
-     */
+    for {
+      state <- State.fromEnd(opts.appName, consumer)
+      _     <- runOnce
+      _     <- consumer.consume(state, processRecords)
+    } yield ()
+  }
+
+  /**
+   * Determine the list of datasets that need processing, process them, and
+   * then write to the database that they were processed.
+   *
+   * When this processor is running in "process" mode (consuming from Kafka),
+   * this is called whenever the analyses topic has a message sent to it.
+   *
+   * Otherwise, this is just called once and then exits.
+   */
+  def runOnce(): IO[Unit] = {
+    val datasetsToProcess: IO[Seq[Dataset]] =
+      (dep, opts.ignoreProcessedBy) match {
+
+        // dependency and not yet processed by this app
+        case (Some(dep), Some(app)) =>
+          Dataset.datasets(xa, dep, topic, app)
+
+        // dependency and reprocess all of them
+        case (Some(dep), None) =>
+          Dataset.datasets(xa, dep, topic)
+
+        // no dependency and not yet processed by this app
+        case (None, Some(app)) =>
+          Commit.commits(xa, topic, app).map(_.map(Dataset.fromCommit))
+
+        // no dependency and reprocess all of them
+        case (None, None) =>
+          Commit.commits(xa, topic).map(_.map(Dataset.fromCommit))
+      }
 
     for {
-      state   <- getState
-      commits <- oldCommits
-      _       <- processCommits(commits)
-      _       <- consumer.consume(state, processRecords)
+      datasets <- datasetsToProcess
+      _        <- processDatasets(datasets)
+      _        <- writeDatasets(datasets)
     } yield ()
+  }
+
+  /**
+   * Ensure that all the datasets are written to the database with the updated
+   * application name that processed them.
+   */
+  protected def writeDatasets(datasets: Seq[Dataset]): IO[Unit] = {
+    val writes = datasets
+      .map(_.copy(app = Some(opts.appName)))
+      .map(_.insert(xa))
+      .toList
+      .sequence
+
+    writes >> IO.unit
   }
 }

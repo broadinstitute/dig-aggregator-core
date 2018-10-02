@@ -24,7 +24,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
  * Kafka JSON topic record consumer.
  */
-final class Consumer(opts: Opts, topic: String) extends LazyLogging {
+final class Consumer(opts: Opts, val topic: String) extends LazyLogging {
 
   /**
    * Create a connection to the database for writing state.
@@ -51,7 +51,30 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
   /**
    * Get all the partitions for this topic.
    */
-  private val partitions: Seq[Int] = client.partitionsFor(topic).asScala.map(_.partition)
+  val partitions: Seq[Int] = client.partitionsFor(topic).asScala.map(_.partition)
+
+  /**
+   * All the partitions for this Topic as Kafka TopicPartitions.
+   */
+  val topicPartitions: Seq[TopicPartition] = partitions.map(new TopicPartition(topic, _))
+
+  /**
+   * A Map of TopicPartition -> offset (Long) given the earliest offsets
+   * available in Kafka for this topic.
+   */
+  lazy val beginningOffsets = client
+    .beginningOffsets(topicPartitions.asJava)
+    .asScala
+    .toMap
+
+  /**
+   * A Map of TopicPartition -> offset (Long) given the latest offsets
+   * available in Kafka for this topic.
+   */
+  lazy val endOffsets = client
+    .endOffsets(topicPartitions.asJava)
+    .asScala
+    .toMap
 
   /**
    * Constantly grab the last set of records processed and try to update -
@@ -79,11 +102,7 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
    * with updated ones from the State.
    */
   private def mergeStateOffsets(state: State): State = {
-    val topicPartitions  = partitions.map(new TopicPartition(topic, _))
-    val beginningOffsets = client.beginningOffsets(topicPartitions.asJava)
-
-    // create a map of offsets from Kafka
-    val offsets = beginningOffsets.asScala.map {
+    val offsets = beginningOffsets.map {
       case (topicPartition, offset) => topicPartition.partition -> offset.toLong
     }
 

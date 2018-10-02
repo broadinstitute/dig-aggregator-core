@@ -14,8 +14,7 @@ import scala.io.StdIn
  * A specific Processor that processes commit records. Mostly just a helper
  * that parses a commit record before processing.
  */
-abstract class CommitProcessor(opts: Opts, sourceTopic: Option[String])
-    extends Processor(opts, "commits") {
+abstract class CommitProcessor(opts: Opts, sourceTopic: Option[String]) extends Processor(opts, "commits") {
 
   /**
    * Subclass resposibility.

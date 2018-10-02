@@ -119,7 +119,7 @@ object Commit {
   /**
    * Get all the datasets committed for a given topic.
    */
-  def committedDatasets(xa: Transactor[IO], topic: String): IO[Seq[Commit]] = {
+  def commits(xa: Transactor[IO], topic: String): IO[Seq[Commit]] = {
     val q = sql"""|SELECT    `commit`,
                   |          `topic`,
                   |          `partition`,
@@ -139,9 +139,7 @@ object Commit {
   /**
    * Get all datasets committed for a given topic not yet processed by an app.
    */
-  def committedDatasets(xa: Transactor[IO],
-                        topic: String,
-                        notProcessedBy: String): IO[Seq[Commit]] = {
+  def commits(xa: Transactor[IO], topic: String, notProcessedBy: String): IO[Seq[Commit]] = {
     val q = sql"""|SELECT           c.`commit`,
                   |                 c.`topic`,
                   |                 c.`partition`,
