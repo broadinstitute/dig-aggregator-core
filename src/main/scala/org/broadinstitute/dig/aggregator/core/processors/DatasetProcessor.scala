@@ -49,13 +49,14 @@ abstract class DatasetProcessor[A](opts: Opts, topic: String, dep: Option[String
   def processDatasets[A](datasets: Seq[Dataset]): IO[A]
 
   /**
-   * The `analyses` is just for dataset processors to send a quick message
+   * The `analyses` topic is just for processors to send a quick message
    * indicating that they have done work. They are not intended to carry any
-   * data about the work to be used by downstream processors.
+   * data about the work to be used by downstream processors, as opposed to
+   * having written to the database what that work was.
    *
-   * For this reason, when a dataset processor gets a message that work has
-   * been done (by anyone), they can simply go to the database, check to see
-   * what work it needs to do, and do it.
+   * When a dataset processor gets a message that work has been done (by
+   * anyone), it can simply go to the database, check to see what work it
+   * needs to do, and do it.
    */
   override def processRecords(records: Seq[Consumer.Record]): IO[Unit] = {
     runOnce
@@ -114,7 +115,7 @@ abstract class DatasetProcessor[A](opts: Opts, topic: String, dep: Option[String
       data     <- processDatasets(datasets)
       _        <- writeDatasets(datasets)
 
-      // TODO: send to analyses topic, maybe write a run entry?
+      // TODO: send to analyses topic, maybe write a run/log entry?
     } yield ()
   }
 
