@@ -73,35 +73,55 @@ object DbFunSuite {
   }
 
   private object Tables {
-    val all: Seq[Table] = Seq(Commits, Runs)
+    val all: Seq[Table] = Seq(Commits, Runs, Provenance)
 
     object Commits extends Table("commits") {
-      override val create: ConnectionIO[Int] = sql"""
-        CREATE TABLE `commits` (
-        `ID` int(11) NOT NULL AUTO_INCREMENT,
-        `commit` int(64) NOT NULL,
-        `topic` varchar(180) NOT NULL,
-        `partition` int(11) NOT NULL,
-        `offset` int(64) NOT NULL,
-        `dataset` varchar(180) NOT NULL,
-        `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (`ID`),
-        UNIQUE KEY `SOURCE_IDX` (`topic`,`dataset`)
-      )""".update.run
+      override val create: ConnectionIO[Int] =
+        sql"""|CREATE TABLE `commits` (
+              |  `ID` int(11) NOT NULL AUTO_INCREMENT,
+              |  `commit` int(64) NOT NULL,
+              |  `topic` varchar(180) NOT NULL,
+              |  `partition` int(11) NOT NULL,
+              |  `offset` int(64) NOT NULL,
+              |  `dataset` varchar(180) NOT NULL,
+              |  `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              |  PRIMARY KEY (`ID`),
+              |  UNIQUE KEY `SOURCE_IDX` (`topic`,`dataset`)
+              |)
+              |""".stripMargin.update.run
     }
 
     object Runs extends Table("runs") {
-      override val create: ConnectionIO[Int] = sql"""
-        CREATE TABLE `runs` (
-          `ID` int(11) NOT NULL AUTO_INCREMENT,
-          `run` int(11) NOT NULL,
-          `app` varchar(180) NOT NULL,
-          `input` varchar(800) NOT NULL,
-          `output` varchar(800) NOT NULL,
-          `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          PRIMARY KEY (`ID`),
-          UNIQUE KEY `RUN_IDX` (`app`,`input`)
-        )""".update.run
+      override val create: ConnectionIO[Int] =
+        sql"""|CREATE TABLE `runs` (
+              |  `ID` int(11) NOT NULL AUTO_INCREMENT,
+              |  `run` int(11) NOT NULL,
+              |  `app` varchar(180) NOT NULL,
+              |  `input` varchar(800) NOT NULL,
+              |  `output` varchar(800) NOT NULL,
+              |  `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              |  PRIMARY KEY (`ID`),
+              |  UNIQUE KEY `APP_IDX` (`app`,`input`),
+              |  KEY `RUN_IDX` (`run`, `app`)
+              |)
+              |""".stripMargin.update.run
+    }
+
+    object Provenance extends Table("provenance") {
+      override val create: ConnectionIO[Int] =
+        sql"""|CREATE TABLE `provenance` (
+              |  `ID` int(11) NOT NULL AUTO_INCREMENT,
+              |  `run` int(11) NOT NULL,
+              |  `app` varchar(180) NOT NULL,
+              |  `source` varchar(1024) DEFAULT NULL,
+              |  `branch` varchar(180) DEFAULT NULL,
+              |  `commit` varchar(40) DEFAULT NULL,
+              |  PRIMARY KEY (`ID`),
+              |  UNIQUE KEY `ID_UNIQUE` (`ID`),
+              |  KEY `RUN_KEY_idx` (`run`,`app`),
+              |  CONSTRAINT `RUN_KEY` FOREIGN KEY (`run`, `app`) REFERENCES `runs` (`run`, `app`) ON DELETE CASCADE ON UPDATE NO ACTION
+              |)
+              |""".stripMargin.update.run
     }
   }
 }
