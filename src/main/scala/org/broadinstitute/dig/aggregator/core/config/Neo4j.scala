@@ -5,7 +5,7 @@ import org.neo4j.driver.v1._
 /**
  * Neo4j configuration settings.
  */
-final case class Neo4j(url: String, user: String, password: String) {
+final case class Neo4jConfig(url: String, user: String, password: String) {
 
   /**
    * The authorization token used when instantiating a new driver connection.

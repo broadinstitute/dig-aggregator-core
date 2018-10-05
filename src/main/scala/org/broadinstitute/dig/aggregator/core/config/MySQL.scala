@@ -7,7 +7,7 @@ import doobie._
 /**
  * MysQL configuration settings.
  */
-final case class MySQL(
+final case class MySQLConfig(
     url: String,
     driver: String,
     schema: String,

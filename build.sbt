@@ -24,6 +24,8 @@ lazy val Orgs = new {
   val DIG = "org.broadinstitute.dig"
 }
 
+mainClass := Some(s"${Orgs.DIG}.aggregator.app.Main")
+
 lazy val scalacOpts = Seq(
   "-feature",
   "-deprecation",

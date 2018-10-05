@@ -8,9 +8,6 @@ import doobie._
 import doobie.implicits._
 import doobie.util._
 
-import java.io.File
-import java.io.PrintWriter
-
 import org.apache.kafka.clients.consumer.ConsumerRecord
 
 import scala.collection.JavaConverters._
@@ -100,8 +97,6 @@ object State {
                  |ORDER BY `partition`
                  |""".stripMargin.query[(Int, Long)].to[List]
 
-    // TODO: should this function take beginning as well and verify # partitions?
-
     // fetch all the offsets for every partition on this topic for this app
     q.transact(xa).flatMap { offsets =>
       if (offsets.isEmpty) {
@@ -119,16 +114,17 @@ object State {
    * can get the map of partitions and offsets to seek to here.
    */
   def reset(xa: Transactor[IO], app: String, topic: String): IO[State] = {
-    val delete = sql"""DELETE FROM `offsets`
-                      |WHERE       `app` = $app
-                      |AND         `topic` = $topic
-                      |""".stripMargin.update
+    val delete = sql"""|DELETE
+                       |FROM     `offsets`
+                       |WHERE    `app` = $app
+                       |AND      `topic` = $topic
+                       |""".stripMargin.update
 
-    val select = sql"""SELECT   `partition`, MAX(`offset`)+1 AS `offset`
-                      |FROM     `commits`
-                      |WHERE    `topic` = $topic
-                      |GROUP BY `partition`
-                      |""".stripMargin.query[(Int, Long)].to[List]
+    val select = sql"""|SELECT   `partition`, MAX(`offset`)+1 AS `offset`
+                       |FROM     `commits`
+                       |WHERE    `topic` = $topic
+                       |GROUP BY `partition`
+                       |""".stripMargin.query[(Int, Long)].to[List]
 
     // delete then select in the same transaction
     val offsets = for {

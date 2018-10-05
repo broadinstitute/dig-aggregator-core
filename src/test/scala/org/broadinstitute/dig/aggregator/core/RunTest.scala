@@ -52,7 +52,7 @@ final class RunTest extends DbFunSuite {
     insert(r0, r1, r2, r3, r4, r5)
 
     // find all the datasets b needs to process
-    val results = Run.runs(xa, "a3", Seq("a0", "a1", "a2")).unsafeRunSync
+    val results = Run.results(xa, Seq("a0", "a1", "a2"), "a3").unsafeRunSync
 
     assert(results.isEmpty)
   }
@@ -73,7 +73,7 @@ final class RunTest extends DbFunSuite {
     insert(r0, r1, r2, r3, r4, r5)
 
     // find all the datasets b needs to process
-    val results = Run.runs(xa, "a3", Seq("a0", "a1", "a2")).unsafeRunSync
+    val results = Run.results(xa, Seq("a0", "a1", "a2"), "a3").unsafeRunSync
 
     // should find 2 datasets that need processing
     assert(results.size == 2)

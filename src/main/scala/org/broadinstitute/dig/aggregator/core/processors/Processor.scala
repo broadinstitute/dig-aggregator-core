@@ -1,86 +1,100 @@
 package org.broadinstitute.dig.aggregator.core.processors
 
-import cats.effect.IO
+import cats._
+import cats.effect._
+
+import doobie._
 
 import com.typesafe.scalalogging.LazyLogging
 
-import doobie.util.transactor.Transactor
+import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 
-import org.broadinstitute.dig.aggregator.core._
-
-import scala.io.StdIn
+import org.rogach.scallop._
 
 /**
- * A Processor will consume records from a given topic and call a process
- * function to-be-implemented by a subclass.
+ * A Processor is a unique. Flags and config are passed in, but not used here
+ * because there needs to be type-safety assurances that all processors take
+ * them as arguments when constructed dynamically.
  */
-abstract class Processor(opts: Opts, val topic: String) extends LazyLogging {
+abstract class Processor(flags: Processor.Flags, config: BaseConfig) extends LazyLogging {
 
   /**
-   * Database transactor for loading state, etc.
+   * A unique name for this processor. Must be unique across all processors!
    */
-  protected val xa: Transactor[IO] = opts.config.mysql.newTransactor()
+  val name: Processor.Name
 
   /**
-   * The Kafka topic consumer.
+   * Run this processor.
    */
-  protected val consumer: Consumer = new Consumer(opts, topic)
+  def run(): IO[Unit]
 
   /**
-   * Subclass responsibility.
+   * The name of this processor needs to match the class that is using it.
    */
-  def processRecords(records: Seq[Consumer.Record]): IO[_]
+  Processor.names.get(name.toString) match {
+    case Some(c) => require(getClass == c, s"Processor class doesn't match $name")
+    case None    => throw new Exception(s"Unregistered processor $name")
+  }
+}
+
+/**
+ * Companion object for registering the names of processors.
+ */
+object Processor {
+  import scala.language.implicitConversions
 
   /**
-   * IO to load this consumer's state from the database.
+   * A mapping of all the registered application names.
    */
-  def loadState: IO[State] = {
-    State.load(xa, opts.appName, topic)
+  private var names: Map[String, (Flags, BaseConfig) => Processor] = Map()
+
+  /**
+   * Lookup a processor by name.
+   */
+  def apply(name: String): (Flags, BaseConfig) => Processor = {
+    names(name)
   }
 
   /**
-   * IO to create the reset state for this consumer.
+   * All processors are required to have a unique name that is unique across
+   * every processor for use in the MySQL database to show what has been
+   * processed already.
    */
-  def resetState: IO[State] = {
-    State.reset(xa, opts.appName, topic)
-  }
+  final class Name(name: String, ctor: (Flags, BaseConfig) => Processor) {
 
-  /**
-   * Determine if the state is being reset (with --reset) or loaded from the
-   * database and return the correct operation to execute.
-   */
-  def getState: IO[State] = {
-    if (opts.reprocess()) {
-      val warning = IO {
-        logger.warn("The consumer state is being reset because either reset")
-        logger.warn("flag was passed on the command line or the commits")
-        logger.warn("database doesn't contain any partition offsets for this")
-        logger.warn("application + topic.")
-        logger.warn("")
-        logger.warn("If this is the desired course of action, answer 'Y' at")
-        logger.warn("the prompt; any other response will exit the program")
-        logger.warn("before any damage is done.")
-        logger.warn("")
+    /**
+     * Get the name of this processor as a string.
+     */
+    override def toString: String = name
 
-        StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")
-      }
-
-      // terminate the entire application if the user doesn't answer "Y"
-      warning.flatMap { confirm =>
-        if (confirm) resetState else IO.raiseError(new Exception("state reset canceled"))
-      }
-    } else {
-      loadState
+    /**
+     * Registers the application name with the global map.
+     */
+    names.get(name) match {
+      case Some(c) => require(c == ctor, s"$name already registered to another constructor")
+      case None    => names += name -> ctor
     }
   }
 
   /**
-   * Create a new consumer and start consuming records from Kafka.
+   * Conversion from DB string to Processor.Name for doobie.
    */
-  def run(): IO[Unit] = {
-    for {
-      state <- getState
-      _     <- consumer.consume(state, processRecords)
-    } yield ()
+  implicit val NameMeta: Meta[Name] = {
+    Meta[String].xmap(name => new Name(name, names(name)), _.toString)
+  }
+
+  /**
+   * All processors expect these options on the command line.
+   */
+  trait Flags { self: ScallopConf =>
+
+    /** Force processor to reprocess data it already has processed. */
+    val reprocess: ScallopOption[Boolean] = opt("reprocess")
+
+    /** Actually run the processor (as opposed to just showing work). */
+    val yes: ScallopOption[Boolean] = opt("yes")
+
+    /** Only run the only processor and not all downstream processors. */
+    val only: ScallopOption[Boolean] = opt("only")
   }
 }

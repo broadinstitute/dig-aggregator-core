@@ -3,7 +3,7 @@ package org.broadinstitute.dig.aggregator.core.config
 /**
  * AWS configuration settings.
  */
-final case class AWS(
+final case class AWSConfig(
     key: String,
     secret: String,
     region: String,

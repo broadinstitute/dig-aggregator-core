@@ -26,9 +26,7 @@ object Provenance {
    * Default constructor will load the version information in the JAR.
    */
   def apply(): Provenance = {
-    //Note that we want the version info for the downstream app that depends on us, not this lib.
-    val propsFileName = Versions.DefaultPropsFileNames.forDownstreamApps
-
+    val propsFileName   = Versions.DefaultPropsFileNames.forDownstreamApps
     val versionsAttempt = Versions.load(propsFileName)
 
     def failureThrowable = versionsAttempt.failed.get

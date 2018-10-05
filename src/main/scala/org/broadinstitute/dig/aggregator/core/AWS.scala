@@ -21,28 +21,32 @@ import com.amazonaws.services.elasticmapreduce.model.StepSummary
 import com.typesafe.scalalogging.LazyLogging
 
 import java.io.InputStream
+import java.net.URI
+
+import org.broadinstitute.dig.aggregator.core.config.AWSConfig
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.io.Source
 
 /**
  * AWS controller (S3 + EMR clients).
  */
-final class AWS(opts: Opts) extends LazyLogging {
+final class AWS(config: AWSConfig) extends LazyLogging {
   import Implicits._
 
   /**
    * The same region and bucket are used for all operations.
    */
-  val region: Regions = Regions.valueOf(opts.config.aws.region)
-  val bucket: String  = opts.config.aws.s3.bucket
+  val region: Regions = Regions.valueOf(config.region)
+  val bucket: String  = config.s3.bucket
 
   /**
    * AWS IAM credentials provider.
    */
   val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-    new BasicAWSCredentials(opts.config.aws.key, opts.config.aws.secret))
+    new BasicAWSCredentials(config.key, config.secret))
 
   /**
    * S3 client for storage.
@@ -59,6 +63,11 @@ final class AWS(opts: Opts) extends LazyLogging {
     .withCredentials(credentials)
     .withRegion(region)
     .build
+
+  /**
+   * Returns the URI to a given key.
+   */
+  def uriOf(key: String): URI = new URI(s"s3://$bucket/$key")
 
   /**
    * Test whether or not a key exists.
@@ -79,6 +88,22 @@ final class AWS(opts: Opts) extends LazyLogging {
    */
   def put(key: String, stream: InputStream): IO[PutObjectResult] = IO {
     s3.putObject(bucket, key, stream, new ObjectMetadata())
+  }
+
+  /**
+   * Upload a JAR resource (as text) to a key. Return a URI to it.
+   */
+  def upload(resource: String, key: String): IO[URI] = {
+    for {
+      result <- put(key, Source.fromResource(resource).mkString)
+    } yield uriOf(key)
+  }
+
+  /**
+   * Upload a JAR resource (as text) to the same location path in S3.
+   */
+  def upload(resource: String): IO[URI] = {
+    upload(resource, resource)
   }
 
   /**
@@ -149,7 +174,7 @@ final class AWS(opts: Opts) extends LazyLogging {
    */
   def runJob(steps: Seq[JobStep]): IO[AddJobFlowStepsResult] = {
     val request = new AddJobFlowStepsRequest()
-      .withJobFlowId(opts.config.aws.emr.cluster)
+      .withJobFlowId(config.emr.cluster)
       .withSteps(steps.map(_.config).asJava)
 
     IO {
@@ -176,7 +201,7 @@ final class AWS(opts: Opts) extends LazyLogging {
     import Implicits._
 
     val request = new ListStepsRequest()
-      .withClusterId(opts.config.aws.emr.cluster)
+      .withClusterId(config.emr.cluster)
       .withStepIds(job.getStepIds)
 
     // wait a little bit then request status

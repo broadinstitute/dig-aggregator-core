@@ -37,7 +37,7 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     }
 
     implicit object RunsAreInsertable extends Insertable[Run] {
-      override def insert(r: Run): IO[_] = r.insert(xa)
+      override def insert(r: Run): IO[_] = Run.insert(xa, r.app, Seq(r.input), r.output)
     }
   }
 

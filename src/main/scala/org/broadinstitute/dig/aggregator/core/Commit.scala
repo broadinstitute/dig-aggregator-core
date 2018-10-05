@@ -12,6 +12,8 @@ import java.io.PrintWriter
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
 
+import org.broadinstitute.dig.aggregator.core.processors.Processor
+
 import org.json4s._
 import org.json4s.JsonDSL.WithBigDecimal._
 import org.json4s.jackson.JsonMethods._
@@ -79,8 +81,6 @@ case class Commit(
 object Commit {
   private implicit val formats = DefaultFormats
 
-  // TODO: commit.post with a lazy producer would be nice!
-
   /**
    * Create a new Commit message that can be sent to the `commits` topic.
    */
@@ -139,26 +139,35 @@ object Commit {
   /**
    * Get all datasets committed for a given topic not yet processed by an app.
    */
-  def commits(xa: Transactor[IO], topic: String, notProcessedBy: String): IO[Seq[Commit]] = {
-    val q = sql"""|SELECT           c.`commit`,
-                  |                 c.`topic`,
-                  |                 c.`partition`,
-                  |                 c.`offset`,
-                  |                 c.`dataset`
+  def commits(xa: Transactor[IO], topic: String, notProcessedBy: Processor.Name): IO[Seq[Commit]] = {
+    val q = sql"""|SELECT           `commits`.`commit`,
+                  |                 `commits`.`topic`,
+                  |                 `commits`.`partition`,
+                  |                 `commits`.`offset`,
+                  |                 `commits`.`dataset`
                   |
-                  |FROM             `commits` AS c
+                  |FROM             `commits`
                   |
-                  |LEFT OUTER JOIN  `runs` AS r
-                  |ON               r.`app` = $notProcessedBy
-                  |AND              r.`input` = c.`dataset`
-                  |AND              r.`timestamp` > c.`timestamp`
+                  |LEFT OUTER JOIN  `runs`
+                  |ON               `runs`.`app` = $notProcessedBy
+                  |AND              `runs`.`input` = `commits`.`dataset`
+                  |AND              `runs`.`timestamp` > `commits`.`timestamp`
                   |
-                  |WHERE            c.`topic` = $topic
-                  |AND              r.`app` IS NULL
-                  |
-                  |ORDER BY         c.`commit`
+                  |WHERE            `commits`.`topic` = $topic
+                  |ORDER BY         `commits`.`commit`
                   |""".stripMargin.query[Commit].to[Seq]
 
     q.transact(xa)
+  }
+
+  /**
+   * Helper function where the "notProcessedBy" is optional and calls the
+   * correct query accordingly.
+   */
+  def commits(xa: Transactor[IO], topic: String, notProcessedBy: Option[Processor.Name]): IO[Seq[Commit]] = {
+    notProcessedBy match {
+      case Some(app) => commits(xa, topic, app)
+      case None      => commits(xa, topic)
+    }
   }
 }

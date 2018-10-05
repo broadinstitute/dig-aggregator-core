@@ -12,16 +12,17 @@ import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 
 /**
- * A RunProcessor is a Processor that queries the `runs` table to determine
- * what outputs have been produced by applications it depends on, which set of
- * those it hasn't processed yet, and process them.
+ * A DatasetProcessor is a Processor that queries the `commits` table for
+ * what datasets have been written to HDFS and have not yet been processed.
+ *
+ * DatasetProcessors are always the entry point to a pipeline.
  */
-abstract class RunProcessor(flags: Processor.Flags, config: BaseConfig) extends Processor(flags, config) {
+abstract class DatasetProcessor(flags: Processor.Flags, config: BaseConfig) extends Processor(flags, config) {
 
   /**
-   * All the processors this processor depends on.
+   * All topic committed datasets come from.
    */
-  val dependencies: Seq[Processor.Name]
+  val topic: String
 
   /**
    * Database transactor for loading state, etc.
@@ -29,17 +30,16 @@ abstract class RunProcessor(flags: Processor.Flags, config: BaseConfig) extends 
   val xa: Transactor[IO] = config.mysql.newTransactor()
 
   /**
-   * Process a set of run results. Must return the output location where this
-   * process produced data.
+   * Process a set of committed datasets.
    */
-  def processResults(results: Seq[Run.Result]): IO[_]
+  def processCommits(commits: Seq[Commit]): IO[_]
 
   /**
    * Output results that would be processed if the --yes flag was specified.
    */
-  def showWork(results: Seq[Run.Result]): IO[_] = IO {
-    for (result <- results) {
-      logger.info(s"Process output of ${result.app}: ${result.output}")
+  def showWork(commits: Seq[Commit]): IO[_] = IO {
+    for (commit <- commits) {
+      logger.info(s"Process ${commit.topic} dataset ${commit.dataset}")
     }
   }
 
@@ -55,8 +55,8 @@ abstract class RunProcessor(flags: Processor.Flags, config: BaseConfig) extends 
    */
   def run(): IO[Unit] = {
     for {
-      results <- Run.results(xa, dependencies, name)
-      _       <- if (flags.yes()) processResults(results) else showWork(results)
+      commits <- Commit.commits(xa, topic, Some(name))
+      _       <- if (flags.yes()) processCommits(commits) else showWork(commits)
     } yield ()
   }
 }

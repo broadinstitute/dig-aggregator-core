@@ -1,24 +1,26 @@
 package org.broadinstitute.dig.aggregator.core
 
+import cats.effect.IO
+
 import java.util.Properties
 
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.serialization
 
-import cats.effect.IO
+import org.broadinstitute.dig.aggregator.core.config.KafkaConfig
 
 /**
  * Kafka JSON topic record producer.
  */
-final class Producer(opts: Opts, topic: String) {
+final class Producer(config: KafkaConfig, topic: String) {
 
   import Producer.Record
-  
+
   /**
    * Kafka connection properties.
    */
   private val props: Properties = Props(
-    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG      -> opts.config.kafka.brokerList,
+    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG      -> config.brokerList,
     ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG   -> classOf[serialization.StringSerializer].getCanonicalName,
     ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG -> classOf[serialization.StringSerializer].getCanonicalName,
     ProducerConfig.ACKS_CONFIG                   -> "1",
@@ -31,6 +33,11 @@ final class Producer(opts: Opts, topic: String) {
    */
   private val client: KafkaProducer[String, String] = {
     Thread.currentThread.setContextClassLoader(null)
+
+    /*
+     * This is a hack so that Kafka can find the serializer classes!
+     */
+
     new KafkaProducer(props)
   }
 
@@ -45,6 +52,7 @@ final class Producer(opts: Opts, topic: String) {
 }
 
 object Producer {
+
   /**
    * Helper type alias since template parameters are fixed.
    */
