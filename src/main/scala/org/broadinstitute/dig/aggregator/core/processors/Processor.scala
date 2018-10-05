@@ -27,14 +27,6 @@ abstract class Processor(flags: Processor.Flags, config: BaseConfig) extends Laz
    * Run this processor.
    */
   def run(): IO[Unit]
-
-  /**
-   * The name of this processor needs to match the class that is using it.
-   */
-  Processor.names.get(name.toString) match {
-    case Some(c) => require(getClass == c, s"Processor class doesn't match $name")
-    case None    => throw new Exception(s"Unregistered processor $name")
-  }
 }
 
 /**
