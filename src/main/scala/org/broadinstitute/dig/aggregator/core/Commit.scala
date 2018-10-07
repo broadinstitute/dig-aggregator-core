@@ -154,6 +154,8 @@ object Commit {
                   |AND              `runs`.`timestamp` > `commits`.`timestamp`
                   |
                   |WHERE            `commits`.`topic` = $topic
+                  |AND              `runs`.`app` IS NULL
+                  |
                   |ORDER BY         `commits`.`commit`
                   |""".stripMargin.query[Commit].to[Seq]
 

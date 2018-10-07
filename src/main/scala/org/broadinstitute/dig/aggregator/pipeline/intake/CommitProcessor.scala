@@ -4,13 +4,11 @@ import cats._
 import cats.effect._
 import cats.implicits._
 
-import com.typesafe.scalalogging.LazyLogging
-
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.processors._
 
-class CommitProcessor(flags: Processor.Flags, config: BaseConfig) extends IntakeProcessor(flags, config) {
+class CommitProcessor(config: BaseConfig) extends IntakeProcessor(config) {
 
   /**
    * Unique name identifying this processor.

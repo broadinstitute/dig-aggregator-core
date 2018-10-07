@@ -87,9 +87,10 @@ object Run {
 
     // join all the dependencies together
     val union  = selects.toList.intercalate(fr"UNION ALL")
-    val select = fr"SELECT inputs.*"
-    val from   = fr"FROM (" ++ union ++ fr") AS inputs"
+    val select = fr"SELECT `inputs`.`app`, `inputs`.`output`, MAX(`inputs`.`timestamp`) AS `timestamp`"
+    val from   = fr"FROM (" ++ union ++ fr") AS `inputs`"
     val where  = fr"WHERE r.`app` IS NULL"
+    val group  = fr"GROUP BY `inputs`.`app`, `inputs`.`output`"
     val join   = fr"""|LEFT OUTER JOIN runs AS r
                       |ON r.`app` = $notProcessedBy
                       |AND r.`input` = inputs.`output`
@@ -97,7 +98,7 @@ object Run {
                       |""".stripMargin
 
     // join all the fragments together the query
-    val q = (select ++ from ++ join ++ where).query[Result].to[Seq]
+    val q = (select ++ from ++ join ++ where ++ group).query[Result].to[Seq]
 
     // run the query
     q.transact(xa)

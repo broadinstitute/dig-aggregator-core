@@ -95,7 +95,7 @@ object DbFunSuite {
       override val create: ConnectionIO[Int] =
         sql"""|CREATE TABLE `runs` (
               |  `ID` int(11) NOT NULL AUTO_INCREMENT,
-              |  `run` int(11) NOT NULL,
+              |  `run` bigint(20) NOT NULL,
               |  `app` varchar(180) NOT NULL,
               |  `input` varchar(800) NOT NULL,
               |  `output` varchar(800) NOT NULL,
@@ -111,7 +111,7 @@ object DbFunSuite {
       override val create: ConnectionIO[Int] =
         sql"""|CREATE TABLE `provenance` (
               |  `ID` int(11) NOT NULL AUTO_INCREMENT,
-              |  `run` int(11) NOT NULL,
+              |  `run` bigint(20) NOT NULL,
               |  `app` varchar(180) NOT NULL,
               |  `source` varchar(1024) DEFAULT NULL,
               |  `branch` varchar(180) DEFAULT NULL,

@@ -12,11 +12,9 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.rogach.scallop._
 
 /**
- * A Processor is a unique. Flags and config are passed in, but not used here
- * because there needs to be type-safety assurances that all processors take
- * them as arguments when constructed dynamically.
+ * Each processor has a globally unique name and a run function.
  */
-abstract class Processor(flags: Processor.Flags, config: BaseConfig) extends LazyLogging {
+trait Processor extends LazyLogging {
 
   /**
    * A unique name for this processor. Must be unique across all processors!
@@ -26,24 +24,24 @@ abstract class Processor(flags: Processor.Flags, config: BaseConfig) extends Laz
   /**
    * Run this processor.
    */
-  def run(): IO[Unit]
+  def run(flags: Processor.Flags): IO[Unit]
 }
 
 /**
  * Companion object for registering the names of processors.
  */
-object Processor {
+object Processor extends LazyLogging {
   import scala.language.implicitConversions
 
   /**
    * A mapping of all the registered application names.
    */
-  private var names: Map[String, (Flags, BaseConfig) => Processor] = Map()
+  private var names: Map[String, BaseConfig => Processor] = Map()
 
   /**
    * Lookup a processor by name.
    */
-  def apply(name: String): (Flags, BaseConfig) => Processor = {
+  def apply(name: String): BaseConfig => Processor = {
     names(name)
   }
 
@@ -52,7 +50,7 @@ object Processor {
    * every processor for use in the MySQL database to show what has been
    * processed already.
    */
-  final class Name(name: String, ctor: (Flags, BaseConfig) => Processor) {
+  final class Name(name: String, ctor: BaseConfig => Processor) {
 
     /**
      * Get the name of this processor as a string.

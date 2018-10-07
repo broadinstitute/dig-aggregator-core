@@ -16,7 +16,7 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
  * what outputs have been produced by applications it depends on, which set of
  * those it hasn't processed yet, and process them.
  */
-abstract class RunProcessor(flags: Processor.Flags, config: BaseConfig) extends Processor(flags, config) {
+abstract class RunProcessor(config: BaseConfig) extends JobProcessor(config) {
 
   /**
    * All the processors this processor depends on.
@@ -38,8 +38,12 @@ abstract class RunProcessor(flags: Processor.Flags, config: BaseConfig) extends 
    * Output results that would be processed if the --yes flag was specified.
    */
   def showWork(results: Seq[Run.Result]): IO[_] = IO {
-    for (result <- results) {
-      logger.info(s"Process output of ${result.app}: ${result.output}")
+    results.size match {
+      case 0 => logger.info(s"Everything up to date.")
+      case _ =>
+        for (result <- results) {
+          logger.info(s"Process output of ${result.app}: ${result.output}")
+        }
     }
   }
 
@@ -53,10 +57,17 @@ abstract class RunProcessor(flags: Processor.Flags, config: BaseConfig) extends 
    *
    * Otherwise, this is just called once and then exits.
    */
-  def run(): IO[Unit] = {
+  def run(flags: Processor.Flags): IO[Unit] = {
+    val notProcessedBy = if (flags.reprocess()) None else Some(name)
+
     for {
-      results <- Run.results(xa, dependencies, name)
-      _       <- if (flags.yes()) processResults(results) else showWork(results)
+      _ <- uploadResources(flags)
+
+      // get the results not yet processed
+      results <- Run.results(xa, dependencies, notProcessedBy)
+
+      // either process them or show what would be processed
+      _ <- if (flags.yes()) processResults(results) else showWork(results)
     } yield ()
   }
 }

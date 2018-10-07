@@ -17,7 +17,7 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
  *
  * DatasetProcessors are always the entry point to a pipeline.
  */
-abstract class DatasetProcessor(flags: Processor.Flags, config: BaseConfig) extends Processor(flags, config) {
+abstract class DatasetProcessor(config: BaseConfig) extends JobProcessor(config) {
 
   /**
    * All topic committed datasets come from.
@@ -38,8 +38,12 @@ abstract class DatasetProcessor(flags: Processor.Flags, config: BaseConfig) exte
    * Output results that would be processed if the --yes flag was specified.
    */
   def showWork(commits: Seq[Commit]): IO[_] = IO {
-    for (commit <- commits) {
-      logger.info(s"Process ${commit.topic} dataset ${commit.dataset}")
+    commits.size match {
+      case 0 => logger.info(s"Everything up to date.")
+      case _ =>
+        for (commit <- commits) {
+          logger.info(s"Process dataset '${commit.dataset}' for topic '${commit.topic}'")
+        }
     }
   }
 
@@ -53,10 +57,17 @@ abstract class DatasetProcessor(flags: Processor.Flags, config: BaseConfig) exte
    *
    * Otherwise, this is just called once and then exits.
    */
-  def run(): IO[Unit] = {
+  def run(flags: Processor.Flags): IO[Unit] = {
+    val notProcessedBy = if (flags.reprocess()) None else Some(name)
+
     for {
-      commits <- Commit.commits(xa, topic, Some(name))
-      _       <- if (flags.yes()) processCommits(commits) else showWork(commits)
+      _ <- uploadResources(flags)
+
+      // fetch the list of datasets for this topic not yet processed
+      commits <- Commit.commits(xa, topic, notProcessedBy)
+
+      // either process them or show what would be processed
+      _ <- if (flags.yes()) processCommits(commits) else showWork(commits)
     } yield ()
   }
 }

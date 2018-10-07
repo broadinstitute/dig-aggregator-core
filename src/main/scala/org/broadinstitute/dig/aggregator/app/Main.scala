@@ -29,14 +29,14 @@ object Main extends IOApp {
     } else {
       Register.processors
 
-      //
+      // ensure the processor (or pipeline) was specified
       require(opts.processor.isSupplied, "No processor specified!")
 
       // lookup the processor to run by unique name
-      val processor = Processor(opts.processor())(opts, opts.config)
+      val processor = Processor(opts.processor())(opts.config)
 
-      //
-      val run = processor.run.guaranteeCase {
+      // launch the processor
+      val run = processor.run(opts).guaranteeCase {
         case ExitCase.Error(err) => fail(processor.name, opts.config, err)
         case _                   => IO.unit
       }

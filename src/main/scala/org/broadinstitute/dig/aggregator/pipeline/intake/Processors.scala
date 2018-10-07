@@ -9,6 +9,6 @@ object Processors extends ProcessorRegister {
   import org.broadinstitute.dig.aggregator.core.processors.Processor.Name
 
   /** Intake processors. */
-  val variantProcessor = new Name("VariantProcessor", new VariantProcessor(_, _))
-  val commitProcessor  = new Name("CommitProcessor", new CommitProcessor(_, _))
+  val variantProcessor = new Name("VariantProcessor", new VariantProcessor(_))
+  val commitProcessor  = new Name("CommitProcessor", new CommitProcessor(_))
 }

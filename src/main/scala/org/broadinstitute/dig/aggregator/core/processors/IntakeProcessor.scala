@@ -17,7 +17,7 @@ import scala.io.StdIn
  * An IntakeProcessor is resposible for listening to datasets being uploaded on
  * a given topic and writing them to HDFS.
  */
-abstract class IntakeProcessor(flags: Processor.Flags, config: BaseConfig) extends Processor(flags, config) {
+abstract class IntakeProcessor(config: BaseConfig) extends Processor {
 
   /**
    * The topic this processor is consuming from.
@@ -52,8 +52,8 @@ abstract class IntakeProcessor(flags: Processor.Flags, config: BaseConfig) exten
    * Either load the state from the database or reset the state back to a
    * known, good offset and continue consuming from there.
    */
-  def getState: IO[State] = {
-    if (flags.reprocess()) {
+  def getState(reprocess: Boolean): IO[State] = {
+    if (reprocess) {
       val warning = IO {
         logger.warn("The consumer state is being reset because the --reprocess")
         logger.warn("flag was passed on the command line.")
@@ -78,11 +78,11 @@ abstract class IntakeProcessor(flags: Processor.Flags, config: BaseConfig) exten
   /**
    * Create a new consumer and start consuming records from Kafka.
    */
-  def run(): IO[Unit] = {
+  def run(flags: Processor.Flags): IO[Unit] = {
     val consumer = new Consumer(config.kafka, topic, xa)
 
     for {
-      loadedState <- getState
+      loadedState <- getState(flags.reprocess())
       state       <- consumer.assignPartitions(loadedState)
 
       /*

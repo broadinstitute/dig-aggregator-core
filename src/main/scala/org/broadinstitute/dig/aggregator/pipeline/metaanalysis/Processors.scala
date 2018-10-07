@@ -9,7 +9,7 @@ object Processors extends ProcessorRegister {
   import org.broadinstitute.dig.aggregator.core.processors.Processor.Name
 
   /** Meta-Analysis processors. */
-  //val variantProcessor = new Name("VariantPartitionProcessor", new VariantPartitionProcessor(_, _))
-  //val ancestrySpecific  = new Name("AncestrySpecificProcessor", new AncestrySpecificProcessor(_, _))
-  //val transEthnicProcessor  = new Name("TransEthnicProcessor", new TransEthnicProcessor(_, _))
+  val variantPartitionProcessor = new Name("VariantPartitionProcessor", new VariantPartitionProcessor(_))
+  val ancestrySpecificProcessor = new Name("AncestrySpecificProcessor", new AncestrySpecificProcessor(_))
+  val transEthnicProcessor      = new Name("TransEthnicProcessor", new TransEthnicProcessor(_))
 }

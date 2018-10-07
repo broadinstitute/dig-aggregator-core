@@ -22,7 +22,7 @@ import com.typesafe.scalalogging.LazyLogging
  *  UPLOAD - writes a variants batch to the dataset directory
  *  COMMIT - resend a commit message to the commits topic in Kafka
  */
-class VariantProcessor(flags: Processor.Flags, config: BaseConfig) extends IntakeProcessor(flags, config) {
+class VariantProcessor(config: BaseConfig) extends IntakeProcessor(config) {
   private implicit val formats: Formats = DefaultFormats
 
   /**
