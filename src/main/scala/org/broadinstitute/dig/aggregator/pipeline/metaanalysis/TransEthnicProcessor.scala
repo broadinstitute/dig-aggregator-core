@@ -29,7 +29,6 @@ import org.broadinstitute.dig.aggregator.core.processors._
  * The inputs for this processor are expected to be phenotypes.
  *
  * The outputs for this processor are phenotypes.
- *
  */
 class TransEthnicProcessor(config: BaseConfig) extends RunProcessor(config) {
 
@@ -64,8 +63,15 @@ class TransEthnicProcessor(config: BaseConfig) extends RunProcessor(config) {
       val step = JobStep.PySpark(script, "--trans-ethnic", phenotype)
 
       for {
+        _ <- IO(logger.info(s"Processing phenotype $phenotype..."))
         _ <- aws.runStepAndWait(step)
+
+        // the output location where the data was written to
+        output = s"metaanalysis/$phenotype/_analysis/trans-ethnic"
+
+        // add the results to the database
         _ <- Run.insert(xa, name, Seq(phenotype), phenotype)
+        _ <- IO(logger.info("Done"))
       } yield ()
     }
 

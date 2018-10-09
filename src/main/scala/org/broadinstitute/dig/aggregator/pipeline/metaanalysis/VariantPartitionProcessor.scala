@@ -20,8 +20,8 @@ import org.broadinstitute.dig.aggregator.core.processors._
  * Once done, the variants are partitioned by phenotype, dataset, ancestry,
  * and then rarity:
  *
- *  out/metaanalysis/<phenotype>/<dataset>/common/<ancestry>/part-*
- *  out/metaanalysis/<phenotype>/<dataset>/rare/<ancestry>/part-*
+ *  file:///mnt/efs/metaanalysis/<phenotype>/<dataset>/common/ancestry=?/part-*
+ *  file:///mnt/efs/metaanalysis/<phenotype>/<dataset>/rare/ancestry=?/part-*
  */
 class VariantPartitionProcessor(config: BaseConfig) extends DatasetProcessor(config) {
 

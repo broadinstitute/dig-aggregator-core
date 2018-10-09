@@ -12,4 +12,6 @@ object Processors extends ProcessorRegister {
   val variantPartitionProcessor = new Name("VariantPartitionProcessor", new VariantPartitionProcessor(_))
   val ancestrySpecificProcessor = new Name("AncestrySpecificProcessor", new AncestrySpecificProcessor(_))
   val transEthnicProcessor      = new Name("TransEthnicProcessor", new TransEthnicProcessor(_))
+  val frequencyUploadProcessor  = new Name("FrequencyUploadProcessor", new FrequencyUploadProcessor(_))
+  val bottomLineUploadProcessor = new Name("BottomLineUploadProcessor", new BottomLineUploadProcessor(_))
 }

@@ -151,8 +151,7 @@ object Implicits {
      * If failed, this is the reason why.
      */
     def failureReason: Option[String] = {
-      //TODO: Could summary.getStatus return null?
-      Option(summary.getStatus.getFailureDetails).flatMap { details =>
+      Option(summary.getStatus).map(_.getFailureDetails).flatMap { details =>
         Option(details.getMessage)
       }
     }

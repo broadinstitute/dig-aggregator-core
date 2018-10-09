@@ -114,6 +114,7 @@ if __name__ == '__main__':
     rare.repartition(1) \
         .write \
         .mode('overwrite') \
+        .partitionBy('ancestry') \
         .csv('%s/rare' % outdir, sep='\t', header=True, mode='overwrite')
 
     # output the common variants as a single CSV

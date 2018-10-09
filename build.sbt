@@ -98,7 +98,7 @@ buildInfoTask := {
 
   val buildDate = java.time.Instant.now
 
-  val file = dir / s"${n}-versionInfo.properties"
+  val file = dir / "versionInfo.properties"
 
   val log = streams.value.log
 

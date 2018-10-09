@@ -29,7 +29,6 @@ import org.broadinstitute.dig.aggregator.core.processors._
  * The inputs for this processor are expected to be phenotypes.
  *
  * The outputs for this processor are phenotypes.
- *
  */
 class AncestrySpecificProcessor(config: BaseConfig) extends RunProcessor(config) {
 
@@ -64,8 +63,12 @@ class AncestrySpecificProcessor(config: BaseConfig) extends RunProcessor(config)
       val step = JobStep.PySpark(script, "--ancestry-specific", phenotype)
 
       for {
+        _ <- IO(logger.info(s"Processing phenotype $phenotype..."))
         _ <- aws.runStepAndWait(step)
+
+        // add the result to the database
         _ <- Run.insert(xa, name, Seq(phenotype), phenotype)
+        _ <- IO(logger.info("Done"))
       } yield ()
     }
 

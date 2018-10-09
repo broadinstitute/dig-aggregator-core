@@ -2,6 +2,7 @@
 
 import argparse
 import glob
+import os.path
 import platform
 import re
 import subprocess
@@ -13,6 +14,12 @@ from pyspark.sql.functions import col, isnan, lit, when  # pylint: disable=E0611
 efsdir = '/mnt/efs/'
 bindir = '/mnt/efs/bin'
 
+# where metal is located in S3
+metal_s3path = 's3://dig-analysis-data/bin/generic-metal/metal'
+
+# where metal is installed to locally
+metal_local = '%s/metal' % bindir
+
 # this is the schema written out by the variant partition process
 variants_schema = StructType(
     [
@@ -21,6 +28,7 @@ variants_schema = StructType(
         StructField('chromosome', StringType(), nullable=False),
         StructField('position', IntegerType(), nullable=False),
         StructField('reference', StringType(), nullable=False),
+        StructField('allele', StringType(), nullable=False),
         StructField('phenotype', StringType(), nullable=False),
         StructField('pValue', DoubleType(), nullable=False),
         StructField('beta', DoubleType(), nullable=False),
@@ -47,6 +55,16 @@ metaanalysis_schema = StructType(
         StructField('TotalSampleSize', DoubleType(), nullable=False),
     ]
 )
+
+
+def install_metal():
+    """
+    Checks to see if METAL (in EFS) doesn't exist and should be copied from S3.
+    """
+    if not os.path.isfile(metal_local):
+        subprocess.check_call(['mkdir', '-p', bindir])
+        subprocess.check_call(['aws', 's3', 'cp', metal_s3path, metal_local])
+        subprocess.check_call(['chmod', '+x', metal_local])
 
 
 def read_analysis(spark, path):
@@ -135,7 +153,7 @@ def run_metal(workdir, parts, overlap=False, freq=True):
         fp.write(script)
 
     # send all the commands to METAL
-    pipe = subprocess.Popen(['%s/metal' % bindir], stdin=subprocess.PIPE)
+    pipe = subprocess.Popen([metal_local], stdin=subprocess.PIPE)
 
     # send the metal script through stdin
     pipe.communicate(input=script.encode('ascii'))
@@ -165,9 +183,6 @@ def run_ancestry_specific_analysis(spark, phenotype):
         ancestries.setdefault(ancestry, []) \
             .append(part)
 
-    # read the rare variants across all datasets
-    rare = spark.read.csv('file://%s/*/rare' % srcdir, header=True, sep='\t', schema=variants_schema)
-
     # for each ancestry, run METAL across all the datasets with OVERLAP ON
     for ancestry, parts in ancestries.items():
         workdir = '%s/_analysis/ancestry-specific/%s' % (srcdir, ancestry)
@@ -196,6 +211,17 @@ def run_ancestry_specific_analysis(spark, phenotype):
         # read the METAANALYSIS file from EFS into spark and transform it
         analysis = read_analysis(spark, 'file://%s' % output_file).toDF()
 
+        # read the rare variants across all for this ancestry
+        rare_variants = spark.read \
+            .csv(
+                'file://%s/*/rare/ancestry=%s' % (srcdir, ancestry),
+                header=True,
+                sep='\t',
+                schema=variants_schema,
+            ) \
+            .withColumn('ancestry', lit(ancestry)) \
+            .select(*columns)
+
         # get the ancestry-specific frequencies for each variant
         freqs = analysis \
             .withColumn('ancestry', lit(ancestry)) \
@@ -211,9 +237,6 @@ def run_ancestry_specific_analysis(spark, phenotype):
                 col('freq'),
             )
 
-        # get the rare variants for this ancestry
-        rare_variants = rare.filter(rare.ancestry == ancestry).select(*columns)
-
         # combine the results with the rare variants for this ancestry
         variants = analysis \
             .withColumn('dataset', lit('METAANALYSIS')) \
@@ -227,6 +250,7 @@ def run_ancestry_specific_analysis(spark, phenotype):
             .reduceByKey(lambda a, b: b if b.sampleSize > a.sampleSize else a) \
             .map(lambda v: v[1]) \
             .toDF() \
+            .repartition(1) \
             .write \
             .csv('file://%s/_combined' % workdir, sep='\t', header=True, mode='overwrite')
 
@@ -244,14 +268,15 @@ def run_trans_ethnic_analysis(spark, phenotype):
     processed with OVERLAP OFF. Once done, the results are uploaded back to
     HDFS (S3) where they can be kept and uploaded to a database.
     """
-    srcdir = '%s/analysis/%s' % (efsdir, phenotype)
-    outdir = 's3://dig-analysis-data/out/METAL/%s/_analysis' % phenotype
+    srcdir = '%s/metaanalysis/%s' % (efsdir, phenotype)
+    outdir = 's3://dig-analysis-data/out/metaanalysis/%s' % phenotype
 
     # part files across the results from analyzing each ancestry
-    parts = [part for part in glob.glob('%s/ancestry=*/_analysis/output/part-*.csv' % srcdir)]
+    paths = '%s/_analysis/ancestry-specific/*/_combined/part-*.csv' % srcdir
+    parts = [part for part in glob.glob(paths)]
 
     # run METAL without OVERLAP joining all ancestries together
-    output_file = run_metal('%s/_analysis' % srcdir, parts, overlap=False)
+    output_file = run_metal('%s/_analysis/trans-ethnic' % srcdir, parts, overlap=False)
 
     # read the METAANALYSIS file from EFS into spark and transform it
     variants = read_analysis(spark, 'file://%s' % output_file)
@@ -302,6 +327,9 @@ if __name__ == '__main__':
 
     # --ancestry-specific or --trans-ethnic must be provided, but not both!
     assert args.ancestry_specific != args.trans_ethnic
+
+    # make sure metal is installed locally
+    install_metal()
 
     # create the spark context
     spark = SparkSession.builder.appName('MetaAnalysis').getOrCreate()

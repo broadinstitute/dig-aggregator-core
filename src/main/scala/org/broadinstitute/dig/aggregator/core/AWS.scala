@@ -99,7 +99,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   /**
    * Returns the canonical URL for a given key.
    */
-  def getURL(key: String): String = {
+  def getPublicURL(key: String): String = {
     s3.getUrl(bucket, key).toExternalForm
   }
 
