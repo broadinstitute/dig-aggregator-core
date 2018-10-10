@@ -13,12 +13,12 @@ class CommitProcessor(config: BaseConfig) extends IntakeProcessor(config) {
   /**
    * Unique name identifying this processor.
    */
-  val name: Processor.Name = Processors.commitProcessor
+  override val name: Processor.Name = Processors.commitProcessor
 
   /**
    * Topic to consume.
    */
-  val topic: String = "commits"
+  override val topic: String = "commits"
 
   /**
    * Commit processors only ever care about the last commit offset and not

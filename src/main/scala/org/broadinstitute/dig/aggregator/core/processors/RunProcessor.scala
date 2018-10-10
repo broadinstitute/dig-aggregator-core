@@ -57,7 +57,7 @@ abstract class RunProcessor(config: BaseConfig) extends JobProcessor(config) {
    *
    * Otherwise, this is just called once and then exits.
    */
-  def run(flags: Processor.Flags): IO[Unit] = {
+  override def run(flags: Processor.Flags): IO[Unit] = {
     val notProcessedBy = if (flags.reprocess()) None else Some(name)
 
     for {

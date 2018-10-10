@@ -35,26 +35,26 @@ class TransEthnicProcessor(config: BaseConfig) extends RunProcessor(config) {
   /**
    * Unique name identifying this processor.
    */
-  val name: Processor.Name = Processors.transEthnicProcessor
+  override val name: Processor.Name = Processors.transEthnicProcessor
 
   /**
    * All the processors this processor depends on.
    */
-  val dependencies: Seq[Processor.Name] = Seq(
+  override val dependencies: Seq[Processor.Name] = Seq(
     Processors.ancestrySpecificProcessor,
   )
 
   /**
    * All the job scripts that need to be uploaded to AWS.
    */
-  val resources: Seq[String] = Seq(
+  override val resources: Seq[String] = Seq(
     "pipeline/metaanalysis/runAnalysis.py",
   )
 
   /**
    * Take all the phenotype results from the dependencies and process them.
    */
-  def processResults(results: Seq[Run.Result]): IO[Unit] = {
+  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val script     = resourceURI("pipeline/metaanalysis/runAnalysis.py")
     val phenotypes = results.map(_.output).distinct
 

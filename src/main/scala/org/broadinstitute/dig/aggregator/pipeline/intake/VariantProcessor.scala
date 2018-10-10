@@ -28,12 +28,12 @@ class VariantProcessor(config: BaseConfig) extends IntakeProcessor(config) {
   /**
    * Unique name identifying this processor.
    */
-  val name: Processor.Name = Processors.variantProcessor
+  override val name: Processor.Name = Processors.variantProcessor
 
   /**
    * Topic to consume.
    */
-  val topic: String = "variants"
+  override val topic: String = "variants"
 
   /**
    * When a dataset is complete, send a message to the commits topic.

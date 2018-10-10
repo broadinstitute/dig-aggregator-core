@@ -78,7 +78,7 @@ abstract class IntakeProcessor(config: BaseConfig) extends Processor {
   /**
    * Create a new consumer and start consuming records from Kafka.
    */
-  def run(flags: Processor.Flags): IO[Unit] = {
+  override def run(flags: Processor.Flags): IO[Unit] = {
     val consumer = new Consumer(config.kafka, topic, xa)
 
     for {

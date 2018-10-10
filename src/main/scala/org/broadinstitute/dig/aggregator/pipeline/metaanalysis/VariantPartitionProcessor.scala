@@ -28,17 +28,17 @@ class VariantPartitionProcessor(config: BaseConfig) extends DatasetProcessor(con
   /**
    * Unique name identifying this processor.
    */
-  val name: Processor.Name = Processors.variantPartitionProcessor
+  override val name: Processor.Name = Processors.variantPartitionProcessor
 
   /**
    * Topic to consume.
    */
-  val topic: String = "variants"
+  override val topic: String = "variants"
 
   /**
    * All the job scripts that need to be uploaded to AWS.
    */
-  val resources: Seq[String] = Seq(
+  override val resources: Seq[String] = Seq(
     "pipeline/metaanalysis/partitionVariants.py",
   )
 
@@ -46,7 +46,7 @@ class VariantPartitionProcessor(config: BaseConfig) extends DatasetProcessor(con
    * Take all the datasets that need to be processed, determine the phenotype
    * for each, and create a mapping of (phenotype -> datasets).
    */
-  def processCommits(commits: Seq[Commit]): IO[Unit] = {
+  override def processCommits(commits: Seq[Commit]): IO[Unit] = {
     val pattern = raw"([^/]+)/(.*)".r
 
     // extract the root and the phenotype from each "root/phenotype" dataset
