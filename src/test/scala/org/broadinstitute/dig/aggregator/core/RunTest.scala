@@ -40,6 +40,21 @@ final class RunTest extends DbFunSuite {
     assert(runP(0) == p)
   }
 
+  dbTest("insert - provenance update") {
+    val r0 = insertRun(TestProcessor.a, Seq("i0", "i1", "i2"), "o0")
+    val r1 = insertRun(TestProcessor.a, Seq("i0", "i1", "i2"), "o1")
+
+    // there should be 1 provenance row
+    val p    = Provenance.thisBuild
+    val run0 = runProvenance(r0, TestProcessor.a)
+    val run1 = runProvenance(r1, TestProcessor.a)
+
+    assert(run0.size == 0)
+    assert(run1.size == 1)
+
+    assert(run1(0) == p)
+  }
+
   dbTest("insert - on duplicate key update") {
     val r0 = insertRun(TestProcessor.a, Seq("i0"), "o0")
     val r1 = insertRun(TestProcessor.a, Seq("i0"), "o1")

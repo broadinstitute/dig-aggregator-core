@@ -129,19 +129,6 @@ object DbFunSuite {
 
     object Provenance extends Table("provenance") {
       override val create: ConnectionIO[Int] = {
-        /*
-         * A final, last line of this CREATE TABLE command should be:
-         *
-         *   FOREIGN KEY (`run`, `app`) REFERENCES `runs` (`run`, `app`) ON DELETE CASCADE ON UPDATE CASCADE
-         *
-         * This is valid H2 syntax (identical to MySQL), but the constraint
-         * causes the tests to fail. The code queries WORK as expected on MySQL
-         * in production, just not in the tests. More work should be done to
-         * fix this when possible, because it having the constraint would allow
-         * for run delete testing, and ensuring that the appropriate provenance
-         * rows are also deleted.
-         */
-
         sql"""|CREATE TABLE `provenance` (
               |  `ID` int(11) NOT NULL AUTO_INCREMENT,
               |  `run` bigint(20) NOT NULL,
@@ -152,6 +139,7 @@ object DbFunSuite {
               |  PRIMARY KEY (`ID`),
               |  UNIQUE KEY `ID_UNIQUE` (`ID`),
               |  UNIQUE KEY `RUN_KEY_idx` (`run`,`app`),
+              |  FOREIGN KEY (`run`, `app`) REFERENCES `runs` (`run`, `app`) ON DELETE CASCADE ON UPDATE CASCADE
               |)
               |""".stripMargin.update.run
       }
