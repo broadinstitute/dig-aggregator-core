@@ -37,6 +37,11 @@ final case class Provenance(source: String, branch: String, commit: String) {
                   |  , $branch
                   |  , $commit
                   |  )
+                  |
+                  |ON DUPLICATE KEY UPDATE
+                  |  `source` = VALUES(`source`),
+                  |  `branch` = VALUES(`branch`),
+                  |  `commit` = VALUES(`commit`)
                   |""".stripMargin.update
 
     q.run.transact(xa)

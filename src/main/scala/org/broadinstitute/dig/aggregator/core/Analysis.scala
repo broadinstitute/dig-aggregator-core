@@ -97,7 +97,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
     def deleteResults(n: Int): IO[Int] = {
       val q = s"""|MATCH (n)-[:PRODUCED_BY]->(:Analysis {name: '$name'})
                   |WITH n
-                  |LIMIT 20000
+                  |LIMIT 10000
                   |DETACH DELETE n
                   |""".stripMargin
 

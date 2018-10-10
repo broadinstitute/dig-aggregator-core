@@ -132,7 +132,7 @@ object DbFunSuite {
         /*
          * A final, last line of this CREATE TABLE command should be:
          *
-         *   FOREIGN KEY (`run`, `app`) REFERENCES `runs` (`run`, `app`) ON DELETE CASCADE ON UPDATE NO ACTION
+         *   FOREIGN KEY (`run`, `app`) REFERENCES `runs` (`run`, `app`) ON DELETE CASCADE ON UPDATE CASCADE
          *
          * This is valid H2 syntax (identical to MySQL), but the constraint
          * causes the tests to fail. The code queries WORK as expected on MySQL
