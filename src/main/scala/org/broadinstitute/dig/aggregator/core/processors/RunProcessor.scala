@@ -38,12 +38,12 @@ abstract class RunProcessor(config: BaseConfig) extends JobProcessor(config) {
    * Output results that would be processed if the --yes flag was specified.
    */
   def showWork(results: Seq[Run.Result]): IO[_] = IO {
-    results.size match {
-      case 0 => logger.info(s"Everything up to date.")
-      case _ =>
-        for (result <- results) {
-          logger.info(s"Process output of ${result.app}: ${result.output}")
-        }
+    if (results.isEmpty) {
+      logger.info(s"Everything up to date.")
+    } else {
+      for (result <- results) {
+        logger.info(s"Process output of ${result.app}: ${result.output}")
+      }
     }
   }
 
