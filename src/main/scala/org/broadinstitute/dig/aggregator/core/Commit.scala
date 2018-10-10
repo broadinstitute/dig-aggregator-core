@@ -85,7 +85,7 @@ object Commit {
    * Create a new Commit message that can be sent to the `commits` topic.
    */
   def message(record: Consumer.Record, dataset: String): String = {
-    require(!record.topic.equals("commits"))
+    require(record.topic != "commits", "Source topic for a commit cannot be the commits topic!")
 
     // cannot use Commit object here since `commit` offset doesn't exist yet
     val json =
