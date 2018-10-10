@@ -21,13 +21,7 @@ import scala.collection.mutable.Buffer
  */
 final class AwsTest extends AwsFunSuite {
   //Config file needs to be in place before this test will work.
-  private val opts = {
-    val o = new Opts(Array("--config", "src/it/resources/config.json"))
-    
-    o.verify()
-    
-    o
-  }
+  private val opts = new Opts(Array("--config", "src/it/resources/config.json"))
   
   override protected val aws = new AWS(opts.config.aws)
   
