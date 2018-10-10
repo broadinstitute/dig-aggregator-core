@@ -80,7 +80,7 @@ object State {
     }
 
     // create a state starting from the latest offsets
-    State(app, consumer.topic, offsets.toMap)
+    State(app, consumer.topic, offsets)
   }
 
   /**
