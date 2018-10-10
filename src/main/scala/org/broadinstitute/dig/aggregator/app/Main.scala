@@ -27,7 +27,7 @@ object Main extends IOApp {
     if (opts.version()) {
       IO.pure(ExitCode.Success)
     } else {
-      Register.processors
+      Register.processors()
 
       // ensure the processor (or pipeline) was specified
       require(opts.processor.isSupplied, "No processor specified!")

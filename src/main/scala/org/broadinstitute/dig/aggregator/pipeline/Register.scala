@@ -10,7 +10,7 @@ trait ProcessorRegister {
    * objects have a guaranteed method that can force the object to load and
    * create all its processor names.
    */
-  def register = ()
+  def register(): Unit = ()
 }
 
 /**
@@ -18,8 +18,8 @@ trait ProcessorRegister {
  * registered and that there are no conflicts!
  */
 object Register {
-  def processors = {
-    intake.Processors.register
-    metaanalysis.Processors.register
+  def processors(): Unit = {
+    intake.Processors.register()
+    metaanalysis.Processors.register()
   }
 }
