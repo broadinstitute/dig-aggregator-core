@@ -18,9 +18,6 @@ object Main extends IOApp {
   override def run(args: List[String]): IO[ExitCode] = {
     val opts = new Opts(args)
 
-    // parse the command line options
-    opts.verify
-
     // TODO: show version information
 
     // run processor
