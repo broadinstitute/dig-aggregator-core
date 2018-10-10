@@ -16,7 +16,7 @@ import scala.io.Source
 /**
  * Command line and configuration file argument parsing.
  */
-class Opts(args: Array[String]) extends ScallopConf(args) with Processor.Flags {
+class Opts(args: Seq[String]) extends ScallopConf(args) with Processor.Flags {
 
   /** JSON configuration file where settings are. */
   val configFile: ScallopOption[File] = opt("config", default = Some(new File("config.json")))

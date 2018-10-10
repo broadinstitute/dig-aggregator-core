@@ -16,7 +16,7 @@ object Main extends IOApp {
    * Entry point.
    */
   override def run(args: List[String]): IO[ExitCode] = {
-    val opts = new Opts(args.toArray)
+    val opts = new Opts(args)
 
     // parse the command line options
     opts.verify
