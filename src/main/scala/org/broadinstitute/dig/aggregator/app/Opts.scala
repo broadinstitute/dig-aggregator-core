@@ -30,6 +30,9 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) with Processor.Fla
   // run shouldn't be there if version is
   mutuallyExclusive(version, processor)
 
+  // parse the command line options
+  verify
+
   /*
    * By default, Scallop will terminate the JVM on any ScallopExceptions, which
    * is very bad for testing. Provide new behavior, where ScallopExceptions

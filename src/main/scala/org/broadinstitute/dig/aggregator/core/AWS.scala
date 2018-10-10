@@ -99,7 +99,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   /**
    * Returns the canonical URL for a given key.
    */
-  def getPublicURL(key: String): String = {
+  def publicUrlOf(key: String): String = {
     s3.getUrl(bucket, key).toExternalForm
   }
 
@@ -180,7 +180,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
    *   StepState.INTERRUPTED
    *   StepState.CANCELLED
    */
-  def waitForJob(job: AddJobFlowStepsResult, prevStep: Option[StepSummary]=None): IO[Unit] = {
+  def waitForJob(job: AddJobFlowStepsResult, prevStep: Option[StepSummary] = None): IO[Unit] = {
     import Implicits._
 
     val request = new ListStepsRequest()
