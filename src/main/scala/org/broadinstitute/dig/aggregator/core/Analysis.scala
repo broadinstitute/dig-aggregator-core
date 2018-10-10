@@ -51,7 +51,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
       uploads = for ((part, n) <- parts.zipWithIndex)
         yield
           IO {
-            val result   = uploadPart(id, aws.getPublicURL(part))
+            val result   = uploadPart(id, aws.publicUrlOf(part))
             val counters = result.consume.counters
             val nodes    = counters.nodesCreated
             val edges    = counters.relationshipsCreated
