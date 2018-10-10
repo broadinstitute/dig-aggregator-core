@@ -19,12 +19,16 @@ final class OptsTest extends FunSuite {
     {
       val o = opts(s"--version --config $confFile")
 
+      o.verify
+
       assert(o.version() === true)
       assert(o.reprocess() === false)
     }
 
     {
       val o = opts(s"--reprocess --config $confFile")
+
+      o.verify
 
       assert(o.version() === false)
       assert(o.reprocess() === true)

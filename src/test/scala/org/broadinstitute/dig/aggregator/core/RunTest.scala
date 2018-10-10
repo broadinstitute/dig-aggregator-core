@@ -9,82 +9,72 @@ import scala.util._
  * Aug 28, 2018
  */
 final class RunTest extends DbFunSuite {
-  val a0 = metaanalysis.Processors.variantPartitionProcessor
-  val a1 = metaanalysis.Processors.variantPartitionProcessor
-  val a2 = metaanalysis.Processors.variantPartitionProcessor
-  val a3 = metaanalysis.Processors.variantPartitionProcessor
-
   dbTest("insert") {
-    val r0 = Run(run = 0, app = a0, input = "i0", output = "o0")
-    val r1 = Run(run = 1, app = a1, input = "i1", output = "o1")
-    val r2 = Run(run = 2, app = a2, input = "i2", output = "o2")
+    assert(allResults.isEmpty)
 
-    assert(allRuns.isEmpty)
+    val r0 = insertRun(TestProcessor.a, Seq("i0"), output = "o0")
 
-    insert(r0)
+    assert(allResults.size == 1)
 
-    assert(allRuns == Seq(r0))
+    val r1 = insertRun(TestProcessor.b, Seq("i1"), "o1")
+    val r2 = insertRun(TestProcessor.b, Seq("i2"), "o2")
 
-    insert(r1, r2)
+    assert(allResults.size == 3)
+  }
 
-    assert(allRuns.toSet == Set(r0, r1, r2))
+  dbTest("insert - multiple inputs") {
+    val r0 = insertRun(TestProcessor.a, Seq("i0", "i1", "i2"), "o0")
+
+    // there should be 3 rows inserted - 1 per input
+    assert(runResults(r0).size == 3)
   }
 
   dbTest("insert - on duplicate key update") {
-    val r0 = Run(run = 0, app = a0, input = "i0", output = "o0")
-    val r1 = Run(run = 1, app = r0.app, input = r0.input, output = "o1")
+    val r0 = insertRun(TestProcessor.a, Seq("i0"), "o0")
+    val r1 = insertRun(TestProcessor.a, Seq("i0"), "o1")
 
-    assert(allRuns.isEmpty)
+    assert(allResults.size == 1)
 
-    insert(r0)
+    var r0results = runResults(r0)
+    var r1results = runResults(r1)
 
-    assert(allRuns == Seq(r0))
-
-    insert(r1)
-
-    assert(allRuns.toSet == Set(r1))
+    assert(r0results.isEmpty)
+    assert(r1results.size == 1)
+    assert(r1results(0).output == "o1")
   }
 
   dbTest("lookup work to be done 1") {
-    val r0 = Run(run = 0, app = a0, input = "i0", output = "o0")
-    val r1 = Run(run = 1, app = a1, input = "i1", output = "o1")
-    val r2 = Run(run = 2, app = a2, input = "i2", output = "o2")
+    val r0 = insertRun(TestProcessor.a, Seq("i0"), "o0")
+    val r1 = insertRun(TestProcessor.b, Seq("i1"), "o1")
 
-    // datasets already processed by this app (b)
-    val r3 = Run(run = 3, app = a3, input = r0.output, output = "o3")
-    val r4 = Run(run = 3, app = a3, input = r1.output, output = "o4")
-    val r5 = Run(run = 3, app = a3, input = r2.output, output = "o5")
+    // everything has already been processed
+    val r2 = insertRun(TestProcessor.c, Seq("o0", "o1"), "o2")
 
-    // insert everything
-    insert(r0, r1, r2, r3, r4, r5)
-
-    // find all the datasets b needs to process
-    val results = Run.results(xa, Seq(a0, a1, a2), a3).unsafeRunSync
+    // find all the processor c needs to process still (depends on a and b)
+    val deps    = Seq(TestProcessor.a, TestProcessor.b)
+    val results = Run.results(xa, deps, TestProcessor.c).unsafeRunSync
 
     assert(results.isEmpty)
   }
 
   dbTest("lookup work to be done 2") {
-    val r0 = Run(run = 0, app = a0, input = "i0", output = "o0")
-    val r1 = Run(run = 1, app = a1, input = "i1", output = "o1")
-    val r2 = Run(run = 2, app = a2, input = "i2", output = "o2")
+    val r0 = insertRun(TestProcessor.a, Seq("i0"), "o0")
+    val r1 = insertRun(TestProcessor.b, Seq("i1"), "o1")
+    val r2 = insertRun(TestProcessor.b, Seq("i2"), "o2")
 
-    // datasets already processed by this app (b)
-    val r3 = Run(run = 3, app = a3, input = r0.output, output = "o3")
-    val r4 = Run(run = 3, app = a3, input = r1.output, output = "o4")
+    // only r0 and r1 outputs have been processed
+    val r3 = insertRun(TestProcessor.c, Seq("o0", "o1"), "o3")
 
-    // replace r1 with a new, updated version
-    val r5 = Run(run = 4, app = a1, input = "i1", output = "o1")
+    // update the output of r1
+    val r4 = insertRun(TestProcessor.b, Seq("i1"), "o4")
 
-    // insert everything
-    insert(r0, r1, r2, r3, r4, r5)
+    // find all the processor c needs to process still (depends on a and b)
+    val deps    = Seq(TestProcessor.a, TestProcessor.b)
+    val results = Run.results(xa, deps, TestProcessor.c).unsafeRunSync
 
-    // find all the datasets b needs to process
-    val results = Run.results(xa, Seq(a0, a1, a2), a3).unsafeRunSync
-
-    // should find 2 datasets that need processing
+    // should need to process o4 and o2
     assert(results.size == 2)
-    assert(results.find(_.app == a1).isDefined)
-    assert(results.find(_.app == a2).isDefined)
+    assert(results.find(_.output == "o2").isDefined)
+    assert(results.find(_.output == "o4").isDefined)
   }
 }

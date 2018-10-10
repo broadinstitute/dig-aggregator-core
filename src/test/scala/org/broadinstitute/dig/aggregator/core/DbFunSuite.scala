@@ -1,12 +1,16 @@
 package org.broadinstitute.dig.aggregator.core
 
-import org.scalatest.FunSuite
+import cats._
+import cats.data._
+import cats.effect._
+import cats.implicits._
+
 import doobie._
 import doobie.implicits._
-import cats._
-import cats.implicits._
-import cats.data._
-import cats.effect.IO
+
+import org.broadinstitute.dig.aggregator.core.processors.Processor
+
+import org.scalatest.FunSuite
 
 /**
  * @author clint
@@ -35,10 +39,6 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     implicit object CommitsAreInsertable extends Insertable[Commit] {
       override def insert(c: Commit): IO[_] = c.insert(xa)
     }
-
-    implicit object RunsAreInsertable extends Insertable[Run] {
-      override def insert(r: Run): IO[_] = Run.insert(xa, r.app, Seq(r.input), r.output)
-    }
   }
 
   def allCommits: Seq[Commit] = {
@@ -47,10 +47,20 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     q.transact(xa).unsafeRunSync()
   }
 
-  def allRuns: Seq[Run] = {
-    val q = sql"SELECT `run`, `app`,`input`,`output` FROM `runs`".query[Run].to[List]
+  def insertRun(app: Processor.Name, inputs: Seq[String], output: String): Long = {
+    Run.insert(xa, app, inputs, output).unsafeRunSync
+  }
+
+  def allResults: Seq[Run.Result] = {
+    val q = sql"""|SELECT `app`,`output`,`timestamp`
+                  |FROM   `runs`
+                  |""".stripMargin.query[Run.Result].to[Seq]
 
     q.transact(xa).unsafeRunSync()
+  }
+
+  def runResults(run: Long): Seq[Run.Result] = {
+    Run.results(xa, run).unsafeRunSync
   }
 
   private def makeTables(): Unit = {
@@ -108,7 +118,20 @@ object DbFunSuite {
     }
 
     object Provenance extends Table("provenance") {
-      override val create: ConnectionIO[Int] =
+      override val create: ConnectionIO[Int] = {
+        /*
+         * A final, last line of this CREATE TABLE command should be:
+         *
+         *   FOREIGN KEY (`run`, `app`) REFERENCES `runs` (`run`, `app`) ON DELETE CASCADE ON UPDATE NO ACTION
+         *
+         * This is valid H2 syntax (identical to MySQL), but the constraint
+         * causes the tests to fail. The code queries WORK as expected on MySQL
+         * in production, just not in the tests. More work should be done to
+         * fix this when possible, because it having the constraint would allow
+         * for run delete testing, and ensuring that the appropriate provenance
+         * rows are also deleted.
+         */
+
         sql"""|CREATE TABLE `provenance` (
               |  `ID` int(11) NOT NULL AUTO_INCREMENT,
               |  `run` bigint(20) NOT NULL,
@@ -119,9 +142,9 @@ object DbFunSuite {
               |  PRIMARY KEY (`ID`),
               |  UNIQUE KEY `ID_UNIQUE` (`ID`),
               |  KEY `RUN_KEY_idx` (`run`,`app`),
-              |  CONSTRAINT `RUN_KEY` FOREIGN KEY (`run`, `app`) REFERENCES `runs` (`run`, `app`) ON DELETE CASCADE ON UPDATE NO ACTION
               |)
               |""".stripMargin.update.run
+      }
     }
   }
 }

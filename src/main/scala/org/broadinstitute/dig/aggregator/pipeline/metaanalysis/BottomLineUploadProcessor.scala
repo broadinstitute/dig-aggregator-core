@@ -56,7 +56,7 @@ class BottomLineUploadProcessor(config: BaseConfig) extends RunProcessor(config)
 
     // create runs for every phenotype
     val ios = for (phenotype <- phenotypes) yield {
-      val analysis = new Analysis(s"TransEthnic-MetaAnalysis/$phenotype", Provenance())
+      val analysis = new Analysis(s"TransEthnic-MetaAnalysis/$phenotype", Provenance.thisBuild)
 
       for {
         _ <- IO(logger.info(s"Uploading trans-ethnic bottom-line results for $phenotype..."))
@@ -100,7 +100,6 @@ class BottomLineUploadProcessor(config: BaseConfig) extends RunProcessor(config)
                 |CREATE (n:BottomLine {
                 |  pValue: toFloat(r.pValue),
                 |  beta: toFloat(r.beta),
-                |  maxEAF: toFloat(r.maxFreq),
                 |  stdErr: toFloat(r.stderr),
                 |  sampleSize: toInteger(r.sampleSize)
                 |})

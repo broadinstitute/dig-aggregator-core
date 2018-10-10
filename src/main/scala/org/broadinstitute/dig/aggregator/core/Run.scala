@@ -10,15 +10,6 @@ import doobie.implicits._
 import org.broadinstitute.dig.aggregator.core.processors.Processor
 
 /**
- * Every time a processor "runs" over a set of inputs, it produces an output.
- * Those inputs -> output are recorded in the `runs` table. If a processor
- * runs multiple times in a quick series to produce multiple outputs, then
- * each of the rows produced will have the same run `id`, indicating that
- * they came from processing the same batch of data.
- */
-case class Run(run: Long, app: Processor.Name, input: String, output: String)
-
-/**
  * Companion object for determining what inputs have been processed and
  * have yet to be processed.
  */
@@ -26,31 +17,48 @@ object Run {
   import Processor.NameMeta
 
   /**
+   * An Entry represents a single row in the `runs` table.
+   *
+   * A processor may take several inputs to produce a single output. In such
+   * an instance, multiple rows are inserted using the same id (`Entry.run`),
+   * which is application-specific, but - for us - a milliseconds timestamp.
+   *
+   * This class is private because it's only used by Doobie to insert rows and
+   * is never actually used outside of insertion. Use `Run.Result` for getting
+   * data out of the `runs` table.
+   */
+  private case class Entry(run: Long, app: Processor.Name, input: String, output: String)
+
+  /**
    * Run entries are created and inserted atomically for a single output.
    */
-  def insert(xa: Transactor[IO], app: Processor.Name, inputs: Seq[String], output: String): IO[Int] = {
-    val sql = """|INSERT INTO `runs`
-                 |  ( `run`
-                 |  , `app`
-                 |  , `input`
-                 |  , `output`
-                 |  )
-                 |
-                 |VALUES
-                 |  (?, ?, ?, ?)
-                 |
-                 |ON DUPLICATE KEY UPDATE
-                 |  `run` = VALUES(`run`),
-                 |  `output` = VALUES(`output`),
-                 |  `timestamp` = NOW()
-                 |""".stripMargin
+  def insert(xa: Transactor[IO], app: Processor.Name, inputs: Seq[String], output: String): IO[Long] = {
+    val sql = s"""|INSERT INTO `runs`
+                  |  ( `run`
+                  |  , `app`
+                  |  , `input`
+                  |  , `output`
+                  |  )
+                  |
+                  |VALUES
+                  |  (?, ?, ?, ?)
+                  |
+                  |ON DUPLICATE KEY UPDATE
+                  |  `run` = VALUES(`run`),
+                  |  `output` = VALUES(`output`),
+                  |  `timestamp` = NOW()
+                  |""".stripMargin
 
     // create a run for each input, use the time in milliseconds as the ID
-    val runId = System.currentTimeMillis()
-    val runs  = inputs.map(Run(runId, app, _, output))
+    val runId   = System.currentTimeMillis()
+    val entries = inputs.map(Entry(runId, app, _, output))
 
-    // run the update atomically, insert a row per input for this output
-    Update[Run](sql).updateMany(runs.toList).transact(xa)
+    for {
+      _ <- Update[Entry](sql).updateMany(entries.toList).transact(xa)
+
+      // insert the provenance row, but should be part of same transaction
+      _ <- Provenance.thisBuild.insert(xa, runId, app)
+    } yield runId
   }
 
   /**
@@ -60,12 +68,25 @@ object Run {
   final case class Result(app: Processor.Name, output: String, timestamp: java.time.Instant)
 
   /**
+   * Lookup all the results for a given run id. This is mostly used for
+   * testing.
+   */
+  def results(xa: Transactor[IO], run: Long): IO[Seq[Result]] = {
+    val q = sql"""|SELECT `app`, `output`, `timestamp`
+                  |FROM   `runs`
+                  |WHERE  `run`=$run
+                  |""".stripMargin.query[Result].to[Seq]
+
+    q.transact(xa)
+  }
+
+  /**
    * Given a list of applications, determine all the outputs produced by all
    * of them together.
    */
   def results(xa: Transactor[IO], deps: Seq[Processor.Name]): IO[Seq[Result]] = {
     val qs = deps.map { dep =>
-      sql"SELECT `app`, `output`, `timestamp` FROM runs WHERE app=$dep"
+      sql"SELECT `app`, `output`, `timestamp` FROM `runs` WHERE app=$dep"
     }
 
     // run a select query for each application

@@ -5,7 +5,7 @@ import cats.effect.IO
 import doobie._
 import doobie.implicits._
 
-import org.broadinstitute.dig.aggregator.pipeline._
+import org.broadinstitute.dig.aggregator.core.processors.Processor
 
 import org.scalatest.FunSuite
 
@@ -14,11 +14,6 @@ import org.scalatest.FunSuite
  * Aug 27, 2018
  */
 final class CommitTest extends DbFunSuite {
-  val a0 = metaanalysis.Processors.variantPartitionProcessor
-  val a1 = metaanalysis.Processors.variantPartitionProcessor
-  val a2 = metaanalysis.Processors.variantPartitionProcessor
-  val a3 = metaanalysis.Processors.variantPartitionProcessor
-
   dbTest("insert") {
     val c0 = makeCommit(0)
     val c1 = makeCommit(1)
@@ -78,23 +73,22 @@ final class CommitTest extends DbFunSuite {
     val c0 = makeCommit(0, topic = "x", dataset = "fooSet")
     val c1 = makeCommit(1, topic = "x", dataset = "barSet")
 
-    val r0 = Run(run = 0, app = a0, input = "fooSet", output = "fooSet-output")
-    val r1 = Run(run = 1, app = a1, input = "barSet", output = "barSet-output")
-
     insert(c0, c1)
-    insert(r0, r1)
+
+    val r0 = insertRun(TestProcessor.a, Seq("fooSet"), "fooSet-output")
+    val r1 = insertRun(TestProcessor.b, Seq("barSet"), "barSet-output")
 
     // fooApp already processed fooSet, so only barSet needs processed
-    val xs = Commit.commits(xa, "x", a0).unsafeRunSync()
+    val xs = Commit.commits(xa, "x", TestProcessor.a).unsafeRunSync()
     assert(xs.toSet == Set(c1))
 
     // barApp already processed barSet, so only needs fooSet
-    val ys = Commit.commits(xa, "x", a1).unsafeRunSync()
+    val ys = Commit.commits(xa, "x", TestProcessor.b).unsafeRunSync()
     assert(ys == Seq(c0))
 
     // test against empty topic
-    assert(Commit.commits(xa, "z", a0).unsafeRunSync().isEmpty)
-    assert(Commit.commits(xa, "z", a1).unsafeRunSync().isEmpty)
+    assert(Commit.commits(xa, "z", TestProcessor.a).unsafeRunSync().isEmpty)
+    assert(Commit.commits(xa, "z", TestProcessor.b).unsafeRunSync().isEmpty)
   }
 
   private def makeCommit(i: Int, topic: String, dataset: String): Commit =

@@ -55,7 +55,7 @@ class FrequencyUploadProcessor(config: BaseConfig) extends RunProcessor(config) 
 
     // create runs for every phenotype
     val ios = for (phenotype <- phenotypes) yield {
-      val analysis = new Analysis(s"AncestrySpecific-MetaAnalysis/$phenotype", Provenance())
+      val analysis = new Analysis(s"AncestrySpecific-MetaAnalysis/$phenotype", Provenance.thisBuild)
 
       for {
         _ <- IO(logger.info(s"Uploading ancestry-specific variant frequencies for $phenotype..."))

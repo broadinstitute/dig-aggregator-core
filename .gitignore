@@ -21,6 +21,6 @@ out/
 .cache-main
 .cache-tests
 
-#c onfig files
+# config files
 src/it/resources/config.json
 config.json
