@@ -94,7 +94,9 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
    * delete the analysis node as it assumes it is being updated.
    */
   def delete(driver: Driver): IO[Unit] = {
-    def deleteResults(n: Int): IO[Int] = {
+
+    // tail-recursive accumulator helper method to count total deletions
+    def deleteResults(total: Int): IO[Int] = {
       val q = s"""|MATCH (n)-[:PRODUCED_BY]->(:Analysis {name: '$name'})
                   |WITH n
                   |LIMIT 10000
@@ -112,8 +114,8 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
       }
 
       io.flatMap {
-        case (0, 0)         => IO(n)
-        case (nodes, edges) => deleteResults(n + nodes + edges)
+        case (0, 0)         => IO(total)
+        case (nodes, edges) => deleteResults(total + nodes + edges)
       }
     }
 
