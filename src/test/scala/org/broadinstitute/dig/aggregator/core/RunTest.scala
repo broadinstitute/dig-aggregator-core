@@ -12,7 +12,7 @@ final class RunTest extends DbFunSuite {
   dbTest("insert") {
     assert(allResults.isEmpty)
 
-    val r0 = insertRun(TestProcessor.a, Seq("i0"), output = "o0")
+    val r0 = insertRun(TestProcessor.a, Seq("i0"), "o0")
 
     assert(allResults.size == 1)
 
@@ -36,8 +36,7 @@ final class RunTest extends DbFunSuite {
     val p    = Provenance.thisBuild
     val runP = runProvenance(r0, TestProcessor.a)
 
-    assert(runP.size == 1)
-    assert(runP(0) == p)
+    assert(runP == Seq(p))
   }
 
   dbTest("insert - provenance update") {
@@ -49,10 +48,8 @@ final class RunTest extends DbFunSuite {
     val run0 = runProvenance(r0, TestProcessor.a)
     val run1 = runProvenance(r1, TestProcessor.a)
 
-    assert(run0.size == 0)
-    assert(run1.size == 1)
-
-    assert(run1(0) == p)
+    assert(run0.isEmpty)
+    assert(run1 == Seq(p))
   }
 
   dbTest("insert - on duplicate key update") {
