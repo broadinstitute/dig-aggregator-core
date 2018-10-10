@@ -56,11 +56,21 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
                   |FROM   `runs`
                   |""".stripMargin.query[Run.Result].to[Seq]
 
-    q.transact(xa).unsafeRunSync()
+    q.transact(xa).unsafeRunSync
   }
 
   def runResults(run: Long): Seq[Run.Result] = {
     Run.results(xa, run).unsafeRunSync
+  }
+
+  def allProvenance: Seq[(Long, Processor.Name)] = {
+    val q = sql"SELECT `run`, `app` FROM `provenance`".query[(Long, Processor.Name)].to[Seq]
+
+    q.transact(xa).unsafeRunSync
+  }
+
+  def runProvenance(run: Long, app: Processor.Name): Seq[Provenance] = {
+    Provenance.ofRun(xa, run, app).unsafeRunSync
   }
 
   private def makeTables(): Unit = {

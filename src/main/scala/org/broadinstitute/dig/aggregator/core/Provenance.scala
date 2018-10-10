@@ -74,4 +74,23 @@ object Provenance {
     // return it
     apply(versionsAttempt.get)
   }
+
+  /**
+   * Get the provenance for a particular processor run.
+   */
+  def ofRun(xa: Transactor[IO], run: Long, app: Processor.Name): IO[Seq[Provenance]] = {
+    import Processor.NameMeta
+
+    val q = sql"""|SELECT  `source`,
+                  |        `branch`,
+                  |        `commit`
+                  |
+                  |FROM    `provenance`
+                  |
+                  |WHERE   `run` = $run
+                  |AND     `app` = $app
+                  |""".stripMargin.query[Provenance].to[Seq]
+
+    q.transact(xa)
+  }
 }
