@@ -151,7 +151,7 @@ object DbFunSuite {
               |  `commit` varchar(40) DEFAULT NULL,
               |  PRIMARY KEY (`ID`),
               |  UNIQUE KEY `ID_UNIQUE` (`ID`),
-              |  KEY `RUN_KEY_idx` (`run`,`app`),
+              |  UNIQUE KEY `RUN_KEY_idx` (`run`,`app`),
               |)
               |""".stripMargin.update.run
       }
