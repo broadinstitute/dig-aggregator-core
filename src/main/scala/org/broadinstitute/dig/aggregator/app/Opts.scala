@@ -27,9 +27,6 @@ class Opts(args: Array[String]) extends ScallopConf(args) with Processor.Flags {
   /** Name of the processor to run. */
   val processor: ScallopOption[String] = trailArg(required = false)
 
-  // ensure the configuration file exists if provided
-  validateFileExists(configFile)
-
   // run shouldn't be there if version is
   mutuallyExclusive(version, processor)
 
