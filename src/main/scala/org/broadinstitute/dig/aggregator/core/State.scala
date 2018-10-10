@@ -10,6 +10,8 @@ import doobie.util._
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
 
+import org.broadinstitute.dig.aggregator.core.processors.Processor
+
 import scala.collection.JavaConverters._
 import scala.io.Source
 
@@ -17,7 +19,8 @@ import scala.io.Source
  * The consumer state object tracks of what offset - for each partition in a
  * Kafka topic - an application has successfully processed through.
  */
-case class State(app: String, topic: String, offsets: Map[Int, Long]) {
+case class State(app: Processor.Name, topic: String, offsets: Map[Int, Long]) {
+  import Processor.NameMeta
 
   /**
    * Return a new state with a updated partition offsets.
@@ -58,7 +61,7 @@ case class State(app: String, topic: String, offsets: Map[Int, Long]) {
     }
 
     // run the query, replace existing offsets, true if db was updated
-    Update[(String, String, Int, Long)](q)
+    Update[(Processor.Name, String, Int, Long)](q)
       .updateMany(values.toList)
       .transact(xa)
       .map(_ => this)
@@ -74,7 +77,7 @@ object State {
    * Fetches the most recent offsets for every partition from a Consumer's
    * Kafka client and returns a State for it.
    */
-  def fromEnd(app: String, consumer: Consumer): IO[State] = IO {
+  def fromEnd(app: Processor.Name, consumer: Consumer): IO[State] = IO {
     val offsets = consumer.endOffsets.map {
       case (topicPartition, offset) => topicPartition.partition -> offset.toLong
     }
@@ -90,7 +93,7 @@ object State {
    * and it is expected that `State.latest` will be used to reset the state
    * of the consumer.
    */
-  def load(xa: Transactor[IO], app: String, topic: String): IO[State] = {
+  def load(xa: Transactor[IO], app: Processor.Name, topic: String): IO[State] = {
     val q = sql"""SELECT   `partition`, IF(`offset`=0, 0, `offset`+1) AS `offset`
                  |FROM     `offsets`
                  |WHERE    `app` = $app AND `topic` = $topic
@@ -113,7 +116,7 @@ object State {
    * data type processors. If a type processor needs to reset its state, it
    * can get the map of partitions and offsets to seek to here.
    */
-  def reset(xa: Transactor[IO], app: String, topic: String): IO[State] = {
+  def reset(xa: Transactor[IO], app: Processor.Name, topic: String): IO[State] = {
     val delete = sql"""|DELETE
                        |FROM     `offsets`
                        |WHERE    `app` = $app
@@ -141,7 +144,7 @@ object State {
    * commits table for an optional source topic. If no source topic is given
    * then the latest commit from ALL source topics will be returned.
    */
-  def lastCommit(xa: Transactor[IO], app: String, sourceTopic: Option[String]): IO[State] = {
+  def lastCommit(xa: Transactor[IO], app: Processor.Name, sourceTopic: Option[String]): IO[State] = {
     val select    = fr"SELECT IFNULL(MAX(`commit`)+1, 0) FROM `commits`"
     val order     = fr"ORDER BY `commit` DESC"
     val limit     = fr"LIMIT 1"

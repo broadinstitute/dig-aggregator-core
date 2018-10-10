@@ -25,7 +25,7 @@ class CommitProcessor(config: BaseConfig) extends IntakeProcessor(config) {
    * the offsets of the source topic.
    */
   override def resetState: IO[State] = {
-    State.lastCommit(xa, name.toString, None)
+    State.lastCommit(xa, name, None)
   }
 
   /**

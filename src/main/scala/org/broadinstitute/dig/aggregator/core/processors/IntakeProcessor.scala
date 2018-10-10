@@ -38,14 +38,14 @@ abstract class IntakeProcessor(config: BaseConfig) extends Processor {
    * IO to load this consumer's state from the database.
    */
   def loadState: IO[State] = {
-    State.load(xa, name.toString, topic)
+    State.load(xa, name, topic)
   }
 
   /**
    * IO to create the reset state for this consumer.
    */
   def resetState: IO[State] = {
-    State.reset(xa, name.toString, topic)
+    State.reset(xa, name, topic)
   }
 
   /**
