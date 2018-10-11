@@ -21,6 +21,12 @@ out/
 .cache-main
 .cache-tests
 
+# formatting
+.editorconfig
+.flake8
+.style.yapf
+.scalafmt.conf
+
 # config files
 src/it/resources/config.json
 config.json
