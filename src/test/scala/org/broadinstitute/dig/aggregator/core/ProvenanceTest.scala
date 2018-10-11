@@ -11,7 +11,7 @@ final class ProvenanceTest extends FunSuite {
   test("apply - no args") {
     val p = Provenance.thisBuild
 
-    assert(p.source === "https://example.com/downstream-app")
+    assert(p.source === "https://example.com/some-app")
     assert(p.branch === "glerg")
     assert(p.commit === "nerg")
   }

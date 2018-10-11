@@ -67,14 +67,13 @@ object Provenance {
    * Default constructor will load the version information in the JAR.
    */
   lazy val thisBuild: Provenance = {
-    val propsFileName   = Versions.DefaultPropsFileNames.forDownstreamApps
-    val versionsAttempt = Versions.load(propsFileName)
+    val versionsAttempt = Versions.load()
 
     // a def so it won't evaluate unless there is an actual issue
     def failureThrowable = versionsAttempt.failed.get
 
     // check that the versions file loaded
-    require(versionsAttempt.isSuccess, s"Couldn't load version info from '${propsFileName}': ${failureThrowable}")
+    require(versionsAttempt.isSuccess, s"Failed to load '${Versions.propsFileName}': ${failureThrowable}")
 
     // return it
     apply(versionsAttempt.get)
