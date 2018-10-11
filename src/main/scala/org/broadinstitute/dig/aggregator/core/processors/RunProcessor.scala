@@ -64,7 +64,7 @@ abstract class RunProcessor(config: BaseConfig) extends JobProcessor(config) {
       _ <- uploadResources(flags)
 
       // get the results not yet processed
-      results <- Run.results(xa, dependencies, notProcessedBy)
+      results <- Run.resultsOf(xa, dependencies, notProcessedBy)
 
       // either process them or show what would be processed
       _ <- if (flags.yes()) processResults(results) else showWork(results)

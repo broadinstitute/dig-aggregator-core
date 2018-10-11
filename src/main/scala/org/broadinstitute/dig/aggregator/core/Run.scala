@@ -71,7 +71,7 @@ object Run {
    * Lookup all the results for a given run id. This is mostly used for
    * testing.
    */
-  def results(xa: Transactor[IO], run: Long): IO[Seq[Result]] = {
+  def resultsOfRun(xa: Transactor[IO], run: Long): IO[Seq[Result]] = {
     val q = sql"""|SELECT `app`, `output`, `timestamp`
                   |FROM   `runs`
                   |WHERE  `run`=$run
@@ -84,7 +84,7 @@ object Run {
    * Given a list of applications, determine all the outputs produced by all
    * of them together.
    */
-  def results(xa: Transactor[IO], deps: Seq[Processor.Name]): IO[Seq[Result]] = {
+  private def resultsOf(xa: Transactor[IO], deps: Seq[Processor.Name]): IO[Seq[Result]] = {
     val qs = deps.map { dep =>
       sql"SELECT `app`, `output`, `timestamp` FROM `runs` WHERE app=$dep"
     }
@@ -101,7 +101,9 @@ object Run {
    * what outputs have been produced by the dependencies that have yet to be
    * processed by it.
    */
-  def results(xa: Transactor[IO], deps: Seq[Processor.Name], notProcessedBy: Processor.Name): IO[Seq[Result]] = {
+  private def resultsOf(xa: Transactor[IO],
+                        deps: Seq[Processor.Name],
+                        notProcessedBy: Processor.Name): IO[Seq[Result]] = {
     val selects = deps.map { dep =>
       fr"SELECT `app`, `output`, `timestamp` FROM runs WHERE app=$dep"
     }
@@ -129,10 +131,12 @@ object Run {
    * Helper function where the "notProcessedBy" is optional and calls the
    * correct query accordingly.
    */
-  def results(xa: Transactor[IO], deps: Seq[Processor.Name], notProcessedBy: Option[Processor.Name]): IO[Seq[Result]] = {
+  def resultsOf(xa: Transactor[IO],
+                deps: Seq[Processor.Name],
+                notProcessedBy: Option[Processor.Name]): IO[Seq[Result]] = {
     notProcessedBy match {
-      case Some(app) => results(xa, deps, app)
-      case None      => results(xa, deps)
+      case Some(app) => resultsOf(xa, deps, app)
+      case None      => resultsOf(xa, deps)
     }
   }
 }

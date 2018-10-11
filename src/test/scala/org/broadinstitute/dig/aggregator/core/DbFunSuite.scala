@@ -60,7 +60,7 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
   }
 
   def runResults(run: Long): Seq[Run.Result] = {
-    Run.results(xa, run).unsafeRunSync
+    Run.resultsOfRun(xa, run).unsafeRunSync
   }
 
   def allProvenance: Seq[(Long, Processor.Name)] = {
