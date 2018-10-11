@@ -1,4 +1,4 @@
-# DIG Aggregator Core Library
+# DIG Analysis Pipeline
 
 This is a library that all DIG Java/Scala applications that talk to Kafka or AWS can use to have a working baseline. 
 
@@ -45,7 +45,6 @@ The configuration class _must_ derive from the trait `BaseConfig` as this ensure
 
 ```json
 {
-    "app": "Unique App Name",
     "kafka": {
         "brokers": [
             "ec2-xx-xx-xx-xx.compute-1.amazonaws.com:9092"
@@ -87,7 +86,7 @@ The configuration class _must_ derive from the trait `BaseConfig` as this ensure
 
 This is where all "private" configuration settings should be kept, and **not** committed to the repository.
 
-## Pure DigApp
+## Processors
 
 The entire application is always run within a pure IO context. This context is handled for you via the `DigApp` abstract class that is intended to have a `run` method implemented in:
 

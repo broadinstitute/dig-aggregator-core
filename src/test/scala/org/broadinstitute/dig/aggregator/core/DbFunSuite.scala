@@ -1,60 +1,81 @@
 package org.broadinstitute.dig.aggregator.core
 
-import org.scalatest.FunSuite
+import cats._
+import cats.data._
+import cats.effect._
+import cats.implicits._
+
 import doobie._
 import doobie.implicits._
-import cats._
-import cats.implicits._
-import cats.data._
-import cats.effect.IO
+
+import org.broadinstitute.dig.aggregator.core.processors.Processor
+
+import org.scalatest.FunSuite
 
 /**
  * @author clint
  * Aug 27, 2018
  */
 trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
-  
+
   def dbTest(name: String)(body: => Any): Unit = {
     test(name) {
       makeTables()
-      
+
       body
     }
   }
-  
+
   def insert[A](a: A, rest: A*)(implicit inserter: Insertable[A]): Unit = {
     (a +: rest).toList.map(inserter.insert).sequence.unsafeRunSync()
+    ()
   }
-  
+
   private sealed trait Insertable[A] {
     def insert(a: A): IO[_]
   }
-  
+
   private object Insertable {
     implicit object CommitsAreInsertable extends Insertable[Commit] {
-      override def insert(c: Commit): IO[_] = c.insert(xa)  
-    }
-    
-    implicit object DatasetsAreInsertable extends Insertable[Dataset] {
-      override def insert(d: Dataset): IO[_] = d.insert(xa)  
+      override def insert(c: Commit): IO[_] = c.insert(xa)
     }
   }
-  
-  def allCommits: Seq[Commit] = { 
+
+  def allCommits: Seq[Commit] = {
     val q = sql"SELECT `commit`,`topic`,`partition`,`offset`,`dataset` FROM `commits`".query[Commit].to[List]
 
     q.transact(xa).unsafeRunSync()
   }
-  
-  def allDatasets: Seq[Dataset] = { 
-    val q = sql"SELECT `app`, `topic`, `dataset`, `commit` FROM `datasets`".query[Dataset].to[List]
 
-    q.transact(xa).unsafeRunSync()
+  def insertRun(app: Processor.Name, inputs: Seq[String], output: String): Long = {
+    Run.insert(xa, app, inputs, output).unsafeRunSync
   }
-  
+
+  def allResults: Seq[Run.Result] = {
+    val q = sql"""|SELECT `app`,`output`,`timestamp`
+                  |FROM   `runs`
+                  |""".stripMargin.query[Run.Result].to[Seq]
+
+    q.transact(xa).unsafeRunSync
+  }
+
+  def runResults(run: Long): Seq[Run.Result] = {
+    Run.resultsOfRun(xa, run).unsafeRunSync
+  }
+
+  def allProvenance: Seq[(Long, Processor.Name)] = {
+    val q = sql"SELECT `run`, `app` FROM `provenance`".query[(Long, Processor.Name)].to[Seq]
+
+    q.transact(xa).unsafeRunSync
+  }
+
+  def runProvenance(run: Long, app: Processor.Name): Seq[Provenance] = {
+    Provenance.ofRun(xa, run, app).unsafeRunSync
+  }
+
   private def makeTables(): Unit = {
     import DbFunSuite._
-    
+
     Tables.all.foreach(dropAndCreate(xa))
   }
 }
@@ -62,43 +83,66 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
 object DbFunSuite {
   private def dropAndCreate(xa: Transactor[IO])(table: Table): Unit = {
     (table.drop, table.create).mapN(_ + _).transact(xa).unsafeRunSync()
+    ()
   }
-  
+
   private abstract class Table(name: String) {
     val drop: ConnectionIO[Int] = (fr"DROP TABLE IF EXISTS " ++ Fragment.const(name)).update.run
-    
+
     def create: ConnectionIO[Int]
   }
-  
+
   private object Tables {
-    val all: Seq[Table] = Seq(Commits, Datasets)
-    
+    val all: Seq[Table] = Seq(Commits, Runs, Provenance)
+
     object Commits extends Table("commits") {
-      override val create: ConnectionIO[Int] = sql"""
-        CREATE TABLE `commits` (
-        `ID` int(11) NOT NULL AUTO_INCREMENT,
-        `commit` int(64) NOT NULL,
-        `topic` varchar(180) NOT NULL,
-        `partition` int(11) NOT NULL,
-        `offset` int(64) NOT NULL,
-        `dataset` varchar(180) NOT NULL,
-        `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (`ID`),
-        UNIQUE KEY `SOURCE_IDX` (`topic`,`dataset`)
-      )""".update.run 
+      override val create: ConnectionIO[Int] =
+        sql"""|CREATE TABLE `commits` (
+              |  `ID` int(11) NOT NULL AUTO_INCREMENT,
+              |  `commit` int(64) NOT NULL,
+              |  `topic` varchar(180) NOT NULL,
+              |  `partition` int(11) NOT NULL,
+              |  `offset` int(64) NOT NULL,
+              |  `dataset` varchar(180) NOT NULL,
+              |  `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              |  PRIMARY KEY (`ID`),
+              |  UNIQUE KEY `SOURCE_IDX` (`topic`,`dataset`)
+              |)
+              |""".stripMargin.update.run
     }
-    
-    object Datasets extends Table("datasets") {
-      override val create: ConnectionIO[Int] = sql"""
-        CREATE TABLE `datasets` (
-        `ID` int(11) NOT NULL AUTO_INCREMENT,
-        `app` varchar(180) NOT NULL,
-        `topic` varchar(180) NOT NULL,
-        `dataset` varchar(180) NOT NULL,
-        `commit` int(64) NOT NULL,
-        PRIMARY KEY (`ID`),
-        UNIQUE KEY `DATASET_IDX` (`app`,`topic`,`dataset`)
-      )""".update.run
+
+    object Runs extends Table("runs") {
+      override val create: ConnectionIO[Int] =
+        sql"""|CREATE TABLE `runs` (
+              |  `ID` int(11) NOT NULL AUTO_INCREMENT,
+              |  `run` bigint(20) NOT NULL,
+              |  `app` varchar(180) NOT NULL,
+              |  `input` varchar(800) NOT NULL,
+              |  `output` varchar(800) NOT NULL,
+              |  `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              |  PRIMARY KEY (`ID`),
+              |  UNIQUE KEY `APP_IDX` (`app`,`input`),
+              |  KEY `RUN_IDX` (`run`, `app`)
+              |)
+              |""".stripMargin.update.run
+    }
+
+    object Provenance extends Table("provenance") {
+      override val create: ConnectionIO[Int] = {
+        sql"""|CREATE TABLE `provenance` (
+              |  `ID` int(11) NOT NULL AUTO_INCREMENT,
+              |  `run` bigint(20) NOT NULL,
+              |  `app` varchar(180) NOT NULL,
+              |  `source` varchar(1024) DEFAULT NULL,
+              |  `branch` varchar(180) DEFAULT NULL,
+              |  `commit` varchar(40) DEFAULT NULL,
+              |  PRIMARY KEY (`ID`),
+              |  UNIQUE KEY `ID_UNIQUE` (`ID`),
+              |  UNIQUE KEY `RUN_KEY_idx` (`run`,`app`),
+              |  FOREIGN KEY (`run`, `app`) REFERENCES `runs` (`run`, `app`) ON DELETE CASCADE ON UPDATE CASCADE
+              |)
+              |""".stripMargin.update.run
+      }
     }
   }
 }

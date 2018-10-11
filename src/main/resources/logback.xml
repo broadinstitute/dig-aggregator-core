@@ -1,0 +1,53 @@
+<configuration debug="false">
+
+    <!-- The order of specifying the log colors for different log levels is:
+         Error, Warn, Info, Debug, Trace -->
+    <property scope="context" name="COLORIZER_COLORS" value="boldred@,yellow@,green@,boldblue@,cyan@" />
+    
+    <!-- Enables %colorize(...) in patterns -->
+    <conversionRule conversionWord="colorize" converterClass="org.tuxdude.logback.extensions.LogColorizer" />
+
+    <property scope="local" name="noColorPattern" value="%date %level [%logger{10}] %msg %n" />
+
+    <!-- Colored log output is on by default; to switch it off, define the aggregator-log-nocolor system property:
+         java -Daggregator-log-nocolor -jar foo.jar some.main.Class
+     -->
+    <if condition='isDefined("aggregator-log-nocolor")'>
+        <then>
+            <property scope="local" name="consolePattern" value="${noColorPattern}" />
+        </then>
+        <else>
+            <property
+                scope="local"
+                name="consolePattern"
+                value="%white(%date) %colorize(%level [%logger{10}] %msg %n)" />
+        </else>
+    </if>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${consolePattern}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 
+         Logging levels in the order of increasing significance are: TRACE < DEBUG < INFO <  WARN < ERROR
+
+         Default log level is INFO.  This can be overridden by setting the 'aggregator-log-level' JVM system property:
+           Switch logging off entirely:   scala -Daggregator-log-level=OFF some.main.Class ...
+           Switch logging to DEBUG level: scala -Daggregator-log-level=DEBUG some.main.Class ...
+           Switch logging to WARN level:  scala -Daggregator-log-level=WARN some.main.Class ...
+           etc
+    -->
+
+    <logger name="org.broadinstitute.dig.aggregator.core" level="${aggregator-log-level:-DEBUG}"/>
+
+    <logger name="org.apache.kafka" level="WARN"/>
+
+    <root level="${aggregator-log-level:-INFO}">
+        <appender-ref ref="STDOUT"/>
+    </root>
+
+
+    
+</configuration>

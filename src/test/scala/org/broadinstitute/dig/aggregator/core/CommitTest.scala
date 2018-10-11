@@ -1,10 +1,13 @@
 package org.broadinstitute.dig.aggregator.core
 
-import org.scalatest.FunSuite
-
 import cats.effect.IO
+
 import doobie._
 import doobie.implicits._
+
+import org.broadinstitute.dig.aggregator.core.processors.Processor
+
+import org.scalatest.FunSuite
 
 /**
  * @author clint
@@ -46,51 +49,46 @@ final class CommitTest extends DbFunSuite {
     assert(allCommits == Seq(c1))
   }
 
-  dbTest("datasetCommits - no ignoreProcessedBy") {
+  dbTest("commits - no ignoreProcessedBy") {
     val c0 = makeCommit(0, topic = "x")
     val c1 = makeCommit(1, topic = "x")
     val c2 = makeCommit(2, topic = "y")
 
     insert(c0, c1, c2)
 
-    val xs = Commit.committedDatasets(xa, "x").unsafeRunSync()
+    val xs = Commit.commitsOf(xa, "x", None).unsafeRunSync()
 
     assert(xs.toSet == Set(c0, c1))
 
-    val ys = Commit.committedDatasets(xa, "y").unsafeRunSync()
+    val ys = Commit.commitsOf(xa, "y", None).unsafeRunSync()
 
     assert(ys.toSet == Set(c2))
 
-    val zs = Commit.committedDatasets(xa, "z").unsafeRunSync()
+    val zs = Commit.commitsOf(xa, "z", None).unsafeRunSync()
 
     assert(zs.isEmpty)
   }
 
-  dbTest("datasetCommits - with ignoreProcessedBy") {
+  dbTest("commits - with ignoreProcessedBy") {
     val c0 = makeCommit(0, topic = "x", dataset = "fooSet")
-    val c1 = makeCommit(1, topic = "x", dataset = "fooSet")
-    val c2 = makeCommit(2, topic = "x", dataset = "barSet")
-    val c3 = makeCommit(3, topic = "y", dataset = "barSet")
+    val c1 = makeCommit(1, topic = "x", dataset = "barSet")
 
-    val d0 = Dataset(app = "fooApp", topic = "x", dataset = "fooSet", commit = c0.commit)
-    val d1 = Dataset(app = "barApp", topic = "x", dataset = "fooSet", commit = c1.commit)
-    val d2 = Dataset(app = "blergApp", topic = "x", dataset = "barSet", commit = c2.commit)
-    val d3 = Dataset(app = "blergApp", topic = "y", dataset = "barSet", commit = c3.commit)
+    insert(c0, c1)
 
-    insert(c0, c1, c2, c3)
-    insert(d0, d1, d2, d3)
+    val r0 = insertRun(TestProcessor.a, Seq("fooSet"), "fooSet-output")
+    val r1 = insertRun(TestProcessor.b, Seq("barSet"), "barSet-output")
 
-    val xs = Commit.committedDatasets(xa, "x", "fooApp").unsafeRunSync()
+    // fooApp already processed fooSet, so only barSet needs processed
+    val xs = Commit.commitsOf(xa, "x", Some(TestProcessor.a)).unsafeRunSync()
+    assert(xs.toSet == Set(c1))
 
-    assert(xs.toSet == Set(c1, c2))
+    // barApp already processed barSet, so only needs fooSet
+    val ys = Commit.commitsOf(xa, "x", Some(TestProcessor.b)).unsafeRunSync()
+    assert(ys == Seq(c0))
 
-    val ys = Commit.committedDatasets(xa, "y", "fooApp").unsafeRunSync()
-
-    assert(ys == Seq(c3))
-
-    assert(Commit.committedDatasets(xa, "z", "fooApp").unsafeRunSync().isEmpty)
-    assert(Commit.committedDatasets(xa, "z", "barApp").unsafeRunSync().isEmpty)
-    assert(Commit.committedDatasets(xa, "z", "blergApp").unsafeRunSync().isEmpty)
+    // test against empty topic
+    assert(Commit.commitsOf(xa, "z", Some(TestProcessor.a)).unsafeRunSync().isEmpty)
+    assert(Commit.commitsOf(xa, "z", Some(TestProcessor.b)).unsafeRunSync().isEmpty)
   }
 
   private def makeCommit(i: Int, topic: String, dataset: String): Commit =

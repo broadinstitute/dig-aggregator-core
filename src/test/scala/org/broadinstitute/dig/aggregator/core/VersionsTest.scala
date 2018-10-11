@@ -15,23 +15,21 @@ final class VersionsTest extends FunSuite {
   private val oct28th = Instant.parse("2016-10-28T18:52:40.889Z")
   private val oct29th = Instant.parse("2016-10-29T18:52:40.889Z")
   
-  import Versions.DefaultPropsFileNames
-  
   test("happy path") {
     //NB: Use versionInfo.properties from src/test/scala, which takes priority at test-time
-    val versions = Versions.load(DefaultPropsFileNames.forAggregatorCore).get
+    val versions = Versions.load().get
     
-    assert(versions.name === "foo")
-    assert(versions.version === "bar")
-    assert(versions.branch === "baz")
-    assert(versions.lastCommit === Some("blerg"))
+    assert(versions.name === "blerg")
+    assert(versions.version === "zerg")
+    assert(versions.branch === "glerg")
+    assert(versions.lastCommit === Some("nerg"))
     assert(versions.anyUncommittedChanges === true)
-    assert(versions.describedVersion === Some("nuh"))
+    assert(versions.describedVersion === Some("flerg"))
     assert(versions.buildDate === oct28th)
-    assert(versions.remoteUrl === Some("https://example.com/broadinstitute/dig-aggregator-core"))
+    assert(versions.remoteUrl === Some("https://example.com/some-app"))
     
-    val expected = s"foo bar (nuh) branch: baz commit: blerg (PLUS uncommitted changes!) built on: $oct28th " + 
-                    "from https://example.com/broadinstitute/dig-aggregator-core"
+    val expected = s"blerg zerg (flerg) branch: glerg commit: nerg (PLUS uncommitted changes!) built on: $oct28th " + 
+                    "from https://example.com/some-app"
     
     assert(versions.toString === expected)
   }

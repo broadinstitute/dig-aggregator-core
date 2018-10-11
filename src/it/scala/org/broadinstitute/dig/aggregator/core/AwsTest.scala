@@ -1,11 +1,19 @@
 package org.broadinstitute.dig.aggregator.core
 
-import org.scalatest.FunSuite
-import cats.effect.IO
+import cats._
+import cats.effect._
+import cats.implicits._
+
 import com.amazonaws.services.s3.model.S3Object
+
+import java.nio.charset.Charset
+
+import org.broadinstitute.dig.aggregator.app.Opts
+
+import org.scalatest.FunSuite
+
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.Buffer
-import java.nio.charset.Charset
 
 /**
  * @author clint
@@ -13,11 +21,9 @@ import java.nio.charset.Charset
  */
 final class AwsTest extends AwsFunSuite {
   //Config file needs to be in place before this test will work.
-  private val opts = new Opts(
-      appName = "dig-aggregator-core-integration-tests", 
-      args = Array("--config", "src/it/resources/config.json"))
+  private val opts = new Opts(Array("--config", "src/it/resources/config.json"))
   
-  override protected val aws = new AWS(opts)
+  override protected val aws = new AWS(opts.config.aws)
   
   /**
    * Put() an object, then get() it  

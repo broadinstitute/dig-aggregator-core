@@ -17,6 +17,8 @@ import java.util.Properties
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common._
 
+import org.broadinstitute.dig.aggregator.core.config.KafkaConfig
+
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -24,18 +26,13 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
  * Kafka JSON topic record consumer.
  */
-final class Consumer(opts: Opts, topic: String) extends LazyLogging {
-
-  /**
-   * Create a connection to the database for writing state.
-   */
-  private val xa = opts.config.mysql.newTransactor()
+final class Consumer(config: KafkaConfig, val topic: String, xa: Transactor[IO]) extends LazyLogging {
 
   /**
    * Kafka connection properties.
    */
   private val props: Properties = Props(
-    ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG        -> opts.config.kafka.brokerList,
+    ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG        -> config.brokerList,
     ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG   -> classOf[serialization.StringDeserializer].getCanonicalName,
     ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> classOf[serialization.StringDeserializer].getCanonicalName
   )
@@ -45,13 +42,47 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
    */
   private val client: KafkaConsumer[String, String] = {
     Thread.currentThread.setContextClassLoader(null)
+
+    /*
+     * This is a hack so that Kafka can find the deserializer classes!
+     */
+
     new KafkaConsumer(props)
   }
 
   /**
    * Get all the partitions for this topic.
    */
-  private val partitions: Seq[Int] = client.partitionsFor(topic).asScala.map(_.partition)
+  val partitions: Seq[Int] = {
+    client.partitionsFor(topic).asScala.map(_.partition)
+  }
+
+  /**
+   * All the partitions for this Topic as Kafka TopicPartitions.
+   */
+  val topicPartitions: Seq[TopicPartition] = {
+    partitions.map(new TopicPartition(topic, _))
+  }
+
+  /**
+   * A Map of TopicPartition -> offset (Long) given the earliest offsets
+   * available in Kafka for this topic.
+   */
+  def beginningOffsets: Map[TopicPartition, Long] = client
+    .beginningOffsets(topicPartitions.asJava)
+    .asScala
+    .mapValues(_.toLong)
+    .toMap
+
+  /**
+   * A Map of TopicPartition -> offset (Long) given the latest offsets
+   * available in Kafka for this topic.
+   */
+  def endOffsets: Map[TopicPartition, Long] = client
+    .endOffsets(topicPartitions.asJava)
+    .asScala
+    .mapValues(_.toLong)
+    .toMap
 
   /**
    * Constantly grab the last set of records processed and try to update -
@@ -79,11 +110,7 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
    * with updated ones from the State.
    */
   private def mergeStateOffsets(state: State): State = {
-    val topicPartitions  = partitions.map(new TopicPartition(topic, _))
-    val beginningOffsets = client.beginningOffsets(topicPartitions.asJava)
-
-    // create a map of offsets from Kafka
-    val offsets = beginningOffsets.asScala.map {
+    val offsets = beginningOffsets.map {
       case (topicPartition, offset) => topicPartition.partition -> offset.toLong
     }
 
@@ -97,9 +124,11 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
    *
    * The state that was loaded may not contain all the partitions because it
    * either isn't there in the database or the number of partitions changed
-   * in Kafka. So, we first find all the
+   * in Kafka. So, we first find all the offsets that Kafka knows about and
+   * merge them with the ones loaded from the database (using the database as
+   * as the authority on where consumption should resume from).
    */
-  private def assignPartitions(state: State): IO[State] = IO {
+  def assignPartitions(state: State): IO[State] = IO {
     val updatedState = mergeStateOffsets(state)
     val topicPartitions = updatedState.offsets.keys.map {
       new TopicPartition(topic, _)
@@ -137,11 +166,8 @@ final class Consumer(opts: Opts, topic: String) extends LazyLogging {
     for {
       ref <- Ref[IO].of[Option[Consumer.Records]](None)
 
-      // assign all the partitions before consuming
-      latestState <- assignPartitions(state)
-
       // create tasks to save the state and another to process the stream
-      saveTask = updateState(latestState, ref)
+      saveTask = updateState(state, ref)
       streamTask = Stream
         .eval(fetch)
         .repeat

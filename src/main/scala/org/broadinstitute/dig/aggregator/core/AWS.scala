@@ -21,6 +21,9 @@ import com.amazonaws.services.elasticmapreduce.model.StepSummary
 import com.typesafe.scalalogging.LazyLogging
 
 import java.io.InputStream
+import java.net.URI
+
+import org.broadinstitute.dig.aggregator.core.config.AWSConfig
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
@@ -29,20 +32,20 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
  * AWS controller (S3 + EMR clients).
  */
-final class AWS(opts: Opts) extends LazyLogging {
+final class AWS(config: AWSConfig) extends LazyLogging {
   import Implicits._
 
   /**
    * The same region and bucket are used for all operations.
    */
-  val region: Regions = Regions.valueOf(opts.config.aws.region)
-  val bucket: String  = opts.config.aws.s3.bucket
+  val region: Regions = Regions.valueOf(config.region)
+  val bucket: String  = config.s3.bucket
 
   /**
    * AWS IAM credentials provider.
    */
   val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-    new BasicAWSCredentials(opts.config.aws.key, opts.config.aws.secret))
+    new BasicAWSCredentials(config.key, config.secret))
 
   /**
    * S3 client for storage.
@@ -59,6 +62,11 @@ final class AWS(opts: Opts) extends LazyLogging {
     .withCredentials(credentials)
     .withRegion(region)
     .build
+
+  /**
+   * Returns the URI to a given key.
+   */
+  def uriOf(key: String): URI = new URI(s"s3://$bucket/$key")
 
   /**
    * Test whether or not a key exists.
@@ -91,7 +99,7 @@ final class AWS(opts: Opts) extends LazyLogging {
   /**
    * Returns the canonical URL for a given key.
    */
-  def getURL(key: String): String = {
+  def publicUrlOf(key: String): String = {
     s3.getUrl(bucket, key).toExternalForm
   }
 
@@ -149,7 +157,7 @@ final class AWS(opts: Opts) extends LazyLogging {
    */
   def runJob(steps: Seq[JobStep]): IO[AddJobFlowStepsResult] = {
     val request = new AddJobFlowStepsRequest()
-      .withJobFlowId(opts.config.aws.emr.cluster)
+      .withJobFlowId(config.emr.cluster)
       .withSteps(steps.map(_.config).asJava)
 
     IO {
@@ -172,11 +180,11 @@ final class AWS(opts: Opts) extends LazyLogging {
    *   StepState.INTERRUPTED
    *   StepState.CANCELLED
    */
-  def waitForJob(job: AddJobFlowStepsResult, prevStep: Option[StepSummary]=None): IO[Unit] = {
+  def waitForJob(job: AddJobFlowStepsResult, prevStep: Option[StepSummary] = None): IO[Unit] = {
     import Implicits._
 
     val request = new ListStepsRequest()
-      .withClusterId(opts.config.aws.emr.cluster)
+      .withClusterId(config.emr.cluster)
       .withStepIds(job.getStepIds)
 
     // wait a little bit then request status

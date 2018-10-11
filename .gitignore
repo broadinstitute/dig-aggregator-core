@@ -13,7 +13,7 @@ out/
 # log files
 *.log
 
-#Eclipse
+# Eclipse
 /bin/
 .classpath
 .project
@@ -21,5 +21,12 @@ out/
 .cache-main
 .cache-tests
 
-#config files
+# formatting
+.editorconfig
+.flake8
+.style.yapf
+.scalafmt.conf
+
+# config files
 src/it/resources/config.json
+config.json
