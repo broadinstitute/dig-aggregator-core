@@ -119,7 +119,7 @@ object Commit {
   /**
    * Get all the datasets committed for a given topic.
    */
-  def commits(xa: Transactor[IO], topic: String): IO[Seq[Commit]] = {
+  private def commitsOf(xa: Transactor[IO], topic: String): IO[Seq[Commit]] = {
     val q = sql"""|SELECT    `commit`,
                   |          `topic`,
                   |          `partition`,
@@ -139,7 +139,7 @@ object Commit {
   /**
    * Get all datasets committed for a given topic not yet processed by an app.
    */
-  def commits(xa: Transactor[IO], topic: String, notProcessedBy: Processor.Name): IO[Seq[Commit]] = {
+  private def commitsOf(xa: Transactor[IO], topic: String, notProcessedBy: Processor.Name): IO[Seq[Commit]] = {
     val q = sql"""|SELECT           `commits`.`commit`,
                   |                 `commits`.`topic`,
                   |                 `commits`.`partition`,
@@ -166,10 +166,10 @@ object Commit {
    * Helper function where the "notProcessedBy" is optional and calls the
    * correct query accordingly.
    */
-  def commits(xa: Transactor[IO], topic: String, notProcessedBy: Option[Processor.Name]): IO[Seq[Commit]] = {
+  def commitsOf(xa: Transactor[IO], topic: String, notProcessedBy: Option[Processor.Name]): IO[Seq[Commit]] = {
     notProcessedBy match {
-      case Some(app) => commits(xa, topic, app)
-      case None      => commits(xa, topic)
+      case Some(app) => commitsOf(xa, topic, app)
+      case None      => commitsOf(xa, topic)
     }
   }
 }

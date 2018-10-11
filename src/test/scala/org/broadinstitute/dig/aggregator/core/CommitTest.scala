@@ -56,15 +56,15 @@ final class CommitTest extends DbFunSuite {
 
     insert(c0, c1, c2)
 
-    val xs = Commit.commits(xa, "x").unsafeRunSync()
+    val xs = Commit.commitsOf(xa, "x", None).unsafeRunSync()
 
     assert(xs.toSet == Set(c0, c1))
 
-    val ys = Commit.commits(xa, "y").unsafeRunSync()
+    val ys = Commit.commitsOf(xa, "y", None).unsafeRunSync()
 
     assert(ys.toSet == Set(c2))
 
-    val zs = Commit.commits(xa, "z").unsafeRunSync()
+    val zs = Commit.commitsOf(xa, "z", None).unsafeRunSync()
 
     assert(zs.isEmpty)
   }
@@ -79,16 +79,16 @@ final class CommitTest extends DbFunSuite {
     val r1 = insertRun(TestProcessor.b, Seq("barSet"), "barSet-output")
 
     // fooApp already processed fooSet, so only barSet needs processed
-    val xs = Commit.commits(xa, "x", TestProcessor.a).unsafeRunSync()
+    val xs = Commit.commitsOf(xa, "x", Some(TestProcessor.a)).unsafeRunSync()
     assert(xs.toSet == Set(c1))
 
     // barApp already processed barSet, so only needs fooSet
-    val ys = Commit.commits(xa, "x", TestProcessor.b).unsafeRunSync()
+    val ys = Commit.commitsOf(xa, "x", Some(TestProcessor.b)).unsafeRunSync()
     assert(ys == Seq(c0))
 
     // test against empty topic
-    assert(Commit.commits(xa, "z", TestProcessor.a).unsafeRunSync().isEmpty)
-    assert(Commit.commits(xa, "z", TestProcessor.b).unsafeRunSync().isEmpty)
+    assert(Commit.commitsOf(xa, "z", Some(TestProcessor.a)).unsafeRunSync().isEmpty)
+    assert(Commit.commitsOf(xa, "z", Some(TestProcessor.b)).unsafeRunSync().isEmpty)
   }
 
   private def makeCommit(i: Int, topic: String, dataset: String): Commit =

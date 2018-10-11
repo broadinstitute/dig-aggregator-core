@@ -64,7 +64,7 @@ abstract class DatasetProcessor(config: BaseConfig) extends JobProcessor(config)
       _ <- uploadResources(flags)
 
       // fetch the list of datasets for this topic not yet processed
-      commits <- Commit.commits(xa, topic, notProcessedBy)
+      commits <- Commit.commitsOf(xa, topic, notProcessedBy)
 
       // either process them or show what would be processed
       _ <- if (flags.yes()) processCommits(commits) else showWork(commits)
