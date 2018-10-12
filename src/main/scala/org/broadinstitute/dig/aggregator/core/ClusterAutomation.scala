@@ -48,8 +48,6 @@ object ClusterAutomation extends App {
       |sc.stop()
       |""".stripMargin.trim
     
-    aws.put("hello-spark.py", helloSparkContents).unsafeRunSync()
-    
     val bootstrapScriptContents: String = """
       #!/bin/bash -xe
       
@@ -63,102 +61,24 @@ object ClusterAutomation extends App {
       sudo pip install scipy==1.1.0
       """
     
-    aws.put("cluster-bootstrap.sh", bootstrapScriptContents).unsafeRunSync()
+    val client: EmrClient = new JavaApiEmrClient(aws)
     
-    val id = makeCluster(
+    val io = for {
+      _ <- aws.put("hello-spark.py", helloSparkContents)
+      _ <- aws.put("cluster-bootstrap.sh", bootstrapScriptContents)
+      id <- client.createCluster(
         bootstrapScripts = Seq(aws.uriOf("cluster-bootstrap.sh")),
         masterInstanceType = "m3.xlarge",
         slaveInstanceType = "m3.xlarge")
-        
-
-    println(s"Made request, job flow id = '${id}'")
-    
-    runOnCluster(id, aws.uriOf("hello-spark.py"))
-    
-    val clusters = listClusters
-    
-    println(s"${clusters.size} clusters:")
-    
-    clusters.foreach(println)
-  }
-  
-  def runOnCluster(clusterId: String, scriptUri: URI, scriptArgs: String*): Unit = {
-    val request = (new AddJobFlowStepsRequest)
-      .withJobFlowId(clusterId)
-      .withSteps(JobStep.PySpark(scriptUri, scriptArgs: _*).config)
-
-    val job = aws.emr.addJobFlowSteps(request)
-
-    // show the job ID so it can be referenced in the AWS console
-    println(s"Submitted job with 1 steps: ${scriptUri}")
-  }
-  
-  def listClusters: Seq[ClusterSummary] = aws.emr.listClusters.getClusters.asScala
-  
-  def deleteCluster(clusterId: String): Unit = {
-    val request = (new TerminateJobFlowsRequest)
-    
-    request.withJobFlowIds(clusterId)
-    
-    val result = aws.emr.terminateJobFlows(request)
-    
-    val statusCode = result.getSdkHttpMetadata.getHttpStatusCode
-    val responseHeaders = result.getSdkHttpMetadata.getHttpHeaders.asScala.toMap
-    
-    println(s"Deleted '$clusterId': status: $statusCode response headers: $responseHeaders")
-  }
-  
-  def makeCluster(
-      applications: Seq[String] = Seq("Hadoop", "Spark", "Hive", "Pig"),
-      instances: Int = 1,
-      releaseLabel: String = "emr-5.17.0",
-      serviceRole: String = "EMR_DefaultRole",
-      jobFlowRole: String = "EMR_EC2_DefaultRole",
-      autoScalingRole: String = "EMR_AutoScaling_DefaultRole",
-      visibleToAllUsers: Boolean = true,
-      sshKeyName: String = "GenomeStore REST",
-      keepJobFlowAliveWhenNoSteps: Boolean = true,
-      masterInstanceType: String = "m1.large", //note: m1.small doesn't have enough ram! m1.medium runs very slowly.
-      slaveInstanceType: String = "m1.large",
-      bootstrapScripts: Seq[URI] = Nil,
-      logUri: String = aws.uriOf("cluster-logs").toString
-    ): String = {
-    
-    val bootstrapScriptConfigs: Seq[BootstrapActionConfig] = bootstrapScripts.map { scriptUri =>
-      (new BootstrapActionConfig).withScriptBootstrapAction(
-          (new ScriptBootstrapActionConfig).withPath(scriptUri.toString)).withName(scriptUri.toString)
+      _ = println(s"Made request, job flow id = '${id}'")
+      _ <- client.runOnCluster(id, aws.uriOf("hello-spark.py"))
+      clusters <- client.listClusters
+      _ = println(s"${clusters.size} clusters:")
+      _ = clusters.foreach(println)
+    } yield {
+      ()
     }
     
-    val securityGroupId = "sg-2b58c961"
-    
-    val subnetId = "subnet-ab89bbf3"
-
-    def toApplication(name: String): Application = (new Application).withName(name)
-    
-    val request = (new RunJobFlowRequest)
-      .withName("Clint's Spark Cluster")
-      .withBootstrapActions(bootstrapScriptConfigs.asJava)
-      .withApplications(applications.map(toApplication).asJava)
-      .withReleaseLabel(releaseLabel)
-      .withServiceRole(serviceRole)
-      .withJobFlowRole(jobFlowRole)
-      .withAutoScalingRole(autoScalingRole)
-      .withLogUri(logUri)
-      .withVisibleToAllUsers(visibleToAllUsers)
-      .withInstances((new JobFlowInstancesConfig)
-        .withAdditionalMasterSecurityGroups(securityGroupId)
-        .withAdditionalSlaveSecurityGroups(securityGroupId)
-        .withEc2SubnetId(subnetId)
-        .withEc2KeyName(sshKeyName)
-        .withInstanceCount(instances)
-        .withKeepJobFlowAliveWhenNoSteps(keepJobFlowAliveWhenNoSteps)
-        .withMasterInstanceType(masterInstanceType)
-        .withSlaveInstanceType(slaveInstanceType))
-        
-    println("Making request...")
-        
-    val result = aws.emr.runJobFlow(request)
-    
-    result.getJobFlowId
+    io.unsafeRunSync()
   }
 }
