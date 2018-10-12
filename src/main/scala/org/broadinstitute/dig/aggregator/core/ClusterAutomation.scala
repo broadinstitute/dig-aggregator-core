@@ -65,7 +65,11 @@ object ClusterAutomation extends App {
     
     aws.put("cluster-bootstrap.sh", bootstrapScriptContents).unsafeRunSync()
     
-    val id = makeCluster(bootstrapScripts = Seq(aws.uriOf("cluster-bootstrap.sh")))
+    val id = makeCluster(
+        bootstrapScripts = Seq(aws.uriOf("cluster-bootstrap.sh")),
+        masterInstanceType = "m3.xlarge",
+        slaveInstanceType = "m3.xlarge")
+        
 
     println(s"Made request, job flow id = '${id}'")
     
@@ -115,8 +119,8 @@ object ClusterAutomation extends App {
       visibleToAllUsers: Boolean = true,
       sshKeyName: String = "GenomeStore REST",
       keepJobFlowAliveWhenNoSteps: Boolean = true,
-      masterInstanceType: String = "m1.medium", //note: m1.small doesn't have enough ram!
-      slaveInstanceType: String = "m1.medium",
+      masterInstanceType: String = "m1.large", //note: m1.small doesn't have enough ram!
+      slaveInstanceType: String = "m1.large",
       bootstrapScripts: Seq[URI] = Nil,
       logUri: String = aws.uriOf("cluster-logs").toString
     ): String = {
