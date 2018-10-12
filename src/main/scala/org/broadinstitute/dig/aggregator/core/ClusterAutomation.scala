@@ -109,8 +109,7 @@ object ClusterAutomation extends App {
   }
   
   def makeCluster(
-      sparkApp: Application = new Application,
-      appName: String = "Spark",
+      applications: Seq[String] = Seq("Hadoop", "Spark", "Hive", "Pig"),
       instances: Int = 1,
       releaseLabel: String = "emr-5.17.0",
       serviceRole: String = "EMR_DefaultRole",
@@ -119,7 +118,7 @@ object ClusterAutomation extends App {
       visibleToAllUsers: Boolean = true,
       sshKeyName: String = "GenomeStore REST",
       keepJobFlowAliveWhenNoSteps: Boolean = true,
-      masterInstanceType: String = "m1.large", //note: m1.small doesn't have enough ram!
+      masterInstanceType: String = "m1.large", //note: m1.small doesn't have enough ram! m1.medium runs very slowly.
       slaveInstanceType: String = "m1.large",
       bootstrapScripts: Seq[URI] = Nil,
       logUri: String = aws.uriOf("cluster-logs").toString
@@ -132,16 +131,14 @@ object ClusterAutomation extends App {
     
     val securityGroupId = "sg-2b58c961"
     
-    val masterNodeSg = "sg-a976afe2"
-    val slaveNodeSg = "sg-bc7fa6f7"
-    
     val subnetId = "subnet-ab89bbf3"
-    val vpcId = "vpc-a53ba7c2"
+
+    def toApplication(name: String): Application = (new Application).withName(name)
     
     val request = (new RunJobFlowRequest)
       .withName("Clint's Spark Cluster")
       .withBootstrapActions(bootstrapScriptConfigs.asJava)
-      .withApplications(sparkApp.withName(appName))
+      .withApplications(applications.map(toApplication).asJava)
       .withReleaseLabel(releaseLabel)
       .withServiceRole(serviceRole)
       .withJobFlowRole(jobFlowRole)
@@ -149,7 +146,6 @@ object ClusterAutomation extends App {
       .withLogUri(logUri)
       .withVisibleToAllUsers(visibleToAllUsers)
       .withInstances((new JobFlowInstancesConfig)
-        //.withServiceAccessSecurityGroup(securityGroupId)
         .withAdditionalMasterSecurityGroups(securityGroupId)
         .withAdditionalSlaveSecurityGroups(securityGroupId)
         .withEc2SubnetId(subnetId)
