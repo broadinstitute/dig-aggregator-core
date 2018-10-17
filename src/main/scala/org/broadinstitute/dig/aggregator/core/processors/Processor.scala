@@ -38,7 +38,10 @@ object Processor extends LazyLogging {
   final class Name private[Processor] (name: String) {
     override def toString: String            = name
     override def hashCode: Int               = name.hashCode
-    override def equals(other: Any): Boolean = name == other.toString
+    override def equals(other: Any): Boolean = other match {
+      case that: Name => this.name == that.name
+      case _ => false
+    }
   }
 
   /**
