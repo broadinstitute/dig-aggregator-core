@@ -29,7 +29,7 @@ object Main extends IOApp with LazyLogging {
     if (opts.version()) {
       IO.pure(ExitCode.Success)
     } else {
-      val _ = Pipeline.pipelines
+      Pipeline.pipelines()
 
       // choose the run function
       val run: (String, Opts) => IO[Unit] = {

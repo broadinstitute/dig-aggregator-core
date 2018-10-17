@@ -73,7 +73,7 @@ object Pipeline {
   /**
    * The global list of all pipelines.
    */
-  val pipelines: Map[String, Pipeline] = Map(
+  def pipelines(): Map[String, Pipeline] = Map(
     "intake"       -> intake.IntakePipeline,
     "metaanalysis" -> metaanalysis.MetaAnalysisPipeline,
     "ldscore"      -> ldscore.LDScorePipeline,
