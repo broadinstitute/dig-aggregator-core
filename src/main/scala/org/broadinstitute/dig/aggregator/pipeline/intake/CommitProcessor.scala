@@ -8,12 +8,7 @@ import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.processors._
 
-class CommitProcessor(config: BaseConfig) extends IntakeProcessor(config) {
-
-  /**
-   * Unique name identifying this processor.
-   */
-  override val name: Processor.Name = Processors.commitProcessor
+class CommitProcessor(name: Processor.Name, config: BaseConfig) extends IntakeProcessor(name, config) {
 
   /**
    * Topic to consume.

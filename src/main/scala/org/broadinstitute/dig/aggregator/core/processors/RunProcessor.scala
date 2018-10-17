@@ -16,7 +16,7 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
  * what outputs have been produced by applications it depends on, which set of
  * those it hasn't processed yet, and process them.
  */
-abstract class RunProcessor(config: BaseConfig) extends JobProcessor(config) {
+abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends JobProcessor(name, config) {
 
   /**
    * All the processors this processor depends on.

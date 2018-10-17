@@ -23,12 +23,7 @@ import org.broadinstitute.dig.aggregator.core.processors._
  *  file:///mnt/efs/metaanalysis/<phenotype>/<dataset>/common/ancestry=?/part-*
  *  file:///mnt/efs/metaanalysis/<phenotype>/<dataset>/rare/ancestry=?/part-*
  */
-class VariantPartitionProcessor(config: BaseConfig) extends DatasetProcessor(config) {
-
-  /**
-   * Unique name identifying this processor.
-   */
-  override val name: Processor.Name = Processors.variantPartitionProcessor
+class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extends DatasetProcessor(name, config) {
 
   /**
    * Topic to consume.

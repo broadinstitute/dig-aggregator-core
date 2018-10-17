@@ -14,12 +14,7 @@ import org.rogach.scallop._
 /**
  * Each processor has a globally unique name and a run function.
  */
-trait Processor extends LazyLogging {
-
-  /**
-   * A unique name for this processor. Must be unique across all processors!
-   */
-  val name: Processor.Name
+abstract class Processor(val name: Processor.Name) extends LazyLogging {
 
   /**
    * Run this processor.
@@ -34,43 +29,59 @@ object Processor extends LazyLogging {
   import scala.language.implicitConversions
 
   /**
-   * A mapping of all the registered application names.
+   * Processors are required to have a unique name that is unique across all
+   * processors for use as keys in the MySQL database queries.
+   *
+   * Names cannot be created at any time. They must be created using with
+   * the `register` function.
    */
-  private var names: Map[String, BaseConfig => Processor] = Map()
-
-  /**
-   * Lookup a processor by name.
-   */
-  def apply(name: String): BaseConfig => Processor = {
-    names(name)
+  final class Name private[Processor] (name: String) {
+    override def toString: String            = name
+    override def hashCode: Int               = name.hashCode
+    override def equals(other: Any): Boolean = name == other.toString
   }
 
   /**
-   * All processors are required to have a unique name that is unique across
-   * every processor for use in the MySQL database to show what has been
-   * processed already.
+   * Implicit conversion from DB string to Processor.Name for doobie.
    */
-  final class Name(name: String, ctor: BaseConfig => Processor) {
+  implicit val NameMeta: Meta[Name] = {
+    Meta[String].xmap(new Name(_), _.toString)
+  }
 
-    /**
-     * Get the name of this processor as a string.
-     */
-    override def toString: String = name
+  /**
+   * Every processor is constructed with a type-safe name and configuration.
+   */
+  type Constructor = (Processor.Name, BaseConfig) => Processor
 
-    /**
-     * Registers the application name with the global map.
-     */
-    names.get(name) match {
-      case Some(c) => require(c == ctor, s"$name already registered to another constructor")
-      case None    => names += name -> ctor
+  /**
+   * A mapping of all the registered processor names.
+   */
+  private var names: Map[Processor.Name, Constructor] = Map()
+
+  /**
+   * Register a processor name with a constructor.
+   */
+  def register(name: String, ctor: Constructor): Processor.Name = {
+    val n = new Name(name)
+
+    // ensure it does
+    names.get(n) match {
+      case Some(_) => throw new Exception(s"Processor '$name' already registered")
+      case None    => names += n -> ctor; n
     }
   }
 
   /**
-   * Conversion from DB string to Processor.Name for doobie.
+   * Create a processor given its name and a configuration.
    */
-  implicit val NameMeta: Meta[Name] = {
-    Meta[String].xmap(name => new Name(name, names(name)), _.toString)
+  def apply(name: String): BaseConfig => Option[Processor] = {
+    val n    = new Name(name)
+    val ctor = names.get(n)
+
+    // lambda that will create this processor with a configuration
+    { config: BaseConfig =>
+      ctor.map(_(n, config))
+    }
   }
 
   /**
@@ -83,8 +94,5 @@ object Processor extends LazyLogging {
 
     /** Actually run the processor (as opposed to just showing work). */
     val yes: ScallopOption[Boolean] = opt("yes")
-
-    /** Only run the only processor and not all downstream processors. */
-    val only: ScallopOption[Boolean] = opt("only")
   }
 }
