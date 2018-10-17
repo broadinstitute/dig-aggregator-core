@@ -17,11 +17,14 @@ final class PipelineTest extends FunSuite {
   }
 
   test("pipeline - list processors") {
-    val intakeProcessors = Pipeline("intake").get.processors
+    import intake.IntakePipeline
+
+    val intakePipeline   = Pipeline("intake").get
+    val intakeProcessors = intakePipeline.processors
     val expectedProcessors = Set(
-      "VariantProcessor",
-      "CommitProcessor",
-      "ThousandGenomeProcessor",
+      IntakePipeline.variantProcessor,
+      IntakePipeline.commitProcessor,
+      IntakePipeline.thousandGenomeProcessor,
     )
 
     assert(intakeProcessors == expectedProcessors)
