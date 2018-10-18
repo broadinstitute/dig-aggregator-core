@@ -29,6 +29,7 @@ object Main extends IOApp with LazyLogging {
     if (opts.version()) {
       IO.pure(ExitCode.Success)
     } else {
+      // side-effect code that registers all the pipelines and processors
       Pipeline.pipelines()
 
       // choose the run function
