@@ -60,7 +60,7 @@ trait Pipeline {
      * }
      */
 
-    IO.unit
+    IO.raiseError(new Exception("Not yet implemented"))
   }
 }
 
