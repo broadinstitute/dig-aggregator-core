@@ -4,8 +4,6 @@ import cats._
 import cats.effect._
 import cats.implicits._
 
-import com.typesafe.scalalogging.LazyLogging
-
 import doobie._
 
 import org.broadinstitute.dig.aggregator.core._
@@ -17,7 +15,7 @@ import scala.io.StdIn
  * An IntakeProcessor is resposible for listening to datasets being uploaded on
  * a given topic and writing them to HDFS.
  */
-abstract class IntakeProcessor(config: BaseConfig) extends Processor {
+abstract class IntakeProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name) {
 
   /**
    * The topic this processor is consuming from.
@@ -49,40 +47,13 @@ abstract class IntakeProcessor(config: BaseConfig) extends Processor {
   }
 
   /**
-   * Either load the state from the database or reset the state back to a
-   * known, good offset and continue consuming from there.
-   */
-  def getState(reprocess: Boolean): IO[State] = {
-    if (reprocess) {
-      val warning = IO {
-        logger.warn("The consumer state is being reset because the --reprocess")
-        logger.warn("flag was passed on the command line.")
-        logger.warn("")
-        logger.warn("If this is the desired course of action, answer 'Y' at")
-        logger.warn("the prompt; any other response will exit the program")
-        logger.warn("before any damage is done.")
-        logger.warn("")
-
-        StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")
-      }
-
-      // terminate the entire application if the user doesn't answer "Y"
-      warning.flatMap { confirm =>
-        if (confirm) resetState else IO.raiseError(new Exception("reset canceled"))
-      }
-    } else {
-      loadState
-    }
-  }
-
-  /**
    * Create a new consumer and start consuming records from Kafka.
    */
   override def run(flags: Processor.Flags): IO[Unit] = {
     val consumer = new Consumer(config.kafka, topic, xa)
 
     for {
-      loadedState <- getState(flags.reprocess())
+      loadedState <- if (flags.reprocess()) resetState else loadState
       state       <- consumer.assignPartitions(loadedState)
 
       /*

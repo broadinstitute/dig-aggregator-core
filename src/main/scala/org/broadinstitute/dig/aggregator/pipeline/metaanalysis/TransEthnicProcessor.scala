@@ -30,18 +30,13 @@ import org.broadinstitute.dig.aggregator.core.processors._
  *
  * The outputs for this processor are phenotypes.
  */
-class TransEthnicProcessor(config: BaseConfig) extends RunProcessor(config) {
-
-  /**
-   * Unique name identifying this processor.
-   */
-  override val name: Processor.Name = Processors.transEthnicProcessor
+class TransEthnicProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /**
    * All the processors this processor depends on.
    */
   override val dependencies: Seq[Processor.Name] = Seq(
-    Processors.ancestrySpecificProcessor,
+    MetaAnalysisPipeline.ancestrySpecificProcessor,
   )
 
   /**

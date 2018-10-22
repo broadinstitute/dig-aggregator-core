@@ -24,7 +24,10 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) with Processor.Fla
   /** Show version information. */
   val version: ScallopOption[Boolean] = opt("version")
 
-  /** Name of the processor to run. */
+  /** The processor name is actually a pipeline name. */
+  val pipeline: ScallopOption[Boolean] = opt("pipeline")
+
+  /** Processor to run. */
   val processor: ScallopOption[String] = trailArg(required = false)
 
   // run shouldn't be there if version is
