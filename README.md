@@ -188,13 +188,13 @@ Each processor knows how to save its current state and how to either pick up whe
 An `IntakeProcessor` uses the `offsets` table in the database. It tracks what offsets (for each partition on a given topic) have already been successfully processed. A `RunProcessor` uses the `runs` table keeps track of what inputs have been processed by each processor already. Consider the following example:
 
 > The `VariantProcessor` (an `UploadProcessor`) reads from the topic `varaints` in Kafka and uploads datasets to S3. As it consumes messages, it writes to the `offsets` table each offset consumed for each partition.
-
+>
 > Once the `VariantProcessor` receives the `COMMIT` message, it sends that message back to the `commits` topic in Kafka, and the `CommitProcessor` (an `IntakeProcessor`) gets it and writes it to the database.
-
+>
 > At this point, the `metaanalysis.VariantPartitionProcessor` (a `DatasetProcessor`) can see in the `commits` table that a dataset has been added that it hasn't yet processed (there is no `runs` entry for it, it the existing entry for that dataset is out of date as the dataset has been updated). It then runs, using the dataset as input and producing an output (in this example, a phenotype) and writes the run to the database.
-
+>
 > Next, the `metaanalysis.AncestrySpecificProcessor`, which depends on the variant partition processor, discovers that one of its dependencies has produced a new output that it hasn't yet processed, and starts to run.
-
+>
 > This continues until the entire meta-analysis pipeline is complete...
 
 # fin.
