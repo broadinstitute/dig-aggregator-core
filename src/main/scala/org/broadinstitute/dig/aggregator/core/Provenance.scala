@@ -20,8 +20,6 @@ final case class Provenance(source: String, branch: String, commit: String) {
    * Insert a new provenance row for a given run.
    */
   def insert(xa: Transactor[IO], runId: Long, app: Processor.Name): IO[Int] = {
-    import Processor.NameMeta
-
     val q = sql"""|INSERT INTO `provenance`
                   |  ( `run`
                   |  , `app`
@@ -83,8 +81,6 @@ object Provenance {
    * Get the provenance for a particular processor run.
    */
   def ofRun(xa: Transactor[IO], run: Long, app: Processor.Name): IO[Seq[Provenance]] = {
-    import Processor.NameMeta
-
     val q = sql"""|SELECT  `source`,
                   |        `branch`,
                   |        `commit`

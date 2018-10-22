@@ -20,7 +20,6 @@ import scala.io.Source
  * Kafka topic - an application has successfully processed through.
  */
 case class State(app: Processor.Name, topic: String, offsets: Map[Int, Long]) {
-  import Processor.NameMeta
 
   /**
    * Return a new state with a updated partition offsets.
