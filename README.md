@@ -1,47 +1,46 @@
 # DIG Analysis Pipeline
 
-This is a library that all DIG Java/Scala applications that talk to Kafka or AWS can use to have a working baseline. 
+This project contains all the code necessary to run the various intake/data processing pipelines necessary to build the DIG Portal Database. It guarantees safety by running all actions through an [IO monad][io]. This ensures that the code - where applicable - can be run concurrently with other code and failures are handled gracefully.
 
-The foundational code has the following features:
-
-* Command line parsing;
-* Configuration file loading;
-* Email notifications;
-* [Kafka][kafka] clients: consumers and producers;
-* [AWS][aws] clients: [S3][s3] and [EMR][emr];
-* [MySQL][mysql] client;
-* [Neo4j][neo4j] driver;
-
-It guarantees safety by running all actions through an [IO monad][io]. This ensures that the code - where applicable - can be run concurrently with other code and failures are handled gracefully.
-
-## Usage
-
-### Running tests.  
+## Running Tests
 
 To run the unit tests, run `sbt test`; to run the integration tests, run `sbt it:test`.
 
-### Building a jar
+## Running Processors
 
-To build a jar, run `sbt publishLocal`.
+To run an individual processor, just run SBT with the processor name.
 
-Once the JAR is part of your program you can import it like so:
-
-```scala
-import org.broadinstitute.dig.aggregator.core._
+```bash
+sbt "run <processor>"
 ```
 
-## Command line argument parsing
+This will show what work (if any) the processor would do. To actually run the processor, you need to provide `--yes` on the command line:
 
-The `Opts` class can be derived from to include custom command line options. But - out of the box - the following command line options exist:
+```bash
+sbt "run --yes <processor>"
+```
 
-* `--config [file]` - loads a private, JSON, configuration file (default=`config.json`).
-* `--reset` - force a reset of the topic consumer offsets.
+Each processor keeps track of what work it has done and what dependencies it has, so at any time it can do only the work that it needs to do. If there is ever a need to force the processor to reprocess work that it has already done, pass `--reprocess` on the command line:
 
-_The `Opts` class is used by the other classes to initialize with private data settings that should **not** be committed to the repository: keys, passwords, IP addresses, etc._ 
+```bash
+sbt "run --reprocess <processor>"
+```
 
-## Configuration file (JSON) loading
+_Again, note that the above will only show the work that would be done, pass `--yes` along with `--reprocess` to actually do the work._
 
-The configuration class _must_ derive from the trait `BaseConfig` as this ensures that a basic JSON structure exists for the rest of the core classes can extract initialization parameters from. There is a default implementation of `BaseConfig` (aptly named `Config`). This is the core template that it loads and expects to exist:
+## Running Pipelines
+
+If `--pipeline` is present on the command line, then instead of a `<processor>` name, the program will expect the name of a pipeline and will run the entire pipeline. Each processor in the pipeline will perform any work that needs to be done (in order) until there is no more work left.
+
+```bash
+sbt "run --pipeline <pipeline>"
+```
+
+_Again, remember `--reprocess` and `--yes` when applicable._
+
+## Configuration Loading
+
+The default configuration parameter is `config.json`, but can be overridden with `--config <file>` on the command line. This is a sample configuration file:
 
 ```json
 {
@@ -86,152 +85,117 @@ The configuration class _must_ derive from the trait `BaseConfig` as this ensure
 
 This is where all "private" configuration settings should be kept, and **not** committed to the repository.
 
-## Processors
+## Packages
 
-The entire application is always run within a pure IO context. This context is handled for you via the `DigApp` abstract class that is intended to have a `run` method implemented in:
+The root package is `org.broadinstitute.dig.aggregator`. Within that package are the following:
 
-```scala
-object Main extends DigApp[Config]()(manifest[Config]) {
+### app
 
-  /**
-   * Entry point is automatically called by DigApp.
-   */
-  override def run(opts: Opts[Config]): IO[ExitCode] = {
-    IO.pure(ExitCode.Success)
+Contains the `Main` entry point and any "application specific" code.
+
+### core
+
+The heart of the repository and contains all the shared code that is used by all the pipelines and processors to do their work.
+
+### pipeline
+
+Each sub-package is a pipeline, which is broken up into its various processors.
+
+## Resources
+
+The `src/main/resources/pipeline` folder contains all the job scripts (each in the appropriate pipeline folder parallel to `org.broadinstitute.dig.aggregator.pipeline._`) used by the various processors. These scripts are uploaded to S3 so all nodes on the EMR cluster can load and execute them.
+
+## Processor Classes
+
+There are a few different type of processors that are implemented in each pipeline:
+
+### IntakeProcessor
+
+The `IntakeProcessor` is strictly for use within the `intake` pipeline. This is a processor that reads from Kafka and does processes each record.
+
+### UploadProcessor
+
+The `UploadProcessor` is a specific type of `IntakeProcessor`. It assumes that the Kafka topic being consumed is uploading datasets and adheres to a very specific protocol: CREATE, UPLOAD, and COMMIT. Each message will be JSON and will contain the unique ID of the dataset, a method (CREATE, UPLOAD, or COMMIT), and a body that is unique per method.
+
+The first record for a dataset on the topic will be the `COMMIT` message:
+
+```js
+{
+  "id": "unique_dataset_id",
+  "method": "COMMIT",
+  "body": {
+    // metadata for this dataset
   }
 }
 ```
 
-The `DigApp` class automatically handles failures and emailing application crashes to the appropriate individuals.
+When this message is encountered, any existing data in S3 for this dataset is deleted and a new directory is created with a single `metadata` file containing the contents of `body`. This is done per-topic. For example, the `variants` topic would end up writing to:
 
-## Options + Configuration File
+```
+s3://dig-analysis-data/variants/unique_dataset_id/metadata
+```
 
-The command line options are automatically parsed by `DigApp`, but the configuration class used to run the program is passed in and parsed by `Opts` and sent to the `run` method.
+Next, zero or more `UPLOAD` messages are sent:
 
-If you want to subclass `BaseConfig` to extend the JSON properties your application uses you can (hence the template parameter).
+```js
+{
+  "id": "unique_dataset_id",
+  "method": "UPLOAD",
+  "body": {
+    "count": 100,
+    "data": [
+      {
+        // a single entry for this dataset
+      },
 
-Now you can use your custom options and configuration.
-
-## Kafka Consumer
-
-Use the `Opts` to create a `Consumer`, which can be used to consume all records from a given topic. Example Scala code:
-
-```scala
-override def run(opts: Opts[Config]): IO[ExitCode] = {
-  
-  /* Create a kafka consumer.
-   *
-   * As the records are consumed and the consumer's state is
-   * updated, and all the partition offsets are written to the
-   * `partitions` table in the database. Without the --reset flag,
-   * the consumer will pick up from where it left off.
-   *
-   * All partition offsets in the database are keyed by the `app`
-   * name in the configuration file and the `topic` name used when
-   * the consumer was created.
-   */
-  val consumer = new Consumer(opts.config, "topic")
-
-  /* Load the current state from the database (or reset to a known
-   * good state) and begin consuming all records in the topic.
-   * 
-   * Technically this runs forever, but we return success.
-   */
-  consumer.consume(process(consumer)).as(ExitCode.Success)
-}
-
-/* This is where the code should do something with the records 
- * received from Kafka. All processing must be done from within
- * the IO monad.
- */
-def process(consumer: Consumer)(recs: Consumer#Records): IO[Unit] = {
-  val ios = for (rec <- recs.iterator.asScala) yield IO {
-    println(s"Processed partition ${rec.partition} offset ${rec.offset}")
+      // ...(count-1) more items...
+    ]
   }
-  
-  /* It's critical that the records for each partition be processed 
-   * IN ORDER! However, with a little extra work, records from 
-   * different partitions can be run in parallel.
-   */
-  ios.toList.sequence >> IO.unit
 }
 ```
 
-## Kafka Producer
+These messages are read by the `UploadProcessor` and the entries are written to a single file in the directory for the dataset. Each line of the file is a single JSON object intended to be processed by Spark:
 
-In addition to a `Consumer`, there is a `Producer` class that can be used to send messages to a topic. Example Scala code:
-
-```scala
-override def run(opts: Opts[Config]): IO[ExitCode] = {
-
-  /* Create a kafka producer. It is always assumed that the key and
-   * value are both Strings.
-   */
-  val producer = new Producer(opts.config, "topic")
-
-  /* Send a message to the topic. Again, sending a message runs in the
-   * IO monad so that it can be combined safely with consuming and other
-   * operations (e.g. writing to a database, S3, ...).
-   */
-  producer.send("key", """{"key": "value"}""").as(ExitCode.Success)
-}
+```
+{entry-1}
+{entry-2}
+{entry-3}
+...
 ```
 
-## AWS Client (S3 + EMR)
+The filename given to each is `data-<offset>`, where `<offset>` is the partition offset this record is at, guaranteeing uniqueness across all files in the dataset.
 
-An Amazon Web Services ([AWS][aws]) object can be created, which will initialize both [S3][s3] and [EMR][emr] clients. The [S3][s3] client can be used to perform [CRUD][crud] actions on files stored in the Amazon cloud. And the [EMR][emr] client can be used to execute jobs on the [Hadoop][hadoop] cluster.
+Finally, a `COMMIT` message is sent (with no `body`). This signals that the dataset is done and can now be processed further by other processors in across all pipelines.
 
-### Using S3
+### JobProcessor
 
-There are some simple S3 file system functions available in the `AWS` object:
+A `JobProcessor` is simply a processor that has resources that need to be uploaded to S3 (e.g. PySpark scripts) before the processor can run.
 
-* `exists(key)` - true if the key exists
-* `put(key, contents)` - writes a new key to the bucket 
-* `put(key, stream)` - uploads a new key to the bucket
-* `get(key)` - returns an `S3Object` for the given key (use `.read` to download)
-* `rm(key)` - deletes the key (if present)
-* `ls(key)` - recursively lists all keys within a given key
-* `rmdir(key)` - recursively delete all keys within a given key
-* `mkdir(key, metadata)` - create a new directory key with a `metadata` file in it
+### DatasetProcessor
 
-_The implicit `bucket` parameter that is passed to all [S3][s3] and [EMR][emr] methods is the one found in the configuration file._
+Once a dataset has been completely uploaded and committed to HDFS (S3), it can then be processed by a `DatasetProcessor` (a subclass of `JobProcessor`). Dataset processors look for any new datasets committed to a given topic and take the next step necessary to prepare it for future use. 
 
-### Spawning Jobs
+DatasetProcessors are (typically) the first processor in a pipeline to run as they have no dependencies other than a new dataset being uploaded.
 
-Jobs on the cluster consist of 1 or more "steps". The following `JobStep` instances exist:
+### RunProcessor
 
-* `MapReduce` - a Hadoop [mapreduce][mr] JAR
-* `PySpark` - runs a Python3 script as a [Spark][spark] application
-* `Pig` - runs a [Pig][pig] script
-* `Script` - runs any shell script (e.g. Perl)
+A `RunProcessor` is a `JobProcessor` that has other processors as dependencies. It waits until a dependency processor has new output, then uses that output as input for its own process. After a `DatasetProcessor` executes, run processors typically make up the rest of the process "graph" for a pipeline.
 
-Simply create a list of steps and call `runJob`:
+## Processor Database
 
-```scala
-def doMultiStepJob(aws: AWS): IO[Unit] = {
-  val steps = List(
-    JobStep.PySpark(new URI("s3://bucket/path/to/script.py"), "arg", "arg"),
-    JobStep.Script(new URI("s3://bucket/path/to/script.pl"), "arg", "arg"),
-    JobStep.Pig(new URI("s3://bucket/path/to/script.pig", "key" -> "value")),
-  )
+Each processor knows how to save its current state and how to either pick up where it left off or check for new work to be processed.
 
-  // this starts the job and waits for it to complete (or fail)
-  val job = aws.runJob(steps) >>= aws.waitForJob
+An `IntakeProcessor` uses the `offsets` table in the database. It tracks what offsets (for each partition on a given topic) have already been successfully processed. A `RunProcessor` uses the `runs` table keeps track of what inputs have been processed by each processor already. Consider the following example:
 
-  // assert that the job completed successfully
-  job.map(result => assert(result.isRight))
-}
-```
-
-Waiting for a job to complete waits until either all the steps have completed or any of of the jobs failed, was cancelled, or otherwise interrupted.
-
-## MySQL
-
-TODO: Talk about [doobie][doobie], `config.mysql.newTransactor()` and running queries.
-
-## Neo4j Driver
-
-TODO: Talk about [Neo4j][neo4j], `config.neo4j.newDriver()` and running queries.
+> The `VariantProcessor` (an `UploadProcessor`) reads from the topic `varaints` in Kafka and uploads datasets to S3. As it consumes messages, it writes to the `offsets` table each offset consumed for each partition.
+>
+> Once the `VariantProcessor` receives the `COMMIT` message, it sends that message back to the `commits` topic in Kafka, and the `CommitProcessor` (an `IntakeProcessor`) gets it and writes it to the database.
+>
+> At this point, the `metaanalysis.VariantPartitionProcessor` (a `DatasetProcessor`) can see in the `commits` table that a dataset has been added that it hasn't yet processed (there is no `runs` entry for it, it the existing entry for that dataset is out of date as the dataset has been updated). It then runs, using the dataset as input and producing an output (in this example, a phenotype) and writes the run to the database.
+>
+> Next, the `metaanalysis.AncestrySpecificProcessor`, which depends on the variant partition processor, discovers that one of its dependencies has produced a new output that it hasn't yet processed, and starts to run.
+>
+> This continues until the entire meta-analysis pipeline is complete...
 
 # fin.
 

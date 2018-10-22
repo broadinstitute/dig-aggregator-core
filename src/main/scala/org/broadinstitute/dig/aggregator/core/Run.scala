@@ -14,7 +14,6 @@ import org.broadinstitute.dig.aggregator.core.processors.Processor
  * have yet to be processed.
  */
 object Run {
-  import Processor.NameMeta
 
   /**
    * An Entry represents a single row in the `runs` table.

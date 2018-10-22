@@ -23,18 +23,13 @@ import org.neo4j.driver.v1.StatementResult
  *
  *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/ancestry-specific/<ancestry>
  */
-class FrequencyUploadProcessor(config: BaseConfig) extends RunProcessor(config) {
-
-  /**
-   * Unique name identifying this processor.
-   */
-  override val name: Processor.Name = Processors.frequencyUploadProcessor
+class FrequencyUploadProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /**
    * All the processors this processor depends on.
    */
   override val dependencies: Seq[Processor.Name] = Seq(
-    Processors.ancestrySpecificProcessor,
+    MetaAnalysisPipeline.ancestrySpecificProcessor,
   )
 
   /**

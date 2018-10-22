@@ -18,7 +18,7 @@ import scala.io.StdIn
  * An JobProcessor requires resources be uploaded to AWS and ends up running
  * job steps on the Spark cluster.
  */
-abstract class JobProcessor(config: BaseConfig) extends Processor {
+abstract class JobProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name) {
 
   /**
    * AWS client for uploading resources and running jobs.

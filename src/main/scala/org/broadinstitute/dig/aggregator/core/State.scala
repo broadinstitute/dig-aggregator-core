@@ -20,7 +20,6 @@ import scala.io.Source
  * Kafka topic - an application has successfully processed through.
  */
 case class State(app: Processor.Name, topic: String, offsets: Map[Int, Long]) {
-  import Processor.NameMeta
 
   /**
    * Return a new state with a updated partition offsets.
@@ -103,7 +102,7 @@ object State {
     // fetch all the offsets for every partition on this topic for this app
     q.transact(xa).flatMap { offsets =>
       if (offsets.isEmpty) {
-        IO.raiseError(new Exception("Load state failed; run with --reset"))
+        IO.raiseError(new Exception("Load state failed; run with --reprocess"))
       } else {
         IO(new State(app, topic, offsets.toMap))
       }

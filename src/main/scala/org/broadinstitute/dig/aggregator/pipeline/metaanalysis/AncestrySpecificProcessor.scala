@@ -30,18 +30,13 @@ import org.broadinstitute.dig.aggregator.core.processors._
  *
  * The outputs for this processor are phenotypes.
  */
-class AncestrySpecificProcessor(config: BaseConfig) extends RunProcessor(config) {
-
-  /**
-   * Unique name identifying this processor.
-   */
-  override val name: Processor.Name = Processors.ancestrySpecificProcessor
+class AncestrySpecificProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /**
    * All the processors this processor depends on.
    */
   override val dependencies: Seq[Processor.Name] = Seq(
-    Processors.variantPartitionProcessor,
+    MetaAnalysisPipeline.variantPartitionProcessor,
   )
 
   /**
