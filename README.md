@@ -119,7 +119,7 @@ The `UploadProcessor` is a specific type of `IntakeProcessor`. It assumes that t
 
 The first record for a dataset on the topic will be the `COMMIT` message:
 
-```json
+```js
 {
   "id": "unique_dataset_id",
   "method": "COMMIT",
@@ -137,7 +137,7 @@ s3://dig-analysis-data/variants/unique_dataset_id/metadata
 
 Next, zero or more `UPLOAD` messages are sent:
 
-```json
+```js
 {
   "id": "unique_dataset_id",
   "method": "UPLOAD",
