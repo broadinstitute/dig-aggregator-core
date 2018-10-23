@@ -18,6 +18,8 @@ import java.util.UUID
 import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsRequest
 import java.net.URI
 import com.amazonaws.services.elasticmapreduce.model.PlacementType
+import java.io.InputStream
+import org.apache.commons.io.IOUtils
 
 /**
  * @author clint
@@ -48,18 +50,15 @@ object ClusterAutomation extends App {
       |sc.stop()
       |""".stripMargin.trim
     
-    val bootstrapScriptContents: String = """
-      #!/bin/bash -xe
+    val bootstrapScriptContents: String = {
+      val stream = getClass.getClassLoader.getResourceAsStream("emr/cluster-bootstrap.sh")
       
-      sudo yum install -y amazon-efs-utils
-      
-      sudo mkdir -p /mnt/efs
-      sudo mount -t efs fs-06254a4d:/ /mnt/efs
-
-      sudo pip install boto==2.39.0
-      sudo pip install neo4j-driver==1.6.1
-      sudo pip install scipy==1.1.0
-      """
+      try {
+        IOUtils.toString(stream)
+      } finally {
+        stream.close()
+      }
+    }
     
     val client: EmrClient = new JavaApiEmrClient(aws)
     
@@ -68,8 +67,8 @@ object ClusterAutomation extends App {
       _ <- aws.put("cluster-bootstrap.sh", bootstrapScriptContents)
       id <- client.createCluster(
         bootstrapScripts = Seq(aws.uriOf("cluster-bootstrap.sh")),
-        masterInstanceType = "m3.xlarge",
-        slaveInstanceType = "m3.xlarge")
+        masterInstanceType = "m4.xlarge",
+        slaveInstanceType = "m4.xlarge")
       _ = println(s"Made request, job flow id = '${id}'")
       _ <- client.runOnCluster(id, aws.uriOf("hello-spark.py"))
       clusters <- client.listClusters

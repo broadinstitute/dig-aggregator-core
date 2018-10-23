@@ -45,8 +45,13 @@ final class JavaApiEmrClient(aws: AWS) extends EmrClient(aws) with LazyLogging {
     
     def toApplication(name: String): Application = (new Application).withName(name)
     
+    val amazonLinuxAmi2018_03_0 = "ami-f316478c"
+    
+    val customAmiWithBinFoo = "ami-0b24b06332b7316ef"
+    
     val request = (new RunJobFlowRequest)
       .withName("Clint's Spark Cluster")
+      .withCustomAmiId(customAmiWithBinFoo)
       .withBootstrapActions(bootstrapScriptConfigs.asJava)
       .withApplications(applications.map(toApplication).asJava)
       .withReleaseLabel(releaseLabel)
