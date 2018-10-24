@@ -1,25 +1,12 @@
-package org.broadinstitute.dig.aggregator.core
+package org.broadinstitute.dig.aggregator.core.emr
 
 import scala.collection.JavaConverters._
-
 import com.amazonaws.auth.AWSStaticCredentialsProvider
 import com.amazonaws.auth.BasicAWSCredentials
-import com.amazonaws.services.elasticmapreduce.AmazonElasticMapReduceClient
-import com.amazonaws.services.elasticmapreduce.model.Application
-import com.amazonaws.services.elasticmapreduce.model.ClusterSummary
-import com.amazonaws.services.elasticmapreduce.model.JobFlowInstancesConfig
-import com.amazonaws.services.elasticmapreduce.model.RunJobFlowRequest
-import com.amazonaws.services.elasticmapreduce.model.TerminateJobFlowsRequest
 import org.broadinstitute.dig.aggregator.app.Opts
-import com.amazonaws.services.elasticmapreduce.model.BootstrapActionConfig
-import com.amazonaws.services.elasticmapreduce.model.ScriptBootstrapActionConfig
-import com.amazonaws.services.elasticmapreduce.model.StepConfig
-import java.util.UUID
-import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsRequest
-import java.net.URI
-import com.amazonaws.services.elasticmapreduce.model.PlacementType
-import java.io.InputStream
 import org.apache.commons.io.IOUtils
+import org.broadinstitute.dig.aggregator.core.AWS
+import scala.collection.Seq
 
 /**
  * @author clint
@@ -44,7 +31,8 @@ object ClusterAutomation extends App {
       |
       |sc = SparkContext()
       |data = sc.parallelize(list("Hello World"))
-      |counts = data.map(lambda x: (x, 1)).reduceByKey(add).sortBy(lambda x: x[1], ascending=False).collect()
+      |counts = data.map(lambda x: (x, 1)).reduceByKey(add).sortBy(lambda x: x[1], asc
+import org.broadinstitute.dig.aggregator.core.emr.JavaApiEmrClientending=False).collect()
       |for (word, count) in counts:
       |    print("{}: {}".format(word, count))
       |sc.stop()
@@ -60,7 +48,7 @@ object ClusterAutomation extends App {
       }
     }
     
-    val client: EmrClient = new JavaApiEmrClient(aws)
+    val client/*: EmrClient */= new JavaApiEmrClient(aws)
     
     val io = for {
       _ <- aws.put("hello-spark.py", helloSparkContents)
@@ -68,7 +56,8 @@ object ClusterAutomation extends App {
       id <- client.createCluster(
         bootstrapScripts = Seq(aws.uriOf("cluster-bootstrap.sh")),
         masterInstanceType = "m4.xlarge",
-        slaveInstanceType = "m4.xlarge")
+        slaveInstanceType = "m4.xlarge",
+        amiId = Some(AmiId.amazonLinux2018Dot03))
       _ = println(s"Made request, job flow id = '${id}'")
       _ <- client.runOnCluster(id, aws.uriOf("hello-spark.py"))
       clusters <- client.listClusters

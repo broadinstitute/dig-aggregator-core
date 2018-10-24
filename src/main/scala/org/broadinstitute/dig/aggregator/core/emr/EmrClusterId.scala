@@ -1,4 +1,4 @@
-package org.broadinstitute.dig.aggregator.core
+package org.broadinstitute.dig.aggregator.core.emr
 
 /**
  * @author clint
