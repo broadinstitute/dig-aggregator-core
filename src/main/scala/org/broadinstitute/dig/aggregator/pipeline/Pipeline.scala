@@ -74,7 +74,6 @@ object Pipeline {
    * The global list of all pipelines.
    */
   def pipelines(): Map[String, Pipeline] = Map(
-    "intake"       -> intake.IntakePipeline,
     "metaanalysis" -> metaanalysis.MetaAnalysisPipeline,
     "ldscore"      -> ldscore.LDScorePipeline,
   )

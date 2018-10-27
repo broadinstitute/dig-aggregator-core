@@ -41,20 +41,20 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
    * Take all the datasets that need to be processed, determine the phenotype
    * for each, and create a mapping of (phenotype -> datasets).
    */
-  override def processCommits(commits: Seq[Commit]): IO[Unit] = {
+  override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
     val pattern = raw"([^/]+)/(.*)".r
 
     // extract the root and the phenotype from each "root/phenotype" dataset
-    val datasets = commits.map(_.dataset).distinct.collect {
+    val datasetPhenotypes = datasets.map(_.dataset).distinct.collect {
       case dataset @ pattern(_, phenotype) => (dataset, phenotype)
     }
 
     // create a map of the unique phenotypes and the roots mapping to them
-    val phenotypes = datasets.map(_._2).distinct
+    val phenotypes = datasetPhenotypes.map(_._2).distinct
 
     // process each phenotype as a separate "run"
     val phenotypeJobs = for (phenotype <- phenotypes) yield {
-      processPhenotype(phenotype, datasets.filter(_._2 == phenotype).map(_._1))
+      processPhenotype(phenotype, datasetPhenotypes.filter(_._2 == phenotype).map(_._1))
     }
 
     // process each phenotype (this could be done in parallel!)
@@ -67,7 +67,7 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
    * completely ready to be processed once done.
    */
   def processPhenotype(phenotype: String, datasets: Seq[String]): IO[Unit] = {
-    val script = resourceURI("pipeline/metaanalysis/partitionVariants.py")
+    val script = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
 
     // create a job for each dataset
     val jobs = datasets.map { dataset =>

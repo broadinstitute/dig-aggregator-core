@@ -12,12 +12,12 @@ import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 
 /**
- * A DatasetProcessor is a Processor that queries the `commits` table for
+ * A DatasetProcessor is a Processor that queries the `datasets` table for
  * what datasets have been written to HDFS and have not yet been processed.
  *
  * DatasetProcessors are always the entry point to a pipeline.
  */
-abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extends JobProcessor(name, config) {
+abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name) {
 
   /**
    * All topic committed datasets come from.
@@ -25,24 +25,35 @@ abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extend
   val topic: String
 
   /**
+   * The collection of resources this processor needs to have uploaded
+   * before the processor can run.
+   */
+  val resources: Seq[String]
+
+  /**
    * Database transactor for loading state, etc.
    */
-  val xa: Transactor[IO] = config.mysql.newTransactor()
+  protected val xa: Transactor[IO] = config.mysql.newTransactor()
+
+  /**
+   * AWS client for uploading resources and running jobs.
+   */
+  protected val aws: AWS = new AWS(config.aws)
 
   /**
    * Process a set of committed datasets.
    */
-  def processCommits(commits: Seq[Commit]): IO[_]
+  def processDatasets(commits: Seq[Dataset]): IO[_]
 
   /**
    * Output results that would be processed if the --yes flag was specified.
    */
-  def showWork(commits: Seq[Commit]): IO[_] = IO {
-    commits.size match {
+  def showWork(datasets: Seq[Dataset]): IO[_] = IO {
+    datasets.size match {
       case 0 => logger.info(s"Everything up to date.")
       case _ =>
-        for (commit <- commits) {
-          logger.info(s"Process dataset '${commit.dataset}' for topic '${commit.topic}'")
+        for (dataset <- datasets) {
+          logger.info(s"Process dataset '${dataset.dataset}' for topic '${dataset.topic}'")
         }
     }
   }
@@ -60,14 +71,19 @@ abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extend
   override def run(flags: Processor.Flags): IO[Unit] = {
     val notProcessedBy = if (flags.reprocess()) None else Some(name)
 
+    // optionally upload all the resources for this processor
+    val uploads = resources.map { resource =>
+      if (flags.yes()) aws.upload(resource) else IO.unit
+    }
+
     for {
-      _ <- uploadResources(flags)
+      _ <- uploads.toList.sequence
 
       // fetch the list of datasets for this topic not yet processed
-      commits <- Commit.commitsOf(xa, topic, notProcessedBy)
+      datasets <- Dataset.datasetsOf(xa, topic, notProcessedBy)
 
       // either process them or show what would be processed
-      _ <- if (flags.yes()) processCommits(commits) else showWork(commits)
+      _ <- if (flags.yes()) processDatasets(datasets) else showWork(datasets)
     } yield ()
   }
 }

@@ -103,5 +103,8 @@ object Processor extends LazyLogging {
 
     /** Actually run the processor (as opposed to just showing work). */
     val yes: ScallopOption[Boolean] = opt("yes")
+
+    /** Custom arguments to the processor when run. */
+    val processorArgs: ScallopOption[List[String]] = trailArg(required = false)
   }
 }

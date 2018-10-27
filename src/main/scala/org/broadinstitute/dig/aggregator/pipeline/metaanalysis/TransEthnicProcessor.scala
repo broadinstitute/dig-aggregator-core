@@ -50,7 +50,7 @@ class TransEthnicProcessor(name: Processor.Name, config: BaseConfig) extends Run
    * Take all the phenotype results from the dependencies and process them.
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
-    val script     = resourceURI("pipeline/metaanalysis/runAnalysis.py")
+    val script     = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
     val phenotypes = results.map(_.output).distinct
 
     // create runs for every phenotype

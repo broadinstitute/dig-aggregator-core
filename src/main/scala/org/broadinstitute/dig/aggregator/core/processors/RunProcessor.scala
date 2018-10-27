@@ -16,7 +16,7 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
  * what outputs have been produced by applications it depends on, which set of
  * those it hasn't processed yet, and process them.
  */
-abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends JobProcessor(name, config) {
+abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name) {
 
   /**
    * All the processors this processor depends on.
@@ -24,9 +24,20 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Jo
   val dependencies: Seq[Processor.Name]
 
   /**
+   * The collection of resources this processor needs to have uploaded
+   * before the processor can run.
+   */
+  val resources: Seq[String]
+
+  /**
    * Database transactor for loading state, etc.
    */
-  val xa: Transactor[IO] = config.mysql.newTransactor()
+  protected val xa: Transactor[IO] = config.mysql.newTransactor()
+
+  /**
+   * AWS client for uploading resources and running jobs.
+   */
+  protected val aws: AWS = new AWS(config.aws)
 
   /**
    * Process a set of run results. Must return the output location where this
@@ -60,8 +71,13 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Jo
   override def run(flags: Processor.Flags): IO[Unit] = {
     val notProcessedBy = if (flags.reprocess()) None else Some(name)
 
+    // optionally upload all the resources for this processor
+    val uploads = resources.map { resource =>
+      if (flags.yes()) aws.upload(resource) else IO.unit
+    }
+
     for {
-      _ <- uploadResources(flags)
+      _ <- uploads.toList.sequence
 
       // get the results not yet processed
       results <- Run.resultsOf(xa, dependencies, notProcessedBy)

@@ -27,14 +27,19 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) with Processor.Fla
   /** The processor name is actually a pipeline name. */
   val pipeline: ScallopOption[Boolean] = opt("pipeline")
 
-  /** Processor to run. */
-  val processor: ScallopOption[String] = trailArg(required = false)
+  /** If running an intake process, provide the topic. */
+  val intake: ScallopOption[String] = opt("intake")
 
   // run shouldn't be there if version is
-  mutuallyExclusive(version, processor)
+  mutuallyExclusive(version, processorArgs)
 
   // parse the command line options
   verify
+
+  /**
+   * Processor to run (first of the processorArgs).
+   */
+  def processor(): String = processorArgs().headOption.getOrElse("")
 
   /*
    * By default, Scallop will terminate the JVM on any ScallopExceptions, which

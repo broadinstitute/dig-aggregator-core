@@ -41,8 +41,8 @@ object Main extends IOApp with LazyLogging {
       val io = confirmReprocess(opts).flatMap { confirm =>
         if (!confirm) IO.unit
         else
-          run(opts.processor(), opts).guaranteeCase {
-            case ExitCase.Error(err) => fail(opts.processor(), opts.config, err)
+          run(opts.processor, opts).guaranteeCase {
+            case ExitCase.Error(err) => fail(opts.processor, opts.config, err)
             case _                   => IO.unit
           }
       }

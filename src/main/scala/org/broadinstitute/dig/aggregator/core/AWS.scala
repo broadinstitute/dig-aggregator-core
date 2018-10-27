@@ -28,6 +28,7 @@ import org.broadinstitute.dig.aggregator.core.config.AWSConfig
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.io.Source
 
 /**
  * AWS controller (S3 + EMR clients).
@@ -87,6 +88,19 @@ final class AWS(config: AWSConfig) extends LazyLogging {
    */
   def put(key: String, stream: InputStream): IO[PutObjectResult] = IO {
     s3.putObject(bucket, key, stream, new ObjectMetadata())
+  }
+
+  /**
+   * Upload a resource file to S3 (using a matching key) and return a URI to it.
+   */
+  def upload(resource: String): IO[URI] = {
+    val source = Source.fromResource(resource).mkString
+    val key    = s"resources/$resource"
+
+    for {
+      _ <- IO(logger.debug(s"Uploading $resource to S3..."))
+      _ <- put(key, source)
+    } yield uriOf(key)
   }
 
   /**
