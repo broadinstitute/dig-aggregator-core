@@ -56,7 +56,7 @@ object ClusterAutomation extends App {
       aws.put(name, getResourceAsString(s"emr/${name}")).map(_ => aws.uriOf(name))
     }
     
-    val client/*: EmrClient */= new JavaApiEmrClient(aws)
+    val client: EmrClient = new JavaApiEmrClient(aws)
     
     val io = for {
       _ <- aws.put("hello-spark.py", helloSparkContents)
@@ -67,7 +67,8 @@ object ClusterAutomation extends App {
         bootstrapScripts = Seq(clusterBootstrapInstallDeps, clusterBootstrap),
         masterInstanceType = InstanceType.m4.xlarge,
         slaveInstanceType = InstanceType.m4.xlarge,
-        amiId = Some(AmiId.amazonLinux2018Dot03))
+        //amiId = Some(AmiId.amazonLinux2018Dot03))
+        amiId = Some(AmiId("ami-05d585056c5a2c2b7")))
       _ = println(s"Made request, job flow id = '${id}'")
       _ <- client.runOnCluster(id, aws.uriOf("hello-spark.py"))
       clusters <- client.listClusters

@@ -8,28 +8,30 @@ import com.amazonaws.services.elasticmapreduce.model.ClusterSummary
 
 import cats.effect.IO
 
+import EmrClient.Defaults
+
 /**
  * @author clint
  * Oct 12, 2018
  */
 trait EmrClient {
   def createCluster(
-      applications: Seq[ApplicationName],
-      instances: Int,
-      releaseLabel: EmrReleaseId,
-      serviceRole: RoleId,
-      jobFlowRole: RoleId,
-      autoScalingRole: RoleId,
-      visibleToAllUsers: Boolean,
-      sshKeyName: SshKeyId,
-      keepJobFlowAliveWhenNoSteps: Boolean,
-      masterInstanceType: InstanceType, 
-      slaveInstanceType: InstanceType,
-      bootstrapScripts: Seq[URI],
-      securityGroupIds: Seq[SecurityGroupId],
-      subnetId: SubnetId,
-      logKey: String,
-      amiId: Option[AmiId]
+      applications: Seq[ApplicationName] = Defaults.applications,
+      instances: Int = Defaults.instances,
+      releaseLabel: EmrReleaseId = Defaults.releaseLabel,
+      serviceRole: RoleId = Defaults.serviceRole,
+      jobFlowRole: RoleId = Defaults.jobFlowRole,
+      autoScalingRole: RoleId = Defaults.autoScalingRole,
+      visibleToAllUsers: Boolean = Defaults.visibleToAllUsers,
+      sshKeyName: SshKeyId = Defaults.sshKeyName,
+      keepJobFlowAliveWhenNoSteps: Boolean = Defaults.keepJobFlowAliveWhenNoSteps,
+      masterInstanceType: InstanceType = Defaults.masterInstanceType, 
+      slaveInstanceType: InstanceType = Defaults.slaveInstanceType,
+      bootstrapScripts: Seq[URI] = Defaults.bootstrapScripts,
+      securityGroupIds: Seq[SecurityGroupId] = Defaults.securityGroupIds,
+      subnetId: SubnetId = Defaults.subnetId,
+      logKey: String = Defaults.logBaseKey,
+      amiId: Option[AmiId] = None
     ): IO[EmrClusterId]
   
   def listClusters: IO[Seq[ClusterSummary]]
