@@ -56,12 +56,12 @@ object EmrClient {
     val visibleToAllUsers: Boolean = true
     val sshKeyName: SshKeyId = SshKeyId.genomeStoreRest
     val keepJobFlowAliveWhenNoSteps: Boolean = true
-    //note: m1.small doesn't have enough ram! m1.medium runs very slowly.
-    val masterInstanceType: InstanceType = InstanceType.m3Large
-    //note: m1.small doesn't have enough ram! m1.medium runs very slowly.
-    val slaveInstanceType: InstanceType = InstanceType.m3Large
+    //note: m1.small doesn't have enough ram; m1.medium runs very slowly.
+    val masterInstanceType: InstanceType = InstanceType.m3.large
+    //note: m1.small doesn't have enough ram; m1.medium runs very slowly.
+    val slaveInstanceType: InstanceType = InstanceType.m3.large
     val bootstrapScripts: Seq[URI] = Nil
-    val securityGroupId: SecurityGroupId = SecurityGroupId.digAnalysisGroup
+    val securityGroupIds: Seq[SecurityGroupId] = Seq(SecurityGroupId.digAnalysisGroup)
     val subnetId: SubnetId = SubnetId.restServices
     val logBaseKey: String = "cluster-logs"
   }

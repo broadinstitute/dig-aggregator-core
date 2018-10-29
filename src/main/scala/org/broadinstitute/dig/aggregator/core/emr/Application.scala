@@ -1,6 +1,10 @@
 package org.broadinstitute.dig.aggregator.core.emr
 
-sealed abstract class ApplicationName(val name: String) 
+import com.amazonaws.services.elasticmapreduce.model.Application
+
+sealed abstract class ApplicationName(val name: String) {
+  final def toApplication: Application = (new Application).withName(name)
+}
 
 object ApplicationName {
   case object Hadoop extends ApplicationName("Hadoop")

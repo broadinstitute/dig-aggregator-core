@@ -28,18 +28,18 @@ final class JavaApiEmrClient(aws: AWS) extends EmrClient with LazyLogging {
   override def createCluster(
       applications: Seq[ApplicationName] = Defaults.applications,
       instances: Int = Defaults.instances,
-      releaseLabel: String = Defaults.releaseLabel,
-      serviceRole: String = Defaults.serviceRole,
-      jobFlowRole: String = Defaults.jobFlowRole,
-      autoScalingRole: String = Defaults.autoScalingRole,
+      releaseLabel: EmrReleaseId = Defaults.releaseLabel,
+      serviceRole: RoleId = Defaults.serviceRole,
+      jobFlowRole: RoleId = Defaults.jobFlowRole,
+      autoScalingRole: RoleId = Defaults.autoScalingRole,
       visibleToAllUsers: Boolean = Defaults.visibleToAllUsers,
-      sshKeyName: String = Defaults.sshKeyName,
+      sshKeyName: SshKeyId = Defaults.sshKeyName,
       keepJobFlowAliveWhenNoSteps: Boolean = Defaults.keepJobFlowAliveWhenNoSteps,
-      masterInstanceType: String = Defaults.masterInstanceType, 
-      slaveInstanceType: String = Defaults.slaveInstanceType,
+      masterInstanceType: InstanceType = Defaults.masterInstanceType, 
+      slaveInstanceType: InstanceType = Defaults.slaveInstanceType,
       bootstrapScripts: Seq[URI] = Defaults.bootstrapScripts,
-      securityGroupId: String = Defaults.securityGroupId,
-      subnetId: String = Defaults.subnetId,
+      securityGroupIds: Seq[SecurityGroupId] = Defaults.securityGroupIds,
+      subnetId: SubnetId = Defaults.subnetId,
       logKey: String = Defaults.logBaseKey,
       amiId: Option[AmiId] = None
     ): IO[EmrClusterId] = IO {
@@ -57,7 +57,7 @@ final class JavaApiEmrClient(aws: AWS) extends EmrClient with LazyLogging {
         masterInstanceType, 
         slaveInstanceType, 
         bootstrapScripts, 
-        securityGroupId, 
+        securityGroupIds, 
         subnetId, 
         aws.uriOf(logKey), 
         amiId)
@@ -111,20 +111,20 @@ object JavaApiEmrClient {
   private[core] def isSuccess(statusCode: Int): Boolean = statusCode == 200
   
   private[core] def makeRequest(
-      applications: Seq[String],
+      applications: Seq[ApplicationName],
       instances: Int,
-      releaseLabel: String,
-      serviceRole: String,
-      jobFlowRole: String,
-      autoScalingRole: String,
+      releaseLabel: EmrReleaseId,
+      serviceRole: RoleId,
+      jobFlowRole: RoleId,
+      autoScalingRole: RoleId,
       visibleToAllUsers: Boolean,
-      sshKeyName: String,
+      sshKeyName: SshKeyId,
       keepJobFlowAliveWhenNoSteps: Boolean,
-      masterInstanceType: String, 
-      slaveInstanceType: String,
+      masterInstanceType: InstanceType, 
+      slaveInstanceType: InstanceType,
       bootstrapScripts: Seq[URI],
-      securityGroupId: String,
-      subnetId: String,
+      securityGroupIds: Seq[SecurityGroupId],
+      subnetId: SubnetId,
       logUri: URI,
       amiId: Option[AmiId]): RunJobFlowRequest = {
     
@@ -132,8 +132,6 @@ object JavaApiEmrClient {
       (new BootstrapActionConfig).withScriptBootstrapAction(
           (new ScriptBootstrapActionConfig).withPath(scriptUri.toString)).withName(scriptUri.toString)
     }
-    
-    def toApplication(name: String): Application = (new Application).withName(name)
     
     def addCustomAmiIdIfSupplied(r: RunJobFlowRequest): RunJobFlowRequest = amiId match {
       case Some(AmiId(id)) => r.withCustomAmiId(id)
@@ -143,21 +141,21 @@ object JavaApiEmrClient {
     addCustomAmiIdIfSupplied((new RunJobFlowRequest)
       .withName("Clint's Spark Cluster")
       .withBootstrapActions(bootstrapScriptConfigs.asJava)
-      .withApplications(applications.map(toApplication).asJava)
-      .withReleaseLabel(releaseLabel)
-      .withServiceRole(serviceRole)
-      .withJobFlowRole(jobFlowRole)
-      .withAutoScalingRole(autoScalingRole)
+      .withApplications(applications.map(_.toApplication).asJava)
+      .withReleaseLabel(releaseLabel.value)
+      .withServiceRole(serviceRole.value)
+      .withJobFlowRole(jobFlowRole.value)
+      .withAutoScalingRole(autoScalingRole.value)
       .withLogUri(logUri.toString)
       .withVisibleToAllUsers(visibleToAllUsers)
       .withInstances((new JobFlowInstancesConfig)
-        .withAdditionalMasterSecurityGroups(securityGroupId)
-        .withAdditionalSlaveSecurityGroups(securityGroupId)
-        .withEc2SubnetId(subnetId)
-        .withEc2KeyName(sshKeyName)
+        .withAdditionalMasterSecurityGroups(securityGroupIds.map(_.value): _*)
+        .withAdditionalSlaveSecurityGroups(securityGroupIds.map(_.value): _*)
+        .withEc2SubnetId(subnetId.value)
+        .withEc2KeyName(sshKeyName.value)
         .withInstanceCount(instances)
         .withKeepJobFlowAliveWhenNoSteps(keepJobFlowAliveWhenNoSteps)
-        .withMasterInstanceType(masterInstanceType)
-        .withSlaveInstanceType(slaveInstanceType)))
+        .withMasterInstanceType(masterInstanceType.value)
+        .withSlaveInstanceType(slaveInstanceType.value)))
   }
 }

@@ -7,6 +7,12 @@ package org.broadinstitute.dig.aggregator.core.emr
 final case class InstanceType(value: String)
 
 object InstanceType {
-  val m3Large: InstanceType = InstanceType("m3.large")
-  val m3XLarge: InstanceType = InstanceType("m3.xlarge")
+  object m3 {
+    val large: InstanceType = InstanceType("m3.large")
+    val xlarge: InstanceType = InstanceType("m3.xlarge")
+  }
+  
+  object m4 {
+    val xlarge: InstanceType = InstanceType("m4.xlarge")
+  }
 }
