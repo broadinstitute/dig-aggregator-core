@@ -26,6 +26,7 @@ import cats.effect.IO
  */
 final class JavaApiEmrClient(aws: AWS) extends EmrClient with LazyLogging {
   override def createCluster(
+      clusterName: String,
       applications: Seq[ApplicationName],
       instances: Int,
       releaseLabel: EmrReleaseId,
@@ -44,7 +45,8 @@ final class JavaApiEmrClient(aws: AWS) extends EmrClient with LazyLogging {
       amiId: Option[AmiId]
     ): IO[EmrClusterId] = IO {
     
-    val request = JavaApiEmrClient.makeRequest(
+    val request = JavaApiEmrClient.makeClusterCreationRequest(
+        clusterName,
         applications, 
         instances, 
         releaseLabel, 
@@ -62,7 +64,7 @@ final class JavaApiEmrClient(aws: AWS) extends EmrClient with LazyLogging {
         aws.uriOf(logKey), 
         amiId)
         
-    println("Making request...")
+    logger.debug("Making EMR cluster-creation request...")
         
     val result = aws.emr.runJobFlow(request)
     
@@ -110,7 +112,8 @@ final class JavaApiEmrClient(aws: AWS) extends EmrClient with LazyLogging {
 object JavaApiEmrClient {
   private[core] def isSuccess(statusCode: Int): Boolean = statusCode == 200
   
-  private[core] def makeRequest(
+  private[core] def makeClusterCreationRequest(
+      clusterName: String,
       applications: Seq[ApplicationName],
       instances: Int,
       releaseLabel: EmrReleaseId,
@@ -139,7 +142,7 @@ object JavaApiEmrClient {
     }
     
     addCustomAmiIdIfSupplied((new RunJobFlowRequest)
-      .withName("Clint's Spark Cluster")
+      .withName(clusterName)
       .withBootstrapActions(bootstrapScriptConfigs.asJava)
       .withApplications(applications.map(_.toApplication).asJava)
       .withReleaseLabel(releaseLabel.value)

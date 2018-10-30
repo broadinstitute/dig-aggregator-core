@@ -2,6 +2,10 @@ package org.broadinstitute.dig.aggregator.core.emr
 
 import com.amazonaws.services.elasticmapreduce.model.Application
 
+/**
+ * @author clint
+ * Oct 30, 2018
+ */
 sealed abstract class ApplicationName(val name: String) {
   final def toApplication: Application = (new Application).withName(name)
 }

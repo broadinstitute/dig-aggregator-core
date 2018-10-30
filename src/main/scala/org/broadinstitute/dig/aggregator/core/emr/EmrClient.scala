@@ -16,6 +16,7 @@ import EmrClient.Defaults
  */
 trait EmrClient {
   def createCluster(
+      clusterName: String = EmrClient.defaultName,
       applications: Seq[ApplicationName] = Defaults.applications,
       instances: Int = Defaults.instances,
       releaseLabel: EmrReleaseId = Defaults.releaseLabel,
@@ -37,7 +38,11 @@ trait EmrClient {
   def listClusters: IO[Seq[ClusterSummary]]
   
   final def listClustersIds: IO[Seq[EmrClusterId]] = {
-    listClusters.map(_.map(summary => EmrClusterId(summary.getId)))
+    for {
+      summaries <- listClusters
+    } yield {
+      summaries.map(summary => EmrClusterId(summary.getId))
+    }
   }
   
   def deleteCluster(clusterId: EmrClusterId): IO[Boolean]
@@ -46,6 +51,8 @@ trait EmrClient {
 }
 
 object EmrClient {
+  private def defaultName: String = java.util.UUID.randomUUID.toString
+  
   object Defaults {
     import ApplicationName.{ Hadoop, Spark, Hive, Pig }
     
