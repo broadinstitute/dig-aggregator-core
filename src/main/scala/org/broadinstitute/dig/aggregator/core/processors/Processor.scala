@@ -19,20 +19,20 @@ abstract class Processor(val name: Processor.Name) extends LazyLogging {
   /**
    * Determines the set of things that need to be processed.
    */
-  def getWork(flags: Processor.Flags): IO[Seq[_]]
+  def getWork(reprocess: Boolean): IO[Seq[_]]
 
   /**
    * True if this processor has something to process.
    */
-  def hasWork(flags: Processor.Flags): IO[Boolean] = {
-    getWork(flags).map(!_.isEmpty)
+  def hasWork(reprocess: Boolean): IO[Boolean] = {
+    getWork(reprocess).map(!_.isEmpty)
   }
 
   /**
    * Logs the set of things this processor will process if run.
    */
-  def showWork(flags: Processor.Flags): IO[Unit] = {
-    for (work <- getWork(flags)) yield {
+  def showWork(reprocess: Boolean): IO[Unit] = {
+    for (work <- getWork(reprocess)) yield {
       work.size match {
         case 0 => logger.info(s"Everything up to date.")
         case n => work.foreach(i => logger.info(s"$i needs processed."))
@@ -43,7 +43,7 @@ abstract class Processor(val name: Processor.Name) extends LazyLogging {
   /**
    * Run this processor.
    */
-  def run(flags: Processor.Flags): IO[Unit]
+  def run(reprocess: Boolean): IO[Unit]
 }
 
 /**
@@ -115,20 +115,5 @@ object Processor extends LazyLogging {
     { config: BaseConfig =>
       ctor.map(_(n, config))
     }
-  }
-
-  /**
-   * All processors expect these options on the command line.
-   */
-  trait Flags { self: ScallopConf =>
-
-    /** Force processor to reprocess data it already has processed. */
-    val reprocess: ScallopOption[Boolean] = opt("reprocess")
-
-    /** Actually run the processor (as opposed to just showing work). */
-    val yes: ScallopOption[Boolean] = opt("yes")
-
-    /** Custom arguments to the processor when run. */
-    val processorArgs: ScallopOption[List[String]] = trailArg(required = false)
   }
 }

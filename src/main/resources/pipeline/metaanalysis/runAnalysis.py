@@ -33,7 +33,7 @@ variants_schema = StructType(
         StructField('pValue', DoubleType(), nullable=False),
         StructField('beta', DoubleType(), nullable=False),
         StructField('maf', DoubleType(), nullable=False),
-        StructField('n', IntegerType(), nullable=False),
+        StructField('n', DoubleType(), nullable=False),
         StructField('stdErr', DoubleType(), nullable=False),
     ]
 )
@@ -119,8 +119,9 @@ def run_metal(workdir, parts, overlap=False, freq=True):
 
     # header used for all input files
     script = [
-        'SEPARATOR TAB',
-        'SCHEME %s' % ('SAMPLESIZE' if overlap else 'STDERR'),
+        'SEPARATOR COMMA',
+        #'SCHEME %s' % ('SAMPLESIZE' if overlap else 'STDERR'),
+        'SCHEME STDERR',
         'MARKERLABEL varId',
         'ALLELELABELS reference alt',
         'PVALUELABEL pValue',
@@ -264,7 +265,6 @@ def run_ancestry_specific_analysis(spark, phenotype):
         rare_variants = spark.read.csv(
             'file://%s' % rare_variants_path(phenotype, ancestry),
             header=True,
-            sep='\t',
             schema=variants_schema,
         )
 
@@ -284,14 +284,14 @@ def run_ancestry_specific_analysis(spark, phenotype):
             .repartition(1) \
             .write \
             .mode('overwrite') \
-            .csv('file://%s/combined' % outdir, sep='\t', header=True)
+            .csv('file://%s/combined' % outdir, header=True)
 
         # write the ancestry-specific frequencies back to S3 if not Mixed
         if ancestry.upper() in ['AA', 'AF', 'EA', 'EU', 'HS', 'SA']:
             path = 's3://dig-analysis-data/out/metaanalysis/%s/ancestry-specific/%s' % (phenotype, ancestry)
 
             # write the frequencies to be uploaded to Neo4j
-            freqs.write.csv(path, sep='\t', header=True, mode='overwrite')
+            freqs.write.csv(path, header=True, mode='overwrite')
 
 
 def run_trans_ethnic_analysis(spark, phenotype):
@@ -336,7 +336,7 @@ def run_trans_ethnic_analysis(spark, phenotype):
     variants.withColumn('top', top_col) \
         .write \
         .mode('overwrite') \
-        .csv(outdir, sep='\t', header=True)
+        .csv(outdir, header=True)
 
 
 # entry point

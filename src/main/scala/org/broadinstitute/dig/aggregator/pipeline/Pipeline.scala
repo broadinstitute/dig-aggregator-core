@@ -38,9 +38,9 @@ trait Pipeline extends LazyLogging {
    * will only show a single level of work, and not later work that may need
    * to happen downstream.
    */
-  def showWork(flags: Processor.Flags, config: BaseConfig): IO[Unit] = {
+  def showWork(config: BaseConfig, reprocess: Boolean): IO[Unit] = {
     val work = for (name <- processors) yield {
-      Processor(name.toString)(config).get.showWork(flags)
+      Processor(name.toString)(config).get.showWork(reprocess)
     }
 
     work.toList.sequence >> IO.unit
@@ -54,14 +54,14 @@ trait Pipeline extends LazyLogging {
    * complete, this is done again. This continues until all processors are
    * done doing their work and have nothing left to do.
    */
-  def run(flags: Processor.Flags, config: BaseConfig): IO[Unit] = {
+  def run(config: BaseConfig, reprocess: Boolean): IO[Unit] = {
     val ps = processors.map(n => n -> Processor(n.toString)(config).get).toMap
 
     // recursive helper function
-    def runProcessors(): IO[Unit] = {
+    def runProcessors(reprocess: Boolean): IO[Unit] = {
       val fetchWork = for ((name, p) <- ps)
         yield
-          p.hasWork(flags).map { work =>
+          p.hasWork(reprocess).map { work =>
             if (work) Some(name) else None
           }
 
@@ -86,17 +86,17 @@ trait Pipeline extends LazyLogging {
           // run everything in parallel
           val io = shouldRun.size match {
             case 0 => IO.raiseError(new Exception("There's work to do, but nothing ran!"))
-            case _ => shouldRun.map(ps(_).run(flags)).toList.parSequence
+            case _ => shouldRun.map(ps(_).run(reprocess)).toList.parSequence
           }
 
-          // after they finish, recursively try again
-          io >> runProcessors
+          // after they finish, recursively try again (don't reprocess!)
+          io >> runProcessors(false)
         }
       }
     }
 
     // run until no work is left
-    runProcessors
+    runProcessors(reprocess)
   }
 }
 

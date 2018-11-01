@@ -30,7 +30,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
    *  * ...call the upload function for each part file;
    */
   def uploadParts(aws: AWS, driver: Driver, analysisId: Int, s3path: String)(
-      uploadPart: (Int, String) => StatementResult): IO[Unit] = {
+      uploadPart: (Driver, Int, String) => StatementResult): IO[Unit] = {
     for {
       listing <- aws.ls(s3path)
 
@@ -44,7 +44,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
       uploads = for ((part, n) <- parts.zipWithIndex)
         yield
           IO {
-            val result   = uploadPart(analysisId, aws.publicUrlOf(part))
+            val result   = uploadPart(driver, analysisId, aws.publicUrlOf(part))
             val counters = result.consume.counters
             val nodes    = counters.nodesCreated
             val edges    = counters.relationshipsCreated

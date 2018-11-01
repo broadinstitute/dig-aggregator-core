@@ -65,7 +65,7 @@ object Run {
    * processed by dependency applications, this is what is returned.
    */
   final case class Result(app: Processor.Name, output: String, timestamp: java.time.Instant) {
-    override def toString: String = s"$app output $output"
+    override def toString: String = s"$app output '$output'"
   }
 
   /**

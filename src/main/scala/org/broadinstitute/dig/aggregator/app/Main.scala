@@ -55,7 +55,7 @@ object Main extends IOApp with LazyLogging {
    * Called before `run` to check if --reprocess and --yes are present, and
    * to confirm with the user that the
    */
-  private def confirmReprocess(flags: Processor.Flags): IO[Boolean] = {
+  private def confirmReprocess(opts: Opts): IO[Boolean] = {
     val warning = IO {
       logger.warn("The consumer state is being reset because the --reprocess")
       logger.warn("flag was passed on the command line.")
@@ -67,15 +67,17 @@ object Main extends IOApp with LazyLogging {
       StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")
     }
 
-    if (flags.reprocess() && flags.yes()) warning else IO.pure(true)
+    if (opts.reprocess() && opts.yes()) warning else IO.pure(true)
   }
 
   /**
    * Run an entire pipeline until all the processors in it have no work left.
    */
   private def runPipeline(name: String, opts: Opts): IO[Unit] = {
+    val reprocess = opts.reprocess()
+
     Pipeline(name) match {
-      case Some(p) => if (opts.yes()) p.run(opts, opts.config) else p.showWork(opts, opts.config)
+      case Some(p) => if (opts.yes()) p.run(opts.config, reprocess) else p.showWork(opts.config, reprocess)
       case _       => IO.raiseError(new Exception(s"Unknown pipeline '$name'"))
     }
   }
@@ -84,8 +86,10 @@ object Main extends IOApp with LazyLogging {
    * Runs a single processor by name.
    */
   private def runProcessor(name: String, opts: Opts): IO[Unit] = {
+    val reprocess = opts.reprocess()
+
     Processor(name)(opts.config) match {
-      case Some(p) => if (opts.yes()) p.run(opts) else p.showWork(opts)
+      case Some(p) => if (opts.yes()) p.run(reprocess) else p.showWork(reprocess)
       case _       => IO.raiseError(new Exception(s"Unknown processor '$name'"))
     }
   }

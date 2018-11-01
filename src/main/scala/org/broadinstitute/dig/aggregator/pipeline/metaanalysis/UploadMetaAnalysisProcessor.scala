@@ -39,11 +39,6 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
   override val resources: Seq[String] = Nil
 
   /**
-   * Neo4j connection pool.
-   */
-  val driver: Driver = config.neo4j.newDriver
-
-  /**
    * Take all the phenotype results from the dependencies and process them.
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
@@ -52,6 +47,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
     // create runs for every phenotype
     val ios = for (phenotype <- phenotypes) yield {
       val analysis = new Analysis(s"MetaAnalysis/$phenotype", Provenance.thisBuild)
+      val driver   = config.neo4j.newDriver
 
       // where the result files are to upload
       val frequency  = s"out/metaanalysis/$phenotype/ancestry-specific/"
@@ -82,13 +78,13 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
   /**
    * Given a part file, upload it and create all the frequency nodes.
    */
-  def uploadFrequencyResults(analysisNodeId: Int, part: String): StatementResult = {
+  def uploadFrequencyResults(driver: Driver, id: Int, part: String): StatementResult = {
     val q = s"""|USING PERIODIC COMMIT
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
                 |// lookup the analysis node
-                |MATCH (q:Analysis) WHERE ID(q)=$analysisNodeId
+                |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
                 |// die if the ancestry doesn't exist
                 |MATCH (a:Ancestry {name: r.ancestry})
@@ -125,13 +121,13 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
   /**
    * Given a part file, upload it and create all the bottom-line nodes.
    */
-  def uploadBottomLineResults(analysisNodeId: Int, part: String): StatementResult = {
+  def uploadBottomLineResults(driver: Driver, id: Int, part: String): StatementResult = {
     val q = s"""|USING PERIODIC COMMIT
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
                 |// lookup the analysis node
-                |MATCH (q:Analysis) WHERE ID(q)=$analysisNodeId
+                |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
                 |// die if the phenotype doesn't exist
                 |MATCH (p:Phenotype {name: r.phenotype})

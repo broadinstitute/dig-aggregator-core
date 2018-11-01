@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 
 import argparse
 import math
@@ -63,14 +63,14 @@ if __name__ == '__main__':
         .write \
         .mode('overwrite') \
         .partitionBy('ancestry') \
-        .csv('%s/rare' % outdir, sep='\t', header=True)
+        .csv('%s/rare' % outdir, header=True)
 
     # output the common variants as a single CSV
     common.repartition(1) \
         .write \
         .mode('overwrite') \
         .partitionBy('ancestry') \
-        .csv('%s/common' % outdir, sep='\t', header=True)
+        .csv('%s/common' % outdir, header=True)
 
     # done
     spark.stop()
