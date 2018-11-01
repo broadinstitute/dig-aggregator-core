@@ -34,7 +34,7 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
    * All the job scripts that need to be uploaded to AWS.
    */
   override val resources: Seq[String] = Seq(
-    "pipeline/metaanalysis/partitionVariants.py",
+    "/pipeline/metaanalysis/partitionVariants.py",
   )
 
   /**
@@ -46,7 +46,7 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
 
     // extract the root and the phenotype from each "root/phenotype" dataset
     val datasetPhenotypes = datasets.map(_.dataset).distinct.collect {
-      case dataset @ pattern(_, phenotype) => (dataset, phenotype)
+      case pattern(root, phenotype) => (root, phenotype)
     }
 
     // create a map of the unique phenotypes and the roots mapping to them
@@ -71,12 +71,17 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
 
     // create a job for each dataset
     val jobs = datasets.map { dataset =>
-      val step = JobStep.PySpark(script, dataset)
+      val step = JobStep.PySpark(script, dataset, phenotype)
 
       for {
-        _ <- IO(logger.info(s"...$dataset"))
+        _ <- IO(logger.info(s"...$dataset/$phenotype"))
         _ <- aws.runStepAndWait(step)
       } yield ()
+    }
+
+    // create a unique list of dataset/phenotype pairs as inputs
+    val inputs = datasets.map { dataset =>
+      s"$dataset/$phenotype"
     }
 
     // run all the jobs (note: this could be done in parallel!)
@@ -84,7 +89,7 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
       _ <- IO(logger.info(s"Processing $phenotype datasets..."))
       _ <- jobs.toList.sequence
       _ <- IO(logger.info("Done"))
-      _ <- Run.insert(xa, name, datasets, phenotype)
+      _ <- Run.insert(xa, name, inputs, phenotype)
     } yield ()
   }
 }

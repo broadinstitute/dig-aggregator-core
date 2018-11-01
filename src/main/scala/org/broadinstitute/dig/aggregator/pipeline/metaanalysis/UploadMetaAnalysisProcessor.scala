@@ -24,13 +24,13 @@ import org.neo4j.driver.v1.StatementResult
  *
  *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/trans-ethnic
  */
-class BottomLineUploadProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /**
    * All the processors this processor depends on.
    */
   override val dependencies: Seq[Processor.Name] = Seq(
-    MetaAnalysisPipeline.ancestrySpecificProcessor,
+    MetaAnalysisPipeline.metaAnalysisProcessor,
   )
 
   /**
@@ -51,13 +51,18 @@ class BottomLineUploadProcessor(name: Processor.Name, config: BaseConfig) extend
 
     // create runs for every phenotype
     val ios = for (phenotype <- phenotypes) yield {
-      val analysis = new Analysis(s"TransEthnic-MetaAnalysis/$phenotype", Provenance.thisBuild)
+      val analysis = new Analysis(s"MetaAnalysis/$phenotype", Provenance.thisBuild)
+
+      // where the result files are to upload
+      val frequency  = s"out/metaanalysis/$phenotype/ancestry-specific/*/"
+      val bottomLine = s"out/metaanalysis/$phenotype/trans-ethnic/"
 
       for {
-        _ <- IO(logger.info(s"Uploading trans-ethnic bottom-line results for $phenotype..."))
+        _ <- IO(logger.info(s"Uploading meta-analysis results for $phenotype..."))
 
         // find all the part files to upload for the analysis
-        _ <- analysis.uploadParts(aws, driver, s"out/metaanalysis/$phenotype/trans-ethnic/")(upload)
+        _ <- analysis.uploadParts(aws, drive, r frequency)(uploadFrequencyResults)
+        _ <- analysis.uploadParts(aws, driver, bottomLine)(uploadBottomLineResults)
 
         // add the result to the database
         _ <- Run.insert(xa, name, Seq(phenotype), analysis.name)
@@ -72,7 +77,50 @@ class BottomLineUploadProcessor(name: Processor.Name, config: BaseConfig) extend
   /**
    * Given a part file, upload it and create all the frequency nodes.
    */
-  def upload(analysisNodeId: Int, part: String): StatementResult = {
+  def uploadFrequencyResults(analysisNodeId: Int, part: String): StatementResult = {
+    val q = s"""|USING PERIODIC COMMIT
+                |LOAD CSV WITH HEADERS FROM '$part' AS r
+                |FIELDTERMINATOR '\t'
+                |
+                |// lookup the analysis node
+                |MATCH (q:Analysis) WHERE ID(q)=$analysisNodeId
+                |
+                |// die if the ancestry doesn't exist
+                |MATCH (a:Ancestry {name: r.ancestry})
+                |MATCH (p:Phenotype {name: r.phenotype})
+                |
+                |// create the variant node if it doesn't exist
+                |MERGE (v:Variant {name: r.varId})
+                |ON CREATE SET
+                |  v.chromosome=r.chromosome,
+                |  v.position=toInteger(r.position),
+                |  v.reference=r.reference,
+                |  v.alt=r.alt
+                |
+                |WITH q, a, p, v, toFloat(r.freq) AS freq
+                |
+                |// create the Frequency node, calculate MAF
+                |CREATE (n:Frequency {
+                |  EAF: freq,
+                |  MAF: CASE WHEN freq < 0.5 THEN freq ELSE 1.0 - freq END
+                |})
+                |
+                |// create the link from the analysis to this node
+                |CREATE (q)<-[:PRODUCED_BY]-(n)
+                |
+                |// create the relationships
+                |CREATE (a)<-[:FOR_ANCESTRY]-(n)
+                |CREATE (v)<-[:FOR_VARIANT]-(n)
+                |CREATE (p)<-[:FOR_PHENOTYPE]-(n)
+                |""".stripMargin
+
+    driver.session.run(q)
+  }
+
+  /**
+   * Given a part file, upload it and create all the bottom-line nodes.
+   */
+  def uploadBottomLineResults(analysisNodeId: Int, part: String): StatementResult = {
     val q = s"""|USING PERIODIC COMMIT
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
@@ -89,10 +137,10 @@ class BottomLineUploadProcessor(name: Processor.Name, config: BaseConfig) extend
                 |  v.chromosome=r.chromosome,
                 |  v.position=toInteger(r.position),
                 |  v.reference=r.reference,
-                |  v.allele=r.allele
+                |  v.alt=r.alt
                 |
-                |// create the BottomLine analysis node
-                |CREATE (n:BottomLine {
+                |// create the MetaAnalysis analysis node
+                |CREATE (n:MetaAnalysis {
                 |  pValue: toFloat(r.pValue),
                 |  beta: toFloat(r.beta),
                 |  stdErr: toFloat(r.stderr),
