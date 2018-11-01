@@ -247,38 +247,33 @@ def run_ancestry_specific_analysis(spark, phenotype):
         # read the METAANALYSIS file from EFS into spark and transform it
         analysis = read_analysis(spark, 'file://%s' % output_file).toDF()
 
-        # read the rare variants across all for this ancestry
-        rare_variants = spark.read \
-            .csv(
-                'file://%s' % rare_variants_path(phenotype, ancestry),
-                header=True,
-                sep='\t',
-                schema=variants_schema,
-            ) \
-            .withColumn('ancestry', lit(ancestry)) \
-            .select(*columns)
-
         # get the ancestry-specific frequencies for each variant
         freqs = analysis \
-            .withColumn('ancestry', lit(ancestry)) \
-            .withColumn('phenotype', lit(phenotype)) \
             .select(
                 col('varId'),
                 col('chromosome'),
                 col('position'),
                 col('reference'),
                 col('alt'),
-                col('ancestry'),
-                col('phenotype'),
                 col('maf'),
+                lit(ancestry).alias('ancestry'),
+                lit(phenotype).alias('phenotype'),
             )
+
+        # read the rare variants across all for this ancestry
+        rare_variants = spark.read.csv(
+            'file://%s' % rare_variants_path(phenotype, ancestry),
+            header=True,
+            sep='\t',
+            schema=variants_schema,
+        )
 
         # combine the results with the rare variants for this ancestry
         variants = analysis \
             .withColumn('dataset', lit('METAANALYSIS')) \
             .withColumn('phenotype', lit(phenotype)) \
             .select(*columns) \
-            .union(rare_variants)
+            .union(rare_variants.select(*columns))
 
         # keep only the variants from the largest dataset, output results
         variants.rdd \

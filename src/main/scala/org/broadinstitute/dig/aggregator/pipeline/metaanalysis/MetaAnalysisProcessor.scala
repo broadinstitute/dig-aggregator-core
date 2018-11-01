@@ -10,25 +10,25 @@ import org.broadinstitute.dig.aggregator.core.processors._
 
 /**
  * After all the variants for a particular phenotype have been processed and
- * partitioned, the ancestry-specific analysis is run on them.
+ * partitioned, meta-analysis is run on them.
  *
  * This process runs METAL on the common variants for each ancestry (grouped
  * by dataset), then merges the rare variants across all ancestries, keeping
  * only the variants with the largest N (sample size) among them and writing
- * those back out for the next processor.
+ * those back out.
  *
- * Additionally, the output of METAL is also written to an S3 location so that
- * it can be uploaded to Neo4j to create :Frequency nodes:
+ * Next, trans-ethnic analysis (METAL) is run across all the ancestries, and
+ * the output of that is written back to HDFS.
+ *
+ * The output of the ancestry-specific analysis is written to:
  *
  *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/ancestry-specific/<ancestry>
  *
- * The METAANALYSIS files for the trans-ethnic analysis are written to:
+ * The output of the trans-ethnic analysis is written to:
  *
- *  file:///mnt/efs/metaanalysis/<phenotype>/_analysis/ancestry-specific/<ancestry>/_combined
+ *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/trans-ethnic
  *
- * The inputs for this processor are expected to be phenotypes.
- *
- * The outputs for this processor are phenotypes.
+ * The inputs and outputs for this processor are expected to be phenotypes.
  */
 class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
@@ -57,14 +57,16 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
 
     // create a set of jobs for each phenotype
     val runs = for (phenotype <- phenotypes) yield {
-      val ancestrySpecific = JobStep.PySpark(script, "--ancestry-specific", phenotype)
-      val transEthnic      = JobStep.PySpark(script, "--trans-ethnic", phenotype)
+      val steps = Seq(
+        JobStep.PySpark(script, "--ancestry-specific", phenotype),
+        JobStep.PySpark(script, "--trans-ethnic", phenotype),
+      )
 
       for {
         _ <- IO(logger.info(s"Processing phenotype $phenotype..."))
 
         // first run ancestry-specific analysis, followed by trans-ethnic
-        _ <- aws.runJobAndWait(Seq(ancestrySpecific, transEthnic))
+        _ <- aws.runJobAndWait(steps)
 
         // add the result to the database
         _ <- Run.insert(xa, name, Seq(phenotype), phenotype)

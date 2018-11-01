@@ -43,47 +43,23 @@ abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extend
   /**
    * Process a set of committed datasets.
    */
-  def processDatasets(commits: Seq[Dataset]): IO[_]
+  def processDatasets(commits: Seq[Dataset]): IO[Unit]
 
   /**
-   * Output results that would be processed if the --yes flag was specified.
+   * Calculates the set of things this processor needs to process.
    */
-  def showWork(datasets: Seq[Dataset]): IO[_] = IO {
-    datasets.size match {
-      case 0 => logger.info(s"Everything up to date.")
-      case _ =>
-        for (dataset <- datasets) {
-          logger.info(s"Process dataset '${dataset.dataset}' for topic '${dataset.topic}'")
-        }
-    }
+  override def getWork(flags: Processor.Flags): IO[Seq[Dataset]] = {
+    Dataset.datasetsOf(xa, topic, if (flags.reprocess()) None else Some(name))
   }
 
   /**
-   * Determine the list of datasets that need processing, process them, write
-   * to the database that they were processed, and send a message to the
-   * analyses topic.
-   *
-   * When this processor is running in "process" mode (consuming from Kafka),
-   * this is called whenever the analyses topic has a message sent to it.
-   *
-   * Otherwise, this is just called once and then exits.
+   * Determine the list of datasets that need processing, process them, and
+   * write to the database that they were processed.
    */
   override def run(flags: Processor.Flags): IO[Unit] = {
-    val notProcessedBy = if (flags.reprocess()) None else Some(name)
-
-    // optionally upload all the resources for this processor
-    val uploads = resources.map { resource =>
-      if (flags.yes()) aws.upload(resource) else IO.unit
-    }
-
     for {
-      _ <- uploads.toList.sequence
-
-      // fetch the list of datasets for this topic not yet processed
-      datasets <- Dataset.datasetsOf(xa, topic, notProcessedBy)
-
-      // either process them or show what would be processed
-      _ <- if (flags.yes()) processDatasets(datasets) else showWork(datasets)
+      _ <- resources.map(aws.upload).toList.sequence
+      _ <- getWork(flags).flatMap(processDatasets)
     } yield ()
   }
 }

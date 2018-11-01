@@ -38,6 +38,11 @@ import scala.io.Source
 case class Dataset(dataset: String, topic: String) {
 
   /**
+   * Used for showing work in the log.
+   */
+  override def toString: String = s"$topic dataset $dataset"
+
+  /**
    * Insert this dataset to the database. This should only be done after all
    * its part files have been completely uploaded to HDFS.
    */

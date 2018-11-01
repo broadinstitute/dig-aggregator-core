@@ -18,7 +18,7 @@ class LDScoreRegressionProcessor(name: Processor.Name, config: BaseConfig) exten
    * All the processors this processor depends on.
    */
   override val dependencies: Seq[Processor.Name] = Seq(
-    metaanalysis.MetaAnalysisPipeline.transEthnicProcessor,
+    metaanalysis.MetaAnalysisPipeline.metaAnalysisProcessor,
   )
 
   /**

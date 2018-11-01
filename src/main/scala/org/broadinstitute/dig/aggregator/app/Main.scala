@@ -71,13 +71,12 @@ object Main extends IOApp with LazyLogging {
   }
 
   /**
-   * Run an entire pipeline. This checks to see which processors in the it
-   * have work to do, runs them, then does it all again recursively until the
-   * processors have no work left.
+   * Run an entire pipeline until all the processors in it have no work left.
    */
   private def runPipeline(name: String, opts: Opts): IO[Unit] = {
-    Pipeline(name).map(_.run(opts, opts.config)).getOrElse {
-      IO.raiseError(new Exception(s"Unknown pipeline '$name'"))
+    Pipeline(name) match {
+      case Some(p) => if (opts.yes()) p.run(opts, opts.config) else p.showWork(opts, opts.config)
+      case _       => IO.raiseError(new Exception(s"Unknown pipeline '$name'"))
     }
   }
 
@@ -85,8 +84,9 @@ object Main extends IOApp with LazyLogging {
    * Runs a single processor by name.
    */
   private def runProcessor(name: String, opts: Opts): IO[Unit] = {
-    Processor(name)(opts.config).map(_.run(opts)).getOrElse {
-      IO.raiseError(new Exception(s"Unknown processor '$name'"))
+    Processor(name)(opts.config) match {
+      case Some(p) => if (opts.yes()) p.run(opts) else p.showWork(opts)
+      case _       => IO.raiseError(new Exception(s"Unknown processor '$name'"))
     }
   }
 

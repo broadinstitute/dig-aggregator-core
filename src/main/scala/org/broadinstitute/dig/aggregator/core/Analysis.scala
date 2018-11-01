@@ -29,20 +29,13 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
    *  * ...create a new analysis node;
    *  * ...call the upload function for each part file;
    */
-  def uploadParts(aws: AWS, driver: Driver, s3path: String)(uploadPart: (Int, String) => StatementResult): IO[Unit] = {
+  def uploadParts(aws: AWS, driver: Driver, analysisId: Int, s3path: String)(
+      uploadPart: (Int, String) => StatementResult): IO[Unit] = {
     for {
       listing <- aws.ls(s3path)
 
       // only keep the part files that are CSV files which can be loaded
       parts = listing.filter(_.toLowerCase.endsWith(".csv"))
-
-      // delete the existing :Analysis node and all result nodes produced by it
-      _ <- IO(logger.debug(s"Deleting existing analysis for '$name'..."))
-      _ <- delete(driver)
-
-      // create the new :Analysis node
-      _  <- IO(logger.debug(s"Creating new analysis for '$name'"))
-      id <- create(driver)
 
       // indicate how many parts are being uploaded
       _ <- IO(logger.debug(s"Uploading ${parts.size} part files..."))
@@ -51,7 +44,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
       uploads = for ((part, n) <- parts.zipWithIndex)
         yield
           IO {
-            val result   = uploadPart(id, aws.publicUrlOf(part))
+            val result   = uploadPart(analysisId, aws.publicUrlOf(part))
             val counters = result.consume.counters
             val nodes    = counters.nodesCreated
             val edges    = counters.relationshipsCreated
@@ -84,9 +77,11 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
                 |""".stripMargin
 
     // run the query, return the node ID
-    IO {
-      driver.session.run(q).single.get(0).asInt
-    }
+    for {
+      _ <- IO(logger.debug(s"Deleting existing analysis for '$name'"))
+      _ <- delete(driver)
+      _ <- IO(logger.debug(s"Creating new analysis for '$name'"))
+    } yield driver.session.run(q).single.get(0).asInt
   }
 
   /**

@@ -12,16 +12,16 @@ import org.neo4j.driver.v1.Driver
 import org.neo4j.driver.v1.StatementResult
 
 /**
- * When trans-ethnic meta-analysis has been complete, in S3 output are
- * the bottom line results calculated for each of the variants for a given
- * phenotype.
+ * When meta-analysis has been complete, in S3 output are the bottom line
+ * results calculated for each of the variants for a given phenotype.
  *
- * This processor will take those tables, and create :Frequency nodes in the
- * graph database, deleting all the existing frequencies for each phenotype/
- * ancestry pair per variant first.
+ * This processor will take the output from the ancestry-specific analysis and
+ * creates :Frequency nodes in the graph database, and then take the results
+ * of the trans-ethnic analysis and create :MetaAnalysis nodes.
  *
  * The source tables are read from:
  *
+ *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/ancestry-specific
  *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/trans-ethnic
  */
 class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
@@ -54,15 +54,18 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
       val analysis = new Analysis(s"MetaAnalysis/$phenotype", Provenance.thisBuild)
 
       // where the result files are to upload
-      val frequency  = s"out/metaanalysis/$phenotype/ancestry-specific/*/"
+      val frequency  = s"out/metaanalysis/$phenotype/ancestry-specific/"
       val bottomLine = s"out/metaanalysis/$phenotype/trans-ethnic/"
 
       for {
         _ <- IO(logger.info(s"Uploading meta-analysis results for $phenotype..."))
 
+        // delete the existing analysis and recreate it
+        id <- analysis.create(driver)
+
         // find all the part files to upload for the analysis
-        _ <- analysis.uploadParts(aws, drive, r frequency)(uploadFrequencyResults)
-        _ <- analysis.uploadParts(aws, driver, bottomLine)(uploadBottomLineResults)
+        _ <- analysis.uploadParts(aws, driver, id, frequency)(uploadFrequencyResults)
+        _ <- analysis.uploadParts(aws, driver, id, bottomLine)(uploadBottomLineResults)
 
         // add the result to the database
         _ <- Run.insert(xa, name, Seq(phenotype), analysis.name)

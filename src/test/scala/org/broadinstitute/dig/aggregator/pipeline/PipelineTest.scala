@@ -22,11 +22,9 @@ final class PipelineTest extends FunSuite {
     val metaanalysisPipeline   = Pipeline("metaanalysis").get
     val metaanalysisProcessors = metaanalysisPipeline.processors
     val expectedProcessors = Set(
-      MetaAnalysisPipeline.ancestrySpecificProcessor,
-      MetaAnalysisPipeline.bottomLineUploadProcessor,
-      MetaAnalysisPipeline.frequencyUploadProcessor,
-      MetaAnalysisPipeline.transEthnicProcessor,
       MetaAnalysisPipeline.variantPartitionProcessor,
+      MetaAnalysisPipeline.metaAnalysisProcessor,
+      MetaAnalysisPipeline.uploadMetaAnalysisProcessor,
     )
 
     assert(metaanalysisProcessors == expectedProcessors)

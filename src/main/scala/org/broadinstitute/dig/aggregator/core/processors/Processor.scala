@@ -17,6 +17,30 @@ import org.rogach.scallop._
 abstract class Processor(val name: Processor.Name) extends LazyLogging {
 
   /**
+   * Determines the set of things that need to be processed.
+   */
+  def getWork(flags: Processor.Flags): IO[Seq[_]]
+
+  /**
+   * True if this processor has something to process.
+   */
+  def hasWork(flags: Processor.Flags): IO[Boolean] = {
+    getWork(flags).map(!_.isEmpty)
+  }
+
+  /**
+   * Logs the set of things this processor will process if run.
+   */
+  def showWork(flags: Processor.Flags): IO[Unit] = {
+    for (work <- getWork(flags)) yield {
+      work.size match {
+        case 0 => logger.info(s"Everything up to date.")
+        case n => work.foreach(i => logger.info(s"$i needs processed."))
+      }
+    }
+  }
+
+  /**
    * Run this processor.
    */
   def run(flags: Processor.Flags): IO[Unit]

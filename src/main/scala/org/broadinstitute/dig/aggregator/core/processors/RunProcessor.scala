@@ -46,16 +46,10 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Pr
   def processResults(results: Seq[Run.Result]): IO[_]
 
   /**
-   * Output results that would be processed if the --yes flag was specified.
+   * Calculates the set of things this processor needs to process.
    */
-  def showWork(results: Seq[Run.Result]): IO[_] = IO {
-    if (results.isEmpty) {
-      logger.info(s"Everything up to date.")
-    } else {
-      for (result <- results) {
-        logger.info(s"Process output of ${result.app}: ${result.output}")
-      }
-    }
+  override def getWork(flags: Processor.Flags): IO[Seq[Run.Result]] = {
+    Run.resultsOf(xa, dependencies, if (flags.reprocess()) None else Some(name))
   }
 
   /**
@@ -69,21 +63,9 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Pr
    * Otherwise, this is just called once and then exits.
    */
   override def run(flags: Processor.Flags): IO[Unit] = {
-    val notProcessedBy = if (flags.reprocess()) None else Some(name)
-
-    // optionally upload all the resources for this processor
-    val uploads = resources.map { resource =>
-      if (flags.yes()) aws.upload(resource) else IO.unit
-    }
-
     for {
-      _ <- uploads.toList.sequence
-
-      // get the results not yet processed
-      results <- Run.resultsOf(xa, dependencies, notProcessedBy)
-
-      // either process them or show what would be processed
-      _ <- if (flags.yes()) processResults(results) else showWork(results)
+      _ <- resources.map(aws.upload).toList.sequence
+      _ <- getWork(flags).flatMap(processResults)
     } yield ()
   }
 }
