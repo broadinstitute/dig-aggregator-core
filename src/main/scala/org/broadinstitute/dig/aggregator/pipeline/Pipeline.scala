@@ -79,7 +79,7 @@ trait Pipeline extends LazyLogging {
           val shouldRun = processors.filter { name =>
             ps(name) match {
               case r: RunProcessor => r.dependencies.forall(!processors.contains(_))
-              case _               => false
+              case _               => true
             }
           }
 

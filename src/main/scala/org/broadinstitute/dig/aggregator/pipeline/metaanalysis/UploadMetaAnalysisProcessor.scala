@@ -58,13 +58,15 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
       val bottomLine = s"out/metaanalysis/$phenotype/trans-ethnic/"
 
       for {
-        _ <- IO(logger.info(s"Uploading meta-analysis results for $phenotype..."))
+        _ <- IO(logger.info(s"Preparing upload of analysis of $phenotype..."))
 
         // delete the existing analysis and recreate it
         id <- analysis.create(driver)
 
         // find all the part files to upload for the analysis
+        _ <- IO(logger.info(s"Uploading frequencies for $phenotype..."))
         _ <- analysis.uploadParts(aws, driver, id, frequency)(uploadFrequencyResults)
+        _ <- IO(logger.info(s"Uploading bottom-line results for $phenotype..."))
         _ <- analysis.uploadParts(aws, driver, id, bottomLine)(uploadBottomLineResults)
 
         // add the result to the database
