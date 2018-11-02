@@ -14,7 +14,8 @@ s3dir = 's3://dig-analysis-data'
 # entry point
 if __name__ == '__main__':
     """
-    @param dataset e.g. `ExChip_CAMP/T2D`
+    @param dataset e.g. `ExChip_CAMP`
+    @param phenotype e.g. `T2D`
     """
     print('Python version: %s' % platform.python_version())
 
@@ -39,20 +40,6 @@ if __name__ == '__main__':
     df = df \
         .filter(df.pValue.isNotNull()) \
         .filter(df.beta.isNotNull())
-    # .select(
-    #     df.varId,
-    #     df.dataset,
-    #     df.chromosome,
-    #     df.position,
-    #     df.reference,
-    #     df.alt,
-    #     df.phenotype,
-    #     df.ancestry,
-    #     df.pValue,
-    #     df.beta,
-    #     df.maf,
-    #     df.n,
-    # )
 
     # split the variants into rare and common buckets
     rare = df.filter(df.maf.isNull() | (df.maf < 0.05))
@@ -63,14 +50,14 @@ if __name__ == '__main__':
         .write \
         .mode('overwrite') \
         .partitionBy('ancestry') \
-        .csv('%s/rare' % outdir, header=True)
+        .csv('%s/rare' % outdir, sep='\t', header=True)
 
     # output the common variants as a single CSV
     common.repartition(1) \
         .write \
         .mode('overwrite') \
         .partitionBy('ancestry') \
-        .csv('%s/common' % outdir, header=True)
+        .csv('%s/common' % outdir, sep='\t', header=True)
 
     # done
     spark.stop()

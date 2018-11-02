@@ -54,7 +54,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
       val bottomLine = s"out/metaanalysis/$phenotype/trans-ethnic/"
 
       for {
-        _ <- IO(logger.info(s"Preparing upload of analysis of $phenotype..."))
+        _ <- IO(logger.info(s"Preparing upload of $phenotype meta-analysis..."))
 
         // delete the existing analysis and recreate it
         id <- analysis.create(driver)
@@ -86,7 +86,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
-                |// die if the ancestry doesn't exist
+                |// die if the ancestry or phenotype doesn't exist
                 |MATCH (a:Ancestry {name: r.ancestry})
                 |MATCH (p:Phenotype {name: r.phenotype})
                 |
@@ -98,12 +98,12 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |  v.reference=r.reference,
                 |  v.alt=r.alt
                 |
-                |WITH q, a, p, v, toFloat(r.freq) AS freq
+                |WITH q, a, p, v, toFloat(r.eaf) AS eaf
                 |
                 |// create the Frequency node, calculate MAF
                 |CREATE (n:Frequency {
-                |  EAF: freq,
-                |  MAF: CASE WHEN freq < 0.5 THEN freq ELSE 1.0 - freq END
+                |  EAF: eaf,
+                |  MAF: CASE WHEN eaf < 0.5 THEN eaf ELSE 1.0 - eaf END
                 |})
                 |
                 |// create the link from the analysis to this node
@@ -144,8 +144,9 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |CREATE (n:MetaAnalysis {
                 |  pValue: toFloat(r.pValue),
                 |  beta: toFloat(r.beta),
-                |  stdErr: toFloat(r.stderr),
-                |  sampleSize: toInteger(r.sampleSize)
+                |  zScore: toFloat(r.zScore),
+                |  stdErr: toFloat(r.stdErr),
+                |  n: toInteger(r.n)
                 |})
                 |
                 |// create the relationship to the analysis node
