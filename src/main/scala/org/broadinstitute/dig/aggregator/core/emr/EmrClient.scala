@@ -47,7 +47,9 @@ trait EmrClient {
   
   def deleteCluster(clusterId: EmrClusterId): IO[Boolean]
   
-  def runOnCluster(clusterId: EmrClusterId, scriptUri: URI, scriptArgs: String*): IO[Option[EmrStepId]]
+  def runSparkJobOnCluster(clusterId: EmrClusterId, scriptUri: URI, scriptArgs: String*): IO[Option[EmrStepId]]
+  
+  def runScriptOnCluster(clusterId: EmrClusterId, scriptUri: URI, scriptArgs: String*): IO[Option[EmrStepId]]
 }
 
 object EmrClient {

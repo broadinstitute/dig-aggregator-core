@@ -16,7 +16,7 @@ object AmiId {
   //Custom AMI based on amazonLinux2018Dot03 with some packages installed:
   //Yum: amazon-efs-utils
   //Pip: boto 2.39.0, neo4j-driver 1.6.1, scipy 1.1.0
-  //METAL (in ~ec2-user/bin/generic-metal)
-  //LDSC (in ~ec2-user/ldsc)
-  val customAmiWithMetalAndLdsc: AmiId = AmiId("ami-05d585056c5a2c2b7")
+  //METAL (in /opt/generic-metal)
+  //LDSC (in /opt/ldsc)
+  val customAmiWithMetalAndLdsc: AmiId = AmiId("ami-0ac766786a5a04a14")
 }

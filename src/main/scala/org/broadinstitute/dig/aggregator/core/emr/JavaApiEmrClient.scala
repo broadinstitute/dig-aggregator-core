@@ -88,10 +88,20 @@ final class JavaApiEmrClient(aws: AWS) extends EmrClient with LazyLogging {
     JavaApiEmrClient.isSuccess(statusCode)
   }
   
-  override def runOnCluster(clusterId: EmrClusterId, scriptUri: URI, scriptArgs: String*): IO[Option[EmrStepId]] = IO {
+  override def runSparkJobOnCluster(
+      clusterId: EmrClusterId, 
+      scriptUri: URI, 
+      scriptArgs: String*): IO[Option[EmrStepId]] = runOnCluster(clusterId, JobStep.PySpark(scriptUri, scriptArgs: _*))
+  
+  override def runScriptOnCluster(
+      clusterId: EmrClusterId, 
+      scriptUri: URI, 
+      scriptArgs: String*): IO[Option[EmrStepId]] = runOnCluster(clusterId, JobStep.Script(scriptUri, scriptArgs: _*))
+  
+  private def runOnCluster(clusterId: EmrClusterId, jobStep: JobStep): IO[Option[EmrStepId]] = IO {
     val request = (new AddJobFlowStepsRequest)
       .withJobFlowId(clusterId.value)
-      .withSteps(JobStep.PySpark(scriptUri, scriptArgs: _*).config)
+      .withSteps(jobStep.config)
 
     val result = aws.emr.addJobFlowSteps(request)
 
@@ -103,7 +113,7 @@ final class JavaApiEmrClient(aws: AWS) extends EmrClient with LazyLogging {
     }
     
     // show the job ID so it can be referenced in the AWS console
-    logger.debug(s"Submitted job with 1 steps: '${scriptUri}' ${idMessagePart}")
+    logger.debug(s"Submitted job with 1 steps: '${jobStep}' ${idMessagePart}")
     
     stepIdOpt.map(EmrStepId(_))
   }
