@@ -96,7 +96,7 @@ final class AwsTest extends AwsFunSuite {
   }
 
   testWithPseudoDirIO("Upload") {
-    doUploadTest("test_upload.txt")
+    doUploadTest("/test_upload.txt")
   }
 
   // Upload a resource file
