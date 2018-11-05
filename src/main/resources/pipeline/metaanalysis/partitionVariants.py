@@ -42,8 +42,8 @@ if __name__ == '__main__':
         .filter(df.beta.isNotNull())
 
     # split the variants into rare and common buckets
-    rare = df.filter(df.maf.isNull() | (df.maf < 0.05))
-    common = df.filter(df.maf.isNotNull() & (df.maf >= 0.05))
+    rare = df.filter(df.maf.isNotNull() & (df.maf < 0.05))
+    common = df.filter(df.maf.isNull() | (df.maf >= 0.05))
 
     # output the rare variants as a single CSV
     rare.repartition(1) \
