@@ -19,7 +19,7 @@ final class Producer(config: KafkaConfig, topic: String) {
   /**
    * Kafka connection properties.
    */
-  private val props: Properties = Props(
+  private val props: Properties = utils.Props(
     ProducerConfig.BOOTSTRAP_SERVERS_CONFIG      -> config.brokerList,
     ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG   -> classOf[serialization.StringSerializer].getCanonicalName,
     ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG -> classOf[serialization.StringSerializer].getCanonicalName,

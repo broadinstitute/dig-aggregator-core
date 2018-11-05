@@ -10,27 +10,27 @@ import org.broadinstitute.dig.aggregator.core.processors._
 
 /**
  * After all the variants for a particular phenotype have been processed and
- * partitioned, the ancestry-specific analysis is run on them.
+ * partitioned, meta-analysis is run on them.
  *
  * This process runs METAL on the common variants for each ancestry (grouped
  * by dataset), then merges the rare variants across all ancestries, keeping
  * only the variants with the largest N (sample size) among them and writing
- * those back out for the next processor.
+ * those back out.
  *
- * Additionally, the output of METAL is also written to an S3 location so that
- * it can be uploaded to Neo4j to create :Frequency nodes:
+ * Next, trans-ethnic analysis (METAL) is run across all the ancestries, and
+ * the output of that is written back to HDFS.
+ *
+ * The output of the ancestry-specific analysis is written to:
  *
  *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/ancestry-specific/<ancestry>
  *
- * The METAANALYSIS files for the trans-ethnic analysis are written to:
+ * The output of the trans-ethnic analysis is written to:
  *
- *  file:///mnt/efs/metaanalysis/<phenotype>/_analysis/ancestry-specific/<ancestry>/_combined
+ *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/trans-ethnic
  *
- * The inputs for this processor are expected to be phenotypes.
- *
- * The outputs for this processor are phenotypes.
+ * The inputs and outputs for this processor are expected to be phenotypes.
  */
-class AncestrySpecificProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /**
    * All the processors this processor depends on.
@@ -43,31 +43,37 @@ class AncestrySpecificProcessor(name: Processor.Name, config: BaseConfig) extend
    * All the job scripts that need to be uploaded to AWS.
    */
   override val resources: Seq[String] = Seq(
-    "pipeline/metaanalysis/runAnalysis.py",
+    "/pipeline/metaanalysis/runAnalysis.py",
   )
 
   /**
    * Take all the phenotype results from the dependencies and process them.
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
-    val script     = resourceURI("pipeline/metaanalysis/runAnalysis.py")
+    val script = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
+
+    // collect unique phenotypes across all results to process
     val phenotypes = results.map(_.output).distinct
 
-    // create runs for every phenotype
+    // create a set of jobs for each phenotype
     val runs = for (phenotype <- phenotypes) yield {
-      val step = JobStep.PySpark(script, "--ancestry-specific", phenotype)
+      val steps = Seq(
+        JobStep.PySpark(script, "--ancestry-specific", phenotype),
+        JobStep.PySpark(script, "--trans-ethnic", phenotype),
+      )
 
       for {
         _ <- IO(logger.info(s"Processing phenotype $phenotype..."))
-        _ <- aws.runStepAndWait(step)
+
+        // first run ancestry-specific analysis, followed by trans-ethnic
+        _ <- aws.runJobAndWait(steps)
 
         // add the result to the database
         _ <- Run.insert(xa, name, Seq(phenotype), phenotype)
-        _ <- IO(logger.info("Done"))
-      } yield ()
+      } yield logger.info("Done")
     }
 
-    // process each phenotype (could be parallel!)
+    // process each phenotype (could be done in parallel!)
     runs.toList.sequence >> IO.unit
   }
 }

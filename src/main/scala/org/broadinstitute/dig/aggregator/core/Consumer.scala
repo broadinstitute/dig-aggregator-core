@@ -31,7 +31,7 @@ final class Consumer(config: KafkaConfig, val topic: String, xa: Transactor[IO])
   /**
    * Kafka connection properties.
    */
-  private val props: Properties = Props(
+  private val props: Properties = utils.Props(
     ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG        -> config.brokerList,
     ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG   -> classOf[serialization.StringDeserializer].getCanonicalName,
     ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> classOf[serialization.StringDeserializer].getCanonicalName

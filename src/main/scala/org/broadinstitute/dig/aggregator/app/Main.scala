@@ -41,8 +41,8 @@ object Main extends IOApp with LazyLogging {
       val io = confirmReprocess(opts).flatMap { confirm =>
         if (!confirm) IO.unit
         else
-          run(opts.processor(), opts).guaranteeCase {
-            case ExitCase.Error(err) => fail(opts.processor(), opts.config, err)
+          run(opts.processor, opts).guaranteeCase {
+            case ExitCase.Error(err) => fail(opts.processor, opts.config, err)
             case _                   => IO.unit
           }
       }
@@ -55,7 +55,7 @@ object Main extends IOApp with LazyLogging {
    * Called before `run` to check if --reprocess and --yes are present, and
    * to confirm with the user that the
    */
-  private def confirmReprocess(flags: Processor.Flags): IO[Boolean] = {
+  private def confirmReprocess(opts: Opts): IO[Boolean] = {
     val warning = IO {
       logger.warn("The consumer state is being reset because the --reprocess")
       logger.warn("flag was passed on the command line.")
@@ -67,17 +67,18 @@ object Main extends IOApp with LazyLogging {
       StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")
     }
 
-    if (flags.reprocess() && flags.yes()) warning else IO.pure(true)
+    if (opts.reprocess() && opts.yes()) warning else IO.pure(true)
   }
 
   /**
-   * Run an entire pipeline. This checks to see which processors in the it
-   * have work to do, runs them, then does it all again recursively until the
-   * processors have no work left.
+   * Run an entire pipeline until all the processors in it have no work left.
    */
   private def runPipeline(name: String, opts: Opts): IO[Unit] = {
-    Pipeline(name).map(_.run(opts, opts.config)).getOrElse {
-      IO.raiseError(new Exception(s"Unknown pipeline '$name'"))
+    val reprocess = opts.reprocess()
+
+    Pipeline(name) match {
+      case Some(p) => if (opts.yes()) p.run(opts.config, reprocess) else p.showWork(opts.config, reprocess)
+      case _       => IO.raiseError(new Exception(s"Unknown pipeline '$name'"))
     }
   }
 
@@ -85,8 +86,11 @@ object Main extends IOApp with LazyLogging {
    * Runs a single processor by name.
    */
   private def runProcessor(name: String, opts: Opts): IO[Unit] = {
-    Processor(name)(opts.config).map(_.run(opts)).getOrElse {
-      IO.raiseError(new Exception(s"Unknown processor '$name'"))
+    val reprocess = opts.reprocess()
+
+    Processor(name)(opts.config) match {
+      case Some(p) => if (opts.yes()) p.run(reprocess) else p.showWork(reprocess)
+      case _       => IO.raiseError(new Exception(s"Unknown processor '$name'"))
     }
   }
 

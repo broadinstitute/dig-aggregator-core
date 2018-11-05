@@ -17,9 +17,34 @@ import org.rogach.scallop._
 abstract class Processor(val name: Processor.Name) extends LazyLogging {
 
   /**
+   * Determines the set of things that need to be processed.
+   */
+  def getWork(reprocess: Boolean): IO[Seq[_]]
+
+  /**
+   * True if this processor has something to process.
+   */
+  def hasWork(reprocess: Boolean): IO[Boolean] = {
+    getWork(reprocess).map(_.nonEmpty)
+  }
+
+  /**
+   * Logs the set of things this processor will process if run.
+   */
+  def showWork(reprocess: Boolean): IO[Unit] = {
+    for (work <- getWork(reprocess)) yield {
+      if (work.isEmpty) {
+        logger.info(s"Everything up to date.")
+      } else {
+        work.foreach(i => logger.info(s"$i needs processed."))
+      }
+    }
+  }
+
+  /**
    * Run this processor.
    */
-  def run(flags: Processor.Flags): IO[Unit]
+  def run(reprocess: Boolean): IO[Unit]
 }
 
 /**
@@ -81,27 +106,21 @@ object Processor extends LazyLogging {
   }
 
   /**
-   * Create a processor given its name and a configuration.
+   * Version of apply() that takes the actual process name.
    */
-  def apply(name: String): BaseConfig => Option[Processor] = {
-    val n    = new Name(name)
-    val ctor = names.get(n)
+  def apply(name: Name): BaseConfig => Option[Processor] = {
+    val ctor = names.get(name)
 
     // lambda that will create this processor with a configuration
     { config: BaseConfig =>
-      ctor.map(_(n, config))
+      ctor.map(_(name, config))
     }
   }
 
   /**
-   * All processors expect these options on the command line.
+   * Create a processor given its name and a configuration.
    */
-  trait Flags { self: ScallopConf =>
-
-    /** Force processor to reprocess data it already has processed. */
-    val reprocess: ScallopOption[Boolean] = opt("reprocess")
-
-    /** Actually run the processor (as opposed to just showing work). */
-    val yes: ScallopOption[Boolean] = opt("yes")
+  def apply(name: String): BaseConfig => Option[Processor] = {
+    apply(new Name(name))
   }
 }

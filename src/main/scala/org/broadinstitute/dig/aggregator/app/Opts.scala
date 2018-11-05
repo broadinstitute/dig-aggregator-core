@@ -16,7 +16,7 @@ import scala.io.Source
 /**
  * Command line and configuration file argument parsing.
  */
-final class Opts(args: Seq[String]) extends ScallopConf(args) with Processor.Flags {
+final class Opts(args: Seq[String]) extends ScallopConf(args) {
 
   /** JSON configuration file where settings are. */
   val configFile: ScallopOption[File] = opt("config", default = Some(new File("config.json")))
@@ -27,11 +27,17 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) with Processor.Fla
   /** The processor name is actually a pipeline name. */
   val pipeline: ScallopOption[Boolean] = opt("pipeline")
 
-  /** Processor to run. */
-  val processor: ScallopOption[String] = trailArg(required = false)
+  /** Force processor to reprocess data it already has processed. */
+  val reprocess: ScallopOption[Boolean] = opt("reprocess")
+
+  /** Actually run the processor (as opposed to just showing work). */
+  val yes: ScallopOption[Boolean] = opt("yes")
+
+  /** The processor (or pipeline if --pipeline specified) to run. */
+  val processorName: ScallopOption[String] = trailArg(required = false)
 
   // run shouldn't be there if version is
-  mutuallyExclusive(version, processor)
+  mutuallyExclusive(version, processorName)
 
   // parse the command line options
   verify
@@ -50,6 +56,9 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) with Processor.Fla
   lazy val config: Opts.Config = {
     configFile.toOption.map(BaseConfig.load[Opts.Config]).get
   }
+
+  /** The processor (or pipeline) to run. */
+  def processor(): String = processorName.getOrElse("")
 
   /**
    * Outputs standard help from Scallop along with an additional message.

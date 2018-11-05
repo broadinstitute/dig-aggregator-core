@@ -16,9 +16,14 @@ object TestProcessor {
     new Processor(processorName) {
 
       /**
+       * There is no work for this processor.
+       */
+      def getWork(reprocess: Boolean): IO[Seq[_]] = IO(Seq())
+
+      /**
        * Does nothing, just here for the trait.
        */
-      def run(flags: Processor.Flags): IO[Unit] = {
+      def run(reprocess: Boolean): IO[Unit] = {
         IO(println(name.toString))
       }
     }

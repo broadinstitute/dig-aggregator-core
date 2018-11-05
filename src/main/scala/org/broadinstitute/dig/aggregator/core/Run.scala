@@ -64,7 +64,9 @@ object Run {
    * When querying the `runs` table to determine what has already been
    * processed by dependency applications, this is what is returned.
    */
-  final case class Result(app: Processor.Name, output: String, timestamp: java.time.Instant)
+  final case class Result(app: Processor.Name, output: String, timestamp: java.time.Instant) {
+    override def toString: String = s"$app output '$output'"
+  }
 
   /**
    * Lookup all the results for a given run id. This is mostly used for
