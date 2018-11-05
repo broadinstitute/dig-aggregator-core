@@ -96,20 +96,21 @@ final class AwsTest extends AwsFunSuite {
   }
 
   testWithPseudoDirIO("Upload") {
-    doUploadTest("/test_upload.txt")
+    doUploadTest("test_upload.txt")
   }
 
   // Upload a resource file
   private def doUploadTest(resource: String): String => IO[Unit] = { pseudoDirKey =>
-    val key = s"""$pseudoDirKey/${resource.stripPrefix("/")}"""
+    val key = s"${pseudoDirKey}/${resource.stripPrefix("/")}"
 
     for {
       shouldntExist <- aws.ls(key)
-      _             <- aws.upload(pseudoDirKey, resource)
+      uri           <- aws.upload(resource, pseudoDirKey)
       shouldExist   <- aws.ls(key)
     } yield {
-      assert(shouldntExist == Nil)
-      assert(shouldExist == Seq(key))
+      assert(shouldntExist === Nil)
+      assert(uri === aws.uriOf(key))
+      assert(shouldExist === Seq(key))
       ()
     }
   }

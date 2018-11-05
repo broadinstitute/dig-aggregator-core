@@ -96,17 +96,26 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   def upload(resource: String, dirKey: String = "resources"): IO[URI] = {
     val key = s"""$dirKey/${resource.stripPrefix("/")}"""
 
+    //An IO that will produce the contents of the classpath resource at `resource` as a string,
+    //and will close the InputStream backed by the resource when reading the resource's data is
+    //done, either successfully or due to an error.
+    val contentsIo: IO[String] = { 
+      val streamIo = IO(getClass.getClassLoader.getResourceAsStream(resource))
+      
+      def closeStream(stream: InputStream): IO[Unit] = IO(stream.close())
+      
+      def getContents(stream: InputStream): IO[String] = IO(Source.fromInputStream(stream).mkString)
+      
+      streamIo.bracket(getContents(_))(closeStream(_))
+    }
+    
     for {
       _ <- IO(logger.debug(s"Uploading $resource to S3..."))
-
       // load the resource in the IO context
-      stream = getClass.getResourceAsStream(resource)
-      source = Source.fromInputStream(stream).mkString
-
+      contents <- contentsIo
       // upload it
-      _ <- put(key, source)
+      _ <- put(key, contents)
     } yield {
-      stream.close()
       uriOf(key)
     }
   }
