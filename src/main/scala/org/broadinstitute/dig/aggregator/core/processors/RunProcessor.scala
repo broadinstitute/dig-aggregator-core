@@ -16,7 +16,7 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
  * what outputs have been produced by applications it depends on, which set of
  * those it hasn't processed yet, and process them.
  */
-abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends JobProcessor(name, config) {
+abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name) {
 
   /**
    * All the processors this processor depends on.
@@ -24,9 +24,23 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Jo
   val dependencies: Seq[Processor.Name]
 
   /**
+   * The collection of resources this processor needs to have uploaded
+   * before the processor can run.
+   *
+   * These resources are from the classpath and are uploaded to a parallel
+   * location in HDFS!
+   */
+  val resources: Seq[String]
+
+  /**
    * Database transactor for loading state, etc.
    */
-  val xa: Transactor[IO] = config.mysql.newTransactor()
+  protected val xa: Transactor[IO] = config.mysql.newTransactor()
+
+  /**
+   * AWS client for uploading resources and running jobs.
+   */
+  protected val aws: AWS = new AWS(config.aws)
 
   /**
    * Process a set of run results. Must return the output location where this
@@ -35,16 +49,10 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Jo
   def processResults(results: Seq[Run.Result]): IO[_]
 
   /**
-   * Output results that would be processed if the --yes flag was specified.
+   * Calculates the set of things this processor needs to process.
    */
-  def showWork(results: Seq[Run.Result]): IO[_] = IO {
-    if (results.isEmpty) {
-      logger.info(s"Everything up to date.")
-    } else {
-      for (result <- results) {
-        logger.info(s"Process output of ${result.app}: ${result.output}")
-      }
-    }
+  override def getWork(reprocess: Boolean): IO[Seq[Run.Result]] = {
+    Run.resultsOf(xa, dependencies, if (reprocess) None else Some(name))
   }
 
   /**
@@ -57,17 +65,10 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Jo
    *
    * Otherwise, this is just called once and then exits.
    */
-  override def run(flags: Processor.Flags): IO[Unit] = {
-    val notProcessedBy = if (flags.reprocess()) None else Some(name)
-
+  override def run(reprocess: Boolean): IO[Unit] = {
     for {
-      _ <- uploadResources(flags)
-
-      // get the results not yet processed
-      results <- Run.resultsOf(xa, dependencies, notProcessedBy)
-
-      // either process them or show what would be processed
-      _ <- if (flags.yes()) processResults(results) else showWork(results)
+      _ <- resources.map(aws.upload(_)).toList.sequence
+      _ <- getWork(reprocess).flatMap(processResults)
     } yield ()
   }
 }

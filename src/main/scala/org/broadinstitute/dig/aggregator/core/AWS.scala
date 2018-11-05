@@ -28,6 +28,7 @@ import org.broadinstitute.dig.aggregator.core.config.AWSConfig
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.io.Source
 
 /**
  * AWS controller (S3 + EMR clients).
@@ -87,6 +88,36 @@ final class AWS(config: AWSConfig) extends LazyLogging {
    */
   def put(key: String, stream: InputStream): IO[PutObjectResult] = IO {
     s3.putObject(bucket, key, stream, new ObjectMetadata())
+  }
+
+  /**
+   * Upload a resource file to S3 (using a matching key) and return a URI to it.
+   */
+  def upload(resource: String, dirKey: String = "resources"): IO[URI] = {
+    val key = s"""$dirKey/${resource.stripPrefix("/")}"""
+
+    //An IO that will produce the contents of the classpath resource at `resource` as a string,
+    //and will close the InputStream backed by the resource when reading the resource's data is
+    //done, either successfully or due to an error.
+    val contentsIo: IO[String] = { 
+      val streamIo = IO(getClass.getClassLoader.getResourceAsStream(resource))
+      
+      def closeStream(stream: InputStream): IO[Unit] = IO(stream.close())
+      
+      def getContents(stream: InputStream): IO[String] = IO(Source.fromInputStream(stream).mkString)
+      
+      streamIo.bracket(getContents(_))(closeStream(_))
+    }
+    
+    for {
+      _ <- IO(logger.debug(s"Uploading $resource to S3..."))
+      // load the resource in the IO context
+      contents <- contentsIo
+      // upload it
+      _ <- put(key, contents)
+    } yield {
+      uriOf(key)
+    }
   }
 
   /**
