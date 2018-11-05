@@ -55,19 +55,19 @@ trait Pipeline extends LazyLogging {
    * done doing their work and have nothing left to do.
    */
   def run(config: BaseConfig, reprocess: Boolean): IO[Unit] = {
-    val ps = processors.map(n => n -> Processor(n.toString)(config).get).toMap
+    val ps = processors.map(n => n -> Processor(n)(config).get).toMap
 
     // recursive helper function
     def runProcessors(reprocess: Boolean): IO[Unit] = {
-      val fetchWork = for ((name, p) <- ps)
-        yield
-          p.hasWork(reprocess).map { work =>
-            if (work) Some(name) else None
-          }
+      val fetchWork = for ((name, p) <- ps) yield {
+        p.hasWork(reprocess).map { work =>
+          if (work) Some(name) else None
+        }
+      }
 
       // determine the list of all processors that have work
-      fetchWork.toList.parSequence.map(_.flatten).flatMap { processors =>
-        if (processors.size == 0) {
+      fetchWork.toList.parSequence.map(_.flatten).flatMap { dependenciesToRun =>
+        if (dependenciesToRun.isEmpty) {
           IO(logger.info("Everything up to date."))
         } else {
 
@@ -76,17 +76,17 @@ trait Pipeline extends LazyLogging {
            * then it shouldn't run yet. Only processors with no dependencies -
            * or with dependencies that have no work - should run.
            */
-          val shouldRun = processors.filter { name =>
+          val shouldRun = dependenciesToRun.filter { name =>
             ps(name) match {
-              case r: RunProcessor => r.dependencies.forall(!processors.contains(_))
+              case r: RunProcessor => r.dependencies.forall(!dependenciesToRun.contains(_))
               case _               => true
             }
           }
 
           // run everything in parallel
-          val io = shouldRun.size match {
-            case 0 => IO.raiseError(new Exception("There's work to do, but nothing ran!"))
-            case _ => shouldRun.map(ps(_).run(reprocess)).toList.parSequence
+          val io = shouldRun.isEmpty match {
+            case true => IO.raiseError(new Exception("There's work to do, but nothing ran!"))
+            case _    => shouldRun.map(ps(_).run(reprocess)).toList.parSequence
           }
 
           // after they finish, recursively try again (don't reprocess!)

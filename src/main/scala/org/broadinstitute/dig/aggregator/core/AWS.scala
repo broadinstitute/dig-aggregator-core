@@ -93,15 +93,22 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   /**
    * Upload a resource file to S3 (using a matching key) and return a URI to it.
    */
-  def upload(resource: String): IO[URI] = {
-    val stream = getClass.getResourceAsStream(resource)
-    val source = Source.fromInputStream(stream).mkString
-    val key    = s"""resources/${resource.stripPrefix("/")}"""
+  def upload(resource: String, dirKey: String = "resources"): IO[URI] = {
+    val key = s"""$dirKey/${resource.stripPrefix("/")}"""
 
     for {
       _ <- IO(logger.debug(s"Uploading $resource to S3..."))
+
+      // load the resource in the IO context
+      stream = getClass.getResourceAsStream(resource)
+      source = Source.fromInputStream(stream).mkString
+
+      // upload it
       _ <- put(key, source)
-    } yield uriOf(key)
+    } yield {
+      stream.close()
+      uriOf(key)
+    }
   }
 
   /**

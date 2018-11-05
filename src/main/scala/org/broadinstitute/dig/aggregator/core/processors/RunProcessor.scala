@@ -26,6 +26,9 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Pr
   /**
    * The collection of resources this processor needs to have uploaded
    * before the processor can run.
+   *
+   * These resources are from the classpath and are uploaded to a parallel
+   * location in HDFS!
    */
   val resources: Seq[String]
 
@@ -64,7 +67,7 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Pr
    */
   override def run(reprocess: Boolean): IO[Unit] = {
     for {
-      _ <- resources.map(aws.upload).toList.sequence
+      _ <- resources.map(aws.upload(_)).toList.sequence
       _ <- getWork(reprocess).flatMap(processResults)
     } yield ()
   }

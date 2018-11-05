@@ -58,7 +58,7 @@ abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extend
    */
   override def run(reprocess: Boolean): IO[Unit] = {
     for {
-      _ <- resources.map(aws.upload).toList.sequence
+      _ <- resources.map(aws.upload(_)).toList.sequence
       _ <- getWork(reprocess).flatMap(processDatasets)
     } yield ()
   }

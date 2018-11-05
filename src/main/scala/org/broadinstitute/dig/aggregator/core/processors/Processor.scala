@@ -25,7 +25,7 @@ abstract class Processor(val name: Processor.Name) extends LazyLogging {
    * True if this processor has something to process.
    */
   def hasWork(reprocess: Boolean): IO[Boolean] = {
-    getWork(reprocess).map(!_.isEmpty)
+    getWork(reprocess).map(_.nonEmpty)
   }
 
   /**
@@ -33,9 +33,10 @@ abstract class Processor(val name: Processor.Name) extends LazyLogging {
    */
   def showWork(reprocess: Boolean): IO[Unit] = {
     for (work <- getWork(reprocess)) yield {
-      work.size match {
-        case 0 => logger.info(s"Everything up to date.")
-        case n => work.foreach(i => logger.info(s"$i needs processed."))
+      if (work.isEmpty) {
+        logger.info(s"Everything up to date.")
+      } else {
+        work.foreach(i => logger.info(s"$i needs processed."))
       }
     }
   }
@@ -105,15 +106,21 @@ object Processor extends LazyLogging {
   }
 
   /**
-   * Create a processor given its name and a configuration.
+   * Version of apply() that takes the actual process name.
    */
-  def apply(name: String): BaseConfig => Option[Processor] = {
-    val n    = new Name(name)
-    val ctor = names.get(n)
+  def apply(name: Name): BaseConfig => Option[Processor] = {
+    val ctor = names.get(name)
 
     // lambda that will create this processor with a configuration
     { config: BaseConfig =>
-      ctor.map(_(n, config))
+      ctor.map(_(name, config))
     }
+  }
+
+  /**
+   * Create a processor given its name and a configuration.
+   */
+  def apply(name: String): BaseConfig => Option[Processor] = {
+    apply(new Name(name))
   }
 }
