@@ -43,7 +43,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
    * All the job scripts that need to be uploaded to AWS.
    */
   override val resources: Seq[String] = Seq(
-    "/pipeline/metaanalysis/runAnalysis.py",
+    "pipeline/metaanalysis/runAnalysis.py",
   )
 
   /**

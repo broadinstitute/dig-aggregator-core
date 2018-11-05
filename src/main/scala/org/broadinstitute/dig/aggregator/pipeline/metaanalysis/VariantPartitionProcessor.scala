@@ -34,7 +34,7 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
    * All the job scripts that need to be uploaded to AWS.
    */
   override val resources: Seq[String] = Seq(
-    "/pipeline/metaanalysis/partitionVariants.py",
+    "pipeline/metaanalysis/partitionVariants.py",
   )
 
   /**
