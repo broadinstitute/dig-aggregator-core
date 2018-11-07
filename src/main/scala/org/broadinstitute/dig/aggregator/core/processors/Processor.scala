@@ -75,11 +75,10 @@ object Processor extends LazyLogging {
   object Name {
 
     /**
-     * Implicit conversion from DB string to Processor.Name for doobie.
+     * Implicit conversion from/from DB string to Processor.Name for doobie.
      */
-    implicit val NameMeta: Meta[Name] = {
-      Meta[String].xmap(new Name(_), _.toString)
-    }
+    implicit val nameGet: Get[Name] = Get[String].tmap(new Name(_))
+    implicit val namePut: Put[Name] = Put[String].tcontramap(_.toString)
   }
 
   /**

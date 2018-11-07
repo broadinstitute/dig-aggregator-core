@@ -17,6 +17,7 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
  * those it hasn't processed yet, and process them.
  */
 abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name) {
+  import Implicits.contextShift
 
   /**
    * All the processors this processor depends on.

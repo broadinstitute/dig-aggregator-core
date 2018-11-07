@@ -10,8 +10,6 @@ import doobie.implicits._
 import java.io.File
 import java.io.PrintWriter
 
-import org.apache.kafka.clients.consumer.ConsumerRecord
-
 import org.broadinstitute.dig.aggregator.core.processors.Processor
 
 import org.json4s._

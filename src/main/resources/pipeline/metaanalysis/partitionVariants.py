@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     # get the source and output directories
     srcdir = 's3://dig-analysis-data/variants/%s/%s' % (args.dataset, args.phenotype)
-    outdir = 'file://%s/metaanalysis/%s/variants/%s' % (efsdir, args.phenotype, args.dataset)
+    outdir = 's3://dig-analysis-data/out/metaanalysis/variants/%s/%s' % (args.phenotype, args.dataset)
 
     # create a spark session
     spark = SparkSession.builder.appName('metaanalysis').getOrCreate()
@@ -39,25 +39,38 @@ if __name__ == '__main__':
     # remove all null pValue, beta values
     df = df \
         .filter(df.pValue.isNotNull()) \
-        .filter(df.beta.isNotNull())
+        .filter(df.beta.isNotNull()) \
+        .select(
+            df.varId,
+            df.chromosome,
+            df.position,
+            df.reference,
+            df.alt,
+            df.phenotype,
+            df.ancestry,
+            df.pValue,
+            df.beta,
+            df.eaf,
+            df.maf,
+            df.stdErr,
+            df.n,
+        )
 
     # split the variants into rare and common buckets
     rare = df.filter(df.maf.isNotNull() & (df.maf < 0.05))
     common = df.filter(df.maf.isNull() | (df.maf >= 0.05))
 
     # output the rare variants as a single CSV
-    rare.repartition(1) \
-        .write \
+    rare.write \
         .mode('overwrite') \
         .partitionBy('ancestry') \
-        .csv('%s/rare' % outdir, sep='\t', header=True)
+        .csv('%s/rare' % outdir, sep='\t')
 
     # output the common variants as a single CSV
-    common.repartition(1) \
-        .write \
+    common.write \
         .mode('overwrite') \
         .partitionBy('ancestry') \
-        .csv('%s/common' % outdir, sep='\t', header=True)
+        .csv('%s/common' % outdir, sep='\t')
 
     # done
     spark.stop()

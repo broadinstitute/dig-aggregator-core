@@ -22,11 +22,11 @@ import org.broadinstitute.dig.aggregator.core.processors._
  *
  * The output of the ancestry-specific analysis is written to:
  *
- *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/ancestry-specific/<ancestry>
+ *  s3://dig-analysis-data/out/metaanalysis/ancestry-specific/<phenotype>/ancestry=?
  *
  * The output of the trans-ethnic analysis is written to:
  *
- *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/trans-ethnic
+ *  s3://dig-analysis-data/out/metaanalysis/trans-ethnic/<phenotype>
  *
  * The inputs and outputs for this processor are expected to be phenotypes.
  */
@@ -59,7 +59,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
     val runs = for (phenotype <- phenotypes) yield {
       val steps = Seq(
         JobStep.PySpark(script, "--ancestry-specific", phenotype),
-        JobStep.PySpark(script, "--trans-ethnic", phenotype),
+        //JobStep.PySpark(script, "--trans-ethnic", phenotype),
       )
 
       for {

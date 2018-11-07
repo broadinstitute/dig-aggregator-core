@@ -1,8 +1,8 @@
 package org.broadinstitute.dig.aggregator.core
 
 import cats._
+import cats.data._
 import cats.effect._
-import cats.effect.concurrent._
 import cats.implicits._
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider
@@ -99,16 +99,16 @@ final class AWS(config: AWSConfig) extends LazyLogging {
     //An IO that will produce the contents of the classpath resource at `resource` as a string,
     //and will close the InputStream backed by the resource when reading the resource's data is
     //done, either successfully or due to an error.
-    val contentsIo: IO[String] = { 
+    val contentsIo: IO[String] = {
       val streamIo = IO(getClass.getClassLoader.getResourceAsStream(resource))
-      
+
       def closeStream(stream: InputStream): IO[Unit] = IO(stream.close())
-      
+
       def getContents(stream: InputStream): IO[String] = IO(Source.fromInputStream(stream).mkString)
-      
+
       streamIo.bracket(getContents(_))(closeStream(_))
     }
-    
+
     for {
       _ <- IO(logger.debug(s"Uploading $resource to S3..."))
       // load the resource in the IO context
@@ -212,8 +212,9 @@ final class AWS(config: AWSConfig) extends LazyLogging {
    *   StepState.CANCELLED
    */
   def waitForJob(job: AddJobFlowStepsResult, prevStep: Option[StepSummary] = None): IO[Unit] = {
-    import Implicits._
+    import Implicits.timer
 
+    // create the job request
     val request = new ListStepsRequest()
       .withClusterId(config.emr.cluster)
       .withStepIds(job.getStepIds)

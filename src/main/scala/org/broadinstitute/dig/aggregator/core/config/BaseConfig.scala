@@ -11,7 +11,6 @@ import scala.io.Source
  * Private configuration settings required by pretty much everything.
  */
 trait BaseConfig {
-  val kafka: KafkaConfig
   val aws: AWSConfig
   val mysql: MySQLConfig
   val neo4j: Neo4jConfig

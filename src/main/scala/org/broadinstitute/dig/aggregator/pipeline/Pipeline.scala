@@ -6,6 +6,7 @@ import cats.implicits._
 
 import com.typesafe.scalalogging.LazyLogging
 
+import org.broadinstitute.dig.aggregator.core.Implicits
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.processors.Processor
 import org.broadinstitute.dig.aggregator.core.processors.RunProcessor
@@ -59,6 +60,8 @@ trait Pipeline extends LazyLogging {
 
     // recursive helper function
     def runProcessors(reprocess: Boolean): IO[Unit] = {
+      import Implicits._
+
       val fetchWork = for ((name, p) <- ps) yield {
         p.hasWork(reprocess).map { work =>
           if (work) Some(name) else None

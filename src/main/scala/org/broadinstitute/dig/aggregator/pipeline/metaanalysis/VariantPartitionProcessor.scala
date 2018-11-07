@@ -10,18 +10,12 @@ import org.broadinstitute.dig.aggregator.core.processors._
 
 /**
  * When a variants dataset has finished uploading, this processor takes the
- * dataset and transforms it, ready for use by the rest of the pipeline. It
- * ensures that each variant...
+ * dataset and partitions the variants for use in the meta-analysis processor
+ * creating CSV data with the appropriate fields and partitioning them by
+ * rarity and ancestry:
  *
- *  * has a `varId`;
- *  * has a `beta` column (optionally derived from `oddRatio`);
- *  * has a `sampleSize` taken from the dataset's metadata;
- *
- * Once done, the variants are partitioned by phenotype, dataset, ancestry,
- * and then rarity:
- *
- *  file:///mnt/efs/metaanalysis/<phenotype>/<dataset>/common/ancestry=?/part-*
- *  file:///mnt/efs/metaanalysis/<phenotype>/<dataset>/rare/ancestry=?/part-*
+ *  s3://dig-analysis-data/out/metaanalysis/variants/<phenotype>/<dataset>/common/ancestry=?
+ *  s3://dig-analysis-data/out/metaanalysis/variants/<phenotype>/<dataset>/rare/ancestry=?
  */
 class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extends DatasetProcessor(name, config) {
 

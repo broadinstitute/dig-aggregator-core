@@ -1,14 +1,13 @@
 lazy val Versions = new {
   val Aws              = "1.11.349"
-  val Cats             = "1.1.0"
-  val CatsEffect       = "1.0.0-RC2"
-  val Doobie           = "0.5.3"
-  val Fs2              = "0.10.1"
+  val Cats             = "1.4.0"
+  val CatsEffect       = "1.0.0"
+  val Doobie           = "0.6.0"
+  val Fs2              = "1.0.0"
   val H2               = "1.4.197"
   val Hadoop           = "1.2.1"
   val Janino           = "3.0.8"
   val Json4s           = "3.5.3"
-  val Kafka            = "1.1.0"
   val LogbackClassic   = "1.2.3"
   val LogbackColorizer = "1.0.1"
   val MySQL            = "8.0.11"
@@ -53,7 +52,6 @@ lazy val mainDeps = Seq(
   "org.typelevel"                  %% "cats-core"           % Versions.Cats,
   "org.typelevel"                  %% "cats-effect"         % Versions.CatsEffect,
   "org.apache.hadoop"              % "hadoop-client"        % Versions.Hadoop,
-  "org.apache.kafka"               %% "kafka"               % Versions.Kafka,
   "mysql"                          % "mysql-connector-java" % Versions.MySQL
 )
 

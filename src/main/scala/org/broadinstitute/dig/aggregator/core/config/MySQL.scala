@@ -28,7 +28,7 @@ final case class MySQLConfig(
    * A connection pool here isn't really all that big a deal because queries
    * are run serially while processing Kafka messages.
    */
-  def newTransactor(): Transactor[IO] = {
+  def newTransactor()(implicit cs: ContextShift[IO]): Transactor[IO] = {
     val connectionString = s"jdbc:mysql://$url/$schema?$qs"
 
     // create the connection

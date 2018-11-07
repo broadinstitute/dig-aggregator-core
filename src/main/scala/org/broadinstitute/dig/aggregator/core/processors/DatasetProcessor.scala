@@ -18,6 +18,7 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
  * DatasetProcessors are always the entry point to a pipeline.
  */
 abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name) {
+  import Implicits.contextShift
 
   /**
    * All topic committed datasets come from.

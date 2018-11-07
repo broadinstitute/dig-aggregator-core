@@ -5,14 +5,20 @@ import glob
 import os.path
 import platform
 import re
+import shutil
 import subprocess
+import sys
 
 from pyspark.sql import SparkSession, Row
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType
 from pyspark.sql.functions import col, isnan, lit, when  # pylint: disable=E0611
 
-efsdir = '/mnt/efs'
+# where in S3 meta-analysis data is
+s3_path = 's3://dig-analysis-data/out/metaanalysis'
+
+# where metal is and where local processing takes place
 bindir = '/mnt/efs/bin'
+localdir = '/mnt/efs/metaanalysis'
 
 # where metal is located in S3
 metal_s3path = 's3://dig-analysis-data/bin/generic-metal/metal'
@@ -24,7 +30,6 @@ metal_local = '%s/metal' % bindir
 variants_schema = StructType(
     [
         StructField('varId', StringType(), nullable=False),
-        StructField('dataset', StringType(), nullable=False),
         StructField('chromosome', StringType(), nullable=False),
         StructField('position', IntegerType(), nullable=False),
         StructField('reference', StringType(), nullable=False),
@@ -33,8 +38,9 @@ variants_schema = StructType(
         StructField('pValue', DoubleType(), nullable=False),
         StructField('beta', DoubleType(), nullable=False),
         StructField('eaf', DoubleType(), nullable=False),
-        StructField('n', DoubleType(), nullable=False),
+        StructField('maf', DoubleType(), nullable=False),
         StructField('stdErr', DoubleType(), nullable=False),
+        StructField('n', DoubleType(), nullable=False),
     ]
 )
 
@@ -47,31 +53,6 @@ def install_metal():
         subprocess.check_call(['mkdir', '-p', bindir])
         subprocess.check_call(['aws', 's3', 'cp', metal_s3path, metal_local])
         subprocess.check_call(['chmod', '+x', metal_local])
-
-
-def variants_path(phenotype):
-    "Where in EFS are the partitioned variants stored for a given dataset."
-    return '%s/metaanalysis/%s/variants' % (efsdir, phenotype)
-
-
-def common_variants_path(phenotype, ancestry):
-    "Where the common variants for a given ancestry are stored."
-    return '%s/*/common/ancestry=%s' % (variants_path(phenotype), ancestry)
-
-
-def rare_variants_path(phenotype, ancestry):
-    "Where the rare variants for a given ancestry are stored."
-    return '%s/*/rare/ancestry=%s' % (variants_path(phenotype), ancestry)
-
-
-def ancestry_specific_path(phenotype, ancestry):
-    "Where the ancestry-specific analysis (per ancestry) is run."
-    return '%s/metaanalysis/%s/ancestry-specific/ancestry=%s' % (efsdir, phenotype, ancestry)
-
-
-def trans_ethnic_path(phenotype):
-    "Where the trans-ethnic analysis (per ancestry) is run."
-    return '%s/metaanalysis/%s/trans-ethnic/analysis' % (efsdir, phenotype)
 
 
 def metaanalysis_schema(samplesize=True, freq=False):
@@ -98,6 +79,7 @@ def metaanalysis_schema(samplesize=True, freq=False):
         schema += [
             StructField('Weight', DoubleType(), nullable=False),
             StructField('Zscore', DoubleType(), nullable=False),
+            StructField('N', DoubleType(), nullable=False),
         ]
     else:
         schema += [
@@ -145,6 +127,7 @@ def read_samplesize_analysis(spark, path):
             header=True,
             schema=metaanalysis_schema(samplesize=True, freq=True),
         ) \
+        .filter(col('MarkerName').isNotNull()) \
         .rdd \
         .map(transform) \
         .toDF() \
@@ -163,11 +146,15 @@ def read_stderr_analysis(spark, path):
         # sometimes METAL will flip the alleles
         flip = alt == row.Allele1.upper()
 
+        # get the effect allele frequency and minor allele frequency
+        eaf = row.Freq1 if not flip else 1.0 - row.Freq1
+        maf = eaf if eaf < 0.5 else 1.0 - eaf
+
         return Row(
             varId=row.MarkerName.upper(),
+            eaf=eaf,
+            maf=maf,
             beta=row.Effect if not flip else -row.Effect,
-            eaf=row.Freq1 if not flip else 1.0 - row.Freq1,
-            maxFreq=row.MaxFreq if not flip else 1.0 - row.MaxFreq,
             stdErr=row.StdErr,
         )
 
@@ -179,6 +166,7 @@ def read_stderr_analysis(spark, path):
             header=True,
             schema=metaanalysis_schema(samplesize=False, freq=True),
         ) \
+        .filter(col('MarkerName').isNotNull()) \
         .rdd \
         .map(transform) \
         .toDF() \
@@ -187,10 +175,11 @@ def read_stderr_analysis(spark, path):
         .filter(isnan(col('stdErr')) == False)
 
 
-def run_metal_script(workdir, parts, scheme, overlap=False, freq=False):
+def run_metal_script(workdir, parts, stderr=False, overlap=False, freq=False):
     """
     Run the METAL program at a given location with a set of part files.
     """
+    scheme = 'STDERR' if stderr else 'SAMPLESIZE'
     path = '%s/scheme=%s' % (workdir, scheme)
 
     # make sure the path exists and is empty
@@ -199,7 +188,7 @@ def run_metal_script(workdir, parts, scheme, overlap=False, freq=False):
 
     # header used for all input files
     script = [
-        'SCHEME %s' % scheme.upper(),
+        'SCHEME %s' % scheme,
         'SEPARATOR TAB',
         'COLUMNCOUNTING LENIENT',
         'MARKERLABEL varId',
@@ -222,7 +211,7 @@ def run_metal_script(workdir, parts, scheme, overlap=False, freq=False):
 
     # add the footer
     script += [
-        'OUTFILE %s/METAANALYSIS .csv' % path,
+        'OUTFILE %s/METAANALYSIS .tbl' % path,
         'ANALYZE',
         'QUIT',
     ]
@@ -243,7 +232,7 @@ def run_metal_script(workdir, parts, scheme, overlap=False, freq=False):
 
     # TODO: Verify by parsing the .info file and checking for errors.
 
-    return '%s/METAANALYSIS1.csv' % path
+    return '%s/METAANALYSIS1.tbl' % path
 
 
 def run_metal(spark, workdir, parts, overlap=False):
@@ -251,8 +240,8 @@ def run_metal(spark, workdir, parts, overlap=False):
     Run METAL twice: once for SAMPLESIZE (pValue + zScore) and once for STDERR,
     then load and join the results together in an DataFrame and return it.
     """
-    samplesize_outfile = run_metal_script(workdir, parts, 'SAMPLESIZE', overlap=overlap)
-    stderr_outfile = run_metal_script(workdir, parts, 'STDERR', overlap=False)
+    samplesize_outfile = run_metal_script(workdir, parts, stderr=False, overlap=overlap)
+    stderr_outfile = run_metal_script(workdir, parts, stderr=True, overlap=False)
 
     # load both files into data frames
     samplesize_analysis = read_samplesize_analysis(spark, 'file://' + samplesize_outfile)
@@ -262,31 +251,81 @@ def run_metal(spark, workdir, parts, overlap=False):
     return samplesize_analysis.join(stderr_analysis, 'varId')
 
 
+def merge_parts(path, outfile, add_header_schema=None):
+    """
+    Run `hadoop fs -getmerge` to join multiple CSV part files together.
+    """
+    subprocess.check_call(['hadoop', 'fs', '-getmerge', '-nl', '-skip-empty-file', path, outfile])
+
+    # after merging, add a header row to the resulting CSV
+    if add_header_schema is not None:
+        headers = '\t'.join(field.name for field in add_header_schema.fields)
+
+        # add the header to the top of the file
+        subprocess.check_call(['sed', '-i', '1i%s' % headers, outfile])
+
+
+def find_parts(path):
+    """
+    Run `hadoop fs -ls -C` to find all the files that match a particular path.
+    """
+    print('Collecting files from %s' % path)
+
+    return subprocess \
+        .check_output(['hadoop', 'fs', '-ls', '-C', path]) \
+        .split('\n')
+
+
 def run_ancestry_specific_analysis(spark, phenotype):
     """
     Runs METAL for each individual ancestry within a phenotype with OVERLAP ON,
     then union the output with the rare variants across all datasets for each
     ancestry.
     """
-    srcdir = variants_path(phenotype)
+    srcdir = '%s/variants/%s' % (s3_path, phenotype)
+    outdir = '%s/ancestry-specific/%s' % (s3_path, phenotype)
 
-    # dataset part files by ancestry
-    ancestries = {}
+    # completely nuke any pre-existing data that may be lying around...
+    shutil.rmtree(localdir, ignore_errors=True)
 
-    # find all the common variant part files
-    for part in glob.glob('%s/*/common/ancestry=*/part-*' % srcdir):
-        ancestry = re.search(r'/ancestry=([^/]+)/', part).group(1)
-        ancestries.setdefault(ancestry, []) \
-            .append(part)
+    # ancestry -> [dataset] map
+    ancestries = dict()
+    df = None
+
+    # the path format is .../<dataset>/(common|rare)/ancestry=?
+    r = re.compile(r'/([^/]+)/(?:common|rare)/ancestry=(.+)$')
+
+    # find all the unique ancestries across this phenotype
+    for part in find_parts('%s/*/*' % srcdir):
+        m = r.search(part)
+
+        if m is not None:
+            dataset, ancestry = m.groups()
+            ancestries.setdefault(ancestry, set()) \
+                .add(dataset)
 
     # for each ancestry, run METAL across all the datasets with OVERLAP ON
-    for ancestry, parts in ancestries.items():
-        outdir = ancestry_specific_path(phenotype, ancestry)
+    for ancestry, datasets in ancestries.items():
+        workdir = '%s/%s' % (localdir, ancestry)
+        analysisdir = '%s/_analysis' % workdir
 
-        # run METAL with OVERLAP load the results into a data frame
-        analysis = run_metal(spark, '%s/analysis' % outdir, parts, overlap=True) \
-            .withColumn('phenotype', lit(phenotype)) \
-            .withColumn('ancestry', lit(ancestry))
+        # collect all the dataset files created
+        dataset_files = []
+
+        # datasets need to be merged into a single file for METAL to EFS
+        for dataset in datasets:
+            parts = '%s/%s/common/ancestry=%s' % (srcdir, dataset, ancestry)
+            dataset_file = '%s/%s/common.csv' % (workdir, dataset)
+
+            # merge the common variants for the dataset together
+            merge_parts(parts, dataset_file, add_header_schema=variants_schema)
+
+            # tally all the
+            dataset_files.append(dataset_file)
+
+        # run METAL across all datasets with OVERLAP ON
+        analysis = run_metal(spark, analysisdir, dataset_files, overlap=True) \
+            .withColumn('phenotype', lit(phenotype))
 
         # NOTE: The columns from the analysis and rare variants need to be
         #       in the same order before unioning the sets together. To
@@ -303,49 +342,41 @@ def run_ancestry_specific_analysis(spark, phenotype):
             col('pValue'),
             col('beta'),
             col('eaf'),
-            col('n'),
+            col('maf'),
             col('stdErr'),
+            col('n'),
         ]
 
         # read the rare variants across all datasets for this ancestry
         rare_variants = spark.read \
             .csv(
-                'file://%s' % rare_variants_path(phenotype, ancestry),
+                '%s/*/rare/ancestry=%s' % (srcdir, ancestry),
                 sep='\t',
-                header=True,
                 schema=variants_schema,
             ) \
             .select(*columns)
 
         # combine the results with the rare variants for this ancestry
-        variants = analysis.select(*columns).union(rare_variants)
+        variants = analysis.select(*columns).union(rare_variants) \
+            .withColumn('ancestry', lit(ancestry))
 
         # keep only the variants from the largest sample size
         variants.rdd \
             .keyBy(lambda v: v.varId) \
             .reduceByKey(lambda a, b: b if b.n > a.n else a) \
             .map(lambda v: v[1]) \
-            .toDF() \
-            .repartition(1) \
-            .write \
-            .mode('overwrite') \
-            .csv('file://%s/analysis+rare' % outdir, sep='\t', header=True)
+            .toDF()
 
-        # write ancestry-specific frequencies for known ancestries
-        if ancestry in ['AA', 'AF', 'EU', 'HS', 'EA', 'SA']:
-            path = 's3://dig-analysis-data/out/metaanalysis/%s/ancestry-specific/ancestry=%s' % (phenotype, ancestry)
-            freq = analysis.select(
-                analysis.varId,
-                analysis.chromosome,
-                analysis.reference,
-                analysis.alt,
-                analysis.eaf,
-                analysis.phenotype,
-                analysis.ancestry,
-            )
+        # union all the variants together into a single data frame
+        df = variants if df is None else df.union(variants)
 
-            # write out the frequency data for this ancestry/phenotype
-            freq.write.mode('overwrite').csv(path, sep='\t', header=True)
+    # write out all the processed variants, rejoined with rare variants
+    df.write \
+        .mode('overwrite') \
+        .partitionBy('ancestry') \
+        .csv(outdir, sep='\t')
+
+    # TODO: rm -rf `localdir`
 
 
 def run_trans_ethnic_analysis(spark, phenotype):
@@ -354,14 +385,34 @@ def run_trans_ethnic_analysis(spark, phenotype):
     processed with OVERLAP OFF. Once done, the results are uploaded back to
     HDFS (S3) where they can be kept and uploaded to a database.
     """
-    outdir = 's3://dig-analysis-data/out/metaanalysis/%s/trans-ethnic' % phenotype
+    srcdir = '%s/ancestry-specific/%s' % (s3_path, phenotype)
+    outdir = '%s/trans-ethnic/%s' % (s3_path, phenotype)
 
-    # part files across the results from analyzing each ancestry
-    paths = '%s/analysis+rare/part-*' % ancestry_specific_path(phenotype, '*')
-    parts = [part for part in glob.glob(paths)]
+    # list of all ancestries for this analysis
+    ancestries = []
+    local_files = []
 
-    # run METAL joining all ancestries together
-    variants = run_metal(spark, trans_ethnic_path(phenotype), parts, overlap=False)
+    # the path format is .../<dataset>/(common|rare)/ancestry=?
+    r = re.compile(r'/ancestry=(.+)$')
+
+    # find all the unique ancestries across this phenotype
+    for part in find_parts(srcdir):
+        m = r.search(part)
+
+        if m is not None:
+            ancestries.append(m.group(1))
+
+    # for each ancestry, merge all the results into a single file
+    for ancestry in ancestries:
+        parts = '%s/ancestry=%s' % (srcdir, ancestry)
+        local_file = '%s/%s/variants.csv' % (localdir, ancestry)
+
+        merge_parts(parts, local_file, add_header_schema=variants_schema)
+        local_files.append(local_file)
+
+    # run METAL across all ancestries with OVERLAP OFF
+    variants = run_metal(spark, '%s/_analysis' % localdir, local_file, overlap=False) \
+        .withColumn('phenotype', lit(phenotype))
 
     # filter the top variants across the genome for this phenotype
     top = variants \
@@ -387,7 +438,7 @@ def run_trans_ethnic_analysis(spark, phenotype):
     variants.withColumn('top', top_col) \
         .write \
         .mode('overwrite') \
-        .csv(outdir, sep='\t', header=True)
+        .csv(outdir, sep='\t')
 
 
 # entry point

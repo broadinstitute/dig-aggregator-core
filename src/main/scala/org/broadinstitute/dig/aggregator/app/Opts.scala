@@ -77,7 +77,6 @@ object Opts {
    * A default implementation of BaseConfig.
    */
   final case class Config(
-      kafka: KafkaConfig,
       aws: AWSConfig,
       mysql: MySQLConfig,
       neo4j: Neo4jConfig,

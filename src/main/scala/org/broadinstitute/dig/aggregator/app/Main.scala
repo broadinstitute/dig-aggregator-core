@@ -113,7 +113,8 @@ object Main extends IOApp with LazyLogging {
         req.setBody(mail.build)
 
         // send the email
-        client.api(req)
+        //client.api(req)
+        logger.error(err.getMessage)
       }
     }
 
