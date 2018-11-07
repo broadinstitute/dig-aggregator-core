@@ -35,18 +35,6 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     def insert(a: A): IO[_]
   }
 
-  private object Insertable {
-    implicit object CommitsAreInsertable extends Insertable[Commit] {
-      override def insert(c: Commit): IO[_] = c.insert(xa)
-    }
-  }
-
-  def allCommits: Seq[Commit] = {
-    val q = sql"SELECT `commit`,`topic`,`partition`,`offset`,`dataset` FROM `commits`".query[Commit].to[List]
-
-    q.transact(xa).unsafeRunSync()
-  }
-
   def insertRun(app: Processor.Name, inputs: Seq[String], output: String): Long = {
     Run.insert(xa, app, inputs, output).unsafeRunSync
   }
