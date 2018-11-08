@@ -237,12 +237,16 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       .withVisibleToAllUsers(cluster.visibleToAllUsers)
       .withInstances(instances)
       .withSteps(steps.map(_.config).asJava)
-    
+
+    // create the IO action to launch the instance
     IO {
-      val job = emr.runJobFlow(request)
+      val job = cluster.amiId match {
+        case Some(id) => emr.runJobFlow(request.withCustomAmiId(id.value))
+        case None     => emr.runJobFlow(request)
+      }
 
       // show the ID of the cluster being created
-      logger.debug(s"Creating EMR cluster for job ${job.getJobFlowId}...")
+      logger.debug(s"Creating EMR cluster for ${cluster.name} (${job.getJobFlowId})...")
 
       // return the job
       job
@@ -263,7 +267,8 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   def waitForJobs(jobs: Seq[IO[RunJobFlowResult]], maxClusters: Int = 4): IO[Unit] = {
     import Implicits.contextShift
 
-    Stream.emits(jobs)
+    Stream
+      .emits(jobs)
       .covary[IO]
       .mapAsyncUnordered(maxClusters)(job => job.flatMap(waitForJob(_)))
       .compile
@@ -323,10 +328,11 @@ final class AWS(config: AWSConfig) extends LazyLogging {
           case None       => true
         }
 
-        // if the step/state has changed, log the change
         if (changed) {
+          val jar = step.getConfig.getJar
           val args = step.getConfig.getArgs.asScala.mkString(" ")
-          logger.debug(s"...${job.getJobFlowId} ${step.getStatus.getState}: ${step.getName} $args (${step.getId})")
+          
+          logger.debug(s"...${job.getJobFlowId} ${step.getStatus.getState}: $jar $args (${step.getId})")
         }
 
         // continue waiting

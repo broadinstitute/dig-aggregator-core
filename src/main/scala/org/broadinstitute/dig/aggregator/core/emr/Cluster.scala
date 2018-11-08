@@ -10,7 +10,7 @@ import java.net.URI
  */
 final case class Cluster(
     name: String,
-    ami: Option[AmiId] = None, //AmiId.amazonLinux_2018_3,
+    amiId: Option[AmiId] = None, //AmiId.amazonLinux_2018_3,
     instances: Int = 3,
     masterInstanceType: InstanceType = InstanceType.m5_4xlarge,
     slaveInstanceType: InstanceType = InstanceType.m5_2xlarge,

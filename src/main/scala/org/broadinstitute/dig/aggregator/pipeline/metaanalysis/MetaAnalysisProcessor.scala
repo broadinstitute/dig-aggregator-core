@@ -6,7 +6,7 @@ import cats.implicits._
 
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.emr.Cluster
+import org.broadinstitute.dig.aggregator.core.emr._
 import org.broadinstitute.dig.aggregator.core.processors._
 
 /**
@@ -44,6 +44,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
    * All the job scripts that need to be uploaded to AWS.
    */
   override val resources: Seq[String] = Seq(
+    "pipeline/metaanalysis/cluster-bootstrap.sh",
     "pipeline/metaanalysis/runAnalysis.py",
   )
 
@@ -51,19 +52,24 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
    * Take all the phenotype results from the dependencies and process them.
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
-    val script = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
+    val bootstrapScript = aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh")
+    val script          = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
 
     // collect unique phenotypes across all results to process
     val phenotypes = results.map(_.output).distinct
 
     // create a set of jobs for each phenotype
     val runs = for (phenotype <- phenotypes) yield {
-      val cluster = Cluster(name = name.toString)
+      val cluster = Cluster(
+        name = name.toString,
+        bootstrapScripts = Seq(bootstrapScript),
+        amiId = Some(AmiId("ami-0f4a13be672c13cbd")),
+      )
 
       // first run ancestry-specific and then trans-ethnic
       val steps = Seq(
         JobStep.PySpark(script, "--ancestry-specific", phenotype),
-        JobStep.PySpark(script, "--trans-ethnic", phenotype),
+        //JobStep.PySpark(script, "--trans-ethnic", phenotype),
       )
 
       for {

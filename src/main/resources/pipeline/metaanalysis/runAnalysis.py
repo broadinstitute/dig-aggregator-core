@@ -16,15 +16,11 @@ from pyspark.sql.functions import col, isnan, lit, when  # pylint: disable=E0611
 # where in S3 meta-analysis data is
 s3_path = 's3://dig-analysis-data/out/metaanalysis'
 
-# where metal is and where local processing takes place
-bindir = '/mnt/efs/bin'
+# where local processing takes place (must be in EFS!)
 localdir = '/mnt/efs/metaanalysis'
 
-# where metal is located in S3
-metal_s3path = 's3://dig-analysis-data/bin/generic-metal/metal'
-
-# where metal is installed to locally
-metal_local = '%s/metal' % bindir
+# where metal is installed locally
+metal_local = '/opt/metal/metal'
 
 # this is the schema written out by the variant partition process
 variants_schema = StructType(
@@ -43,16 +39,6 @@ variants_schema = StructType(
         StructField('n', DoubleType(), nullable=False),
     ]
 )
-
-
-def install_metal():
-    """
-    Install metal from S3.
-    """
-    if not os.path.isfile(metal_local):
-        subprocess.check_call(['mkdir', '-p', bindir])
-        subprocess.check_call(['aws', 's3', 'cp', metal_s3path, metal_local])
-        subprocess.check_call(['chmod', '+x', metal_local])
 
 
 def metaanalysis_schema(samplesize=True, freq=False):
@@ -461,9 +447,6 @@ if __name__ == '__main__':
 
     # --ancestry-specific or --trans-ethnic must be provided, but not both!
     assert args.ancestry_specific != args.trans_ethnic
-
-    # make sure metal is installed locally
-    install_metal()
 
     # create the spark context
     spark = SparkSession.builder.appName('MetaAnalysis').getOrCreate()
