@@ -197,9 +197,10 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   }
 
   /**
-   * Given a set of steps, start a job.
+   * Create a job request that will be used to create a new EMR cluster and
+   * run a series of steps.
    */
-  def runJob(cluster: Cluster, steps: Seq[JobStep]): IO[RunJobFlowResult] = IO {
+  def runJob(cluster: Cluster, steps: Seq[JobStep]): IO[RunJobFlowResult] = {
     import Implicits.RichURI
 
     // create all the bootstrap actions for this cluster
@@ -236,15 +237,42 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       .withVisibleToAllUsers(cluster.visibleToAllUsers)
       .withInstances(instances)
       .withSteps(steps.map(_.config).asJava)
+    
+    IO {
+      val job = emr.runJobFlow(request)
 
-    // show the job ID so it can be referenced in the AWS console
-    logger.debug(s"Submitted job with ${steps.size} steps...")
+      // show the ID of the cluster being created
+      logger.debug(s"Creating EMR cluster ${job.getJobFlowId}...")
 
-    emr.runJobFlow(request)
+      // return the job
+      job
+    }
   }
 
   /**
-   * Every 20 seconds, send a request to the cluster to determine the state
+   * Helper: create a job that's a single step.
+   */
+  def runJob(cluster: Cluster, step: JobStep): IO[RunJobFlowResult] = {
+    runJob(cluster, Seq(step))
+  }
+
+  /**
+   * Given a sequence of jobs, run them in parallel, but limit the maximum
+   * concurrency so too many clusters aren't created at once.
+   */
+  def waitForJobs(jobs: Seq[IO[RunJobFlowResult]], maxClusters: Int = 4): IO[Unit] = {
+    import Implicits.contextShift
+
+    Stream.emits(jobs)
+      .covary[IO]
+      .mapAsyncUnordered(maxClusters)(job => job.flatMap(waitForJob(_)))
+      .compile
+      .toList
+      .as(())
+  }
+
+  /**
+   * Every 5 seconds, send a request to the cluster to determine the state
    * of all the steps in the job. Only return once the state is one of the
    * following for the last/current step:
    *
@@ -276,12 +304,12 @@ final class AWS(config: AWSConfig) extends LazyLogging {
      */
     curStep.flatMap {
       case None =>
-        logger.debug(s"Job complete")
+        logger.debug(s"Job ${job.getJobFlowId} complete")
         IO.unit
 
       // the current step stopped for some reason
       case Some(step) if step.isStopped =>
-        logger.error(s"Job failed: ${step.stopReason}")
+        logger.error(s"Job failed on ${job.getJobFlowId}: ${step.stopReason}")
         logger.error(s"View output logs from the master node of the cluster by running:")
         logger.error(s"  yarn logs --applicationId <id>")
         IO.fromEither(Left(new Throwable(step.stopReason)))
@@ -295,46 +323,11 @@ final class AWS(config: AWSConfig) extends LazyLogging {
 
         // if the step/state has changed, log the change
         if (changed) {
-          logger.debug(s"...${step.getName} (${job.getJobFlowId} : ${step.getId}): ${step.getStatus.getState}")
+          logger.debug(s"...${job.getJobFlowId} (${step.getName}; ${step.getId}): ${step.getStatus.getState}")
         }
 
         // continue waiting
         waitForJob(job, Some(step))
     }
-  }
-
-  /**
-   * Helper: runs a job and waits for the results to complete.
-   */
-  def runJobAndWait(cluster: Cluster, steps: Seq[JobStep]): IO[Unit] = {
-    runJob(cluster, steps).flatMap(waitForJob(_))
-  }
-
-  /**
-   * Helper: run a single step as a job.
-   */
-  def runStep(cluster: Cluster, step: JobStep): IO[RunJobFlowResult] = {
-    runJob(cluster, List(step))
-  }
-
-  /**
-   * Helper: run a single step and wait for it to complete.
-   */
-  def runStepAndWait(cluster: Cluster, step: JobStep): IO[Unit] = {
-    runStep(cluster, step).flatMap(waitForJob(_))
-  }
-
-  /**
-   * A list of jobs to run in parallel (waiting), but only N at once.
-   */
-  def runJobs(jobs: Seq[IO[RunJobFlowResult]], limit: Int = 3): IO[List[Unit]] = {
-    import Implicits.contextShift
-
-    // build a stream and run it
-    Stream.emits(jobs)
-      .covary[IO]
-      .mapAsyncUnordered(limit)(_.flatMap(waitForJob(_)))
-      .compile
-      .toList
   }
 }

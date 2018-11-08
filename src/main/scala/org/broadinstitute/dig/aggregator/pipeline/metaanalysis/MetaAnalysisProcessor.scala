@@ -63,21 +63,17 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
       // first run ancestry-specific and then trans-ethnic
       val steps = Seq(
         JobStep.PySpark(script, "--ancestry-specific", phenotype),
-        //JobStep.PySpark(script, "--trans-ethnic", phenotype),
+        JobStep.PySpark(script, "--trans-ethnic", phenotype),
       )
 
       for {
-        _ <- IO(logger.info(s"Processing phenotype $phenotype..."))
-
-        // first run ancestry-specific analysis, followed by trans-ethnic
-        _ <- aws.runJobAndWait(cluster, steps)
-
-        // add the result to the database
-        _ <- Run.insert(xa, name, Seq(phenotype), phenotype)
-      } yield logger.info("Done")
+        _      <- IO(logger.info(s"Processing phenotype $phenotype..."))
+        result <- aws.runJob(cluster, steps)
+        _      <- Run.insert(xa, name, Seq(phenotype), phenotype)
+      } yield result
     }
 
     // process each phenotype (could be done in parallel!)
-    runs.toList.sequence >> IO.unit
+    aws.waitForJobs(runs)
   }
 }

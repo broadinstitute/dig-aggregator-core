@@ -72,9 +72,9 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
       val step    = JobStep.PySpark(script, dataset, phenotype)
 
       for {
-        _  <- IO(logger.info(s"...$dataset/$phenotype"))
-        io <- aws.runStep(cluster, step)
-      } yield io
+        _      <- IO(logger.info(s"...$dataset/$phenotype"))
+        result <- aws.runJob(cluster, step)
+      } yield result
     }
 
     // create a unique list of dataset/phenotype pairs as inputs
@@ -85,9 +85,9 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
     // run all the jobs (note: this could be done in parallel!)
     for {
       _ <- IO(logger.info(s"Processing $phenotype datasets..."))
-      _ <- aws.runJobs(jobs)
-      _ <- IO(logger.info("Done"))
+      _ <- aws.waitForJobs(jobs)
       _ <- Run.insert(xa, name, inputs, phenotype)
+      _ <- IO(logger.info("Done"))
     } yield ()
   }
 }
