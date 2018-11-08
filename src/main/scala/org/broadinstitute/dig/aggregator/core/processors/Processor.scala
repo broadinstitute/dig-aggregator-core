@@ -19,20 +19,20 @@ abstract class Processor(val name: Processor.Name) extends LazyLogging {
   /**
    * Determines the set of things that need to be processed.
    */
-  def getWork(reprocess: Boolean): IO[Seq[_]]
+  def getWork(reprocess: Boolean, only: Option[String]): IO[Seq[_]]
 
   /**
    * True if this processor has something to process.
    */
   def hasWork(reprocess: Boolean): IO[Boolean] = {
-    getWork(reprocess).map(_.nonEmpty)
+    getWork(reprocess, None).map(_.nonEmpty)
   }
 
   /**
    * Logs the set of things this processor will process if run.
    */
-  def showWork(reprocess: Boolean): IO[Unit] = {
-    for (work <- getWork(reprocess)) yield {
+  def showWork(reprocess: Boolean, only: Option[String]): IO[Unit] = {
+    for (work <- getWork(reprocess, only)) yield {
       if (work.isEmpty) {
         logger.info(s"Everything up to date.")
       } else {
@@ -44,7 +44,7 @@ abstract class Processor(val name: Processor.Name) extends LazyLogging {
   /**
    * Run this processor.
    */
-  def run(reprocess: Boolean): IO[Unit]
+  def run(reprocess: Boolean, only: Option[String]): IO[Unit]
 }
 
 /**

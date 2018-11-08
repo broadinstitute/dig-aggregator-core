@@ -6,6 +6,7 @@ import cats.implicits._
 
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
+import org.broadinstitute.dig.aggregator.core.emr.Cluster
 import org.broadinstitute.dig.aggregator.core.processors._
 
 /**
@@ -61,16 +62,19 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
    * completely ready to be processed once done.
    */
   def processPhenotype(phenotype: String, datasets: Seq[String]): IO[Unit] = {
+    import Implicits.contextShift
+
     val script = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
 
     // create a job for each dataset
     val jobs = datasets.map { dataset =>
-      val step = JobStep.PySpark(script, dataset, phenotype)
+      val cluster = Cluster(name = name.toString)
+      val step    = JobStep.PySpark(script, dataset, phenotype)
 
       for {
-        _ <- IO(logger.info(s"...$dataset/$phenotype"))
-        _ <- aws.runStepAndWait(step)
-      } yield ()
+        _  <- IO(logger.info(s"...$dataset/$phenotype"))
+        io <- aws.runStep(cluster, step)
+      } yield io
     }
 
     // create a unique list of dataset/phenotype pairs as inputs
@@ -81,7 +85,7 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
     // run all the jobs (note: this could be done in parallel!)
     for {
       _ <- IO(logger.info(s"Processing $phenotype datasets..."))
-      _ <- jobs.toList.sequence
+      _ <- aws.runJobs(jobs)
       _ <- IO(logger.info("Done"))
       _ <- Run.insert(xa, name, inputs, phenotype)
     } yield ()

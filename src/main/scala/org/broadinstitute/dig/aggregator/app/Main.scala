@@ -87,9 +87,10 @@ object Main extends IOApp with LazyLogging {
    */
   private def runProcessor(name: String, opts: Opts): IO[Unit] = {
     val reprocess = opts.reprocess()
+    val only      = opts.only.toOption
 
     Processor(name)(opts.config) match {
-      case Some(p) => if (opts.yes()) p.run(reprocess) else p.showWork(reprocess)
+      case Some(p) => if (opts.yes()) p.run(reprocess, only) else p.showWork(reprocess, only)
       case _       => IO.raiseError(new Exception(s"Unknown processor '$name'"))
     }
   }

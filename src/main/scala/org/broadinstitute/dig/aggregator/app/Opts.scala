@@ -33,6 +33,9 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   /** Actually run the processor (as opposed to just showing work). */
   val yes: ScallopOption[Boolean] = opt("yes")
 
+  /** Only process a single input with a given name (good for debugging). */
+  val only: ScallopOption[String] = opt("only")
+
   /** The processor (or pipeline if --pipeline specified) to run. */
   val processorName: ScallopOption[String] = trailArg(required = false)
 

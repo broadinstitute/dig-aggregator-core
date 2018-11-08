@@ -49,18 +49,22 @@ abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extend
   /**
    * Calculates the set of things this processor needs to process.
    */
-  override def getWork(reprocess: Boolean): IO[Seq[Dataset]] = {
-    Dataset.datasetsOf(xa, topic, if (reprocess) None else Some(name))
+  override def getWork(reprocess: Boolean, only: Option[String]): IO[Seq[Dataset]] = {
+    for {
+      datasets <- Dataset.datasetsOf(xa, topic, if (reprocess) None else Some(name))
+    } yield {
+      datasets.filter(d => only.getOrElse(d.dataset) == d.dataset)
+    }
   }
 
   /**
    * Determine the list of datasets that need processing, process them, and
    * write to the database that they were processed.
    */
-  override def run(reprocess: Boolean): IO[Unit] = {
+  override def run(reprocess: Boolean, only: Option[String]): IO[Unit] = {
     for {
       _ <- resources.map(aws.upload(_)).toList.sequence
-      _ <- getWork(reprocess).flatMap(processDatasets)
+      _ <- getWork(reprocess, only).flatMap(processDatasets)
     } yield ()
   }
 }

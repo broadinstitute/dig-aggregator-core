@@ -6,6 +6,7 @@ import cats.implicits._
 
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
+import org.broadinstitute.dig.aggregator.core.emr.Cluster
 import org.broadinstitute.dig.aggregator.core.processors._
 
 /**
@@ -57,6 +58,9 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
 
     // create a set of jobs for each phenotype
     val runs = for (phenotype <- phenotypes) yield {
+      val cluster = Cluster(name = name.toString)
+
+      // first run ancestry-specific and then trans-ethnic
       val steps = Seq(
         JobStep.PySpark(script, "--ancestry-specific", phenotype),
         //JobStep.PySpark(script, "--trans-ethnic", phenotype),
@@ -66,7 +70,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
         _ <- IO(logger.info(s"Processing phenotype $phenotype..."))
 
         // first run ancestry-specific analysis, followed by trans-ethnic
-        _ <- aws.runJobAndWait(steps)
+        _ <- aws.runJobAndWait(cluster, steps)
 
         // add the result to the database
         _ <- Run.insert(xa, name, Seq(phenotype), phenotype)

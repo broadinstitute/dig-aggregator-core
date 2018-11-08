@@ -41,7 +41,7 @@ trait Pipeline extends LazyLogging {
    */
   def showWork(config: BaseConfig, reprocess: Boolean): IO[Unit] = {
     val work = for (name <- processors) yield {
-      Processor(name.toString)(config).get.showWork(reprocess)
+      Processor(name.toString)(config).get.showWork(reprocess, None)
     }
 
     work.toList.sequence >> IO.unit
@@ -89,7 +89,7 @@ trait Pipeline extends LazyLogging {
           // run everything in parallel
           val io = shouldRun.isEmpty match {
             case true => IO.raiseError(new Exception("There's work to do, but nothing ran!"))
-            case _    => shouldRun.map(ps(_).run(reprocess)).toList.parSequence
+            case _    => shouldRun.map(ps(_).run(reprocess, None)).toList.parSequence
           }
 
           // after they finish, recursively try again (don't reprocess!)

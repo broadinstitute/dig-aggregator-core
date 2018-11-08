@@ -44,11 +44,6 @@ The default configuration parameter is `config.json`, but can be overridden with
 
 ```json
 {
-    "kafka": {
-        "brokers": [
-            "ec2-xx-xx-xx-xx.compute-1.amazonaws.com:9092"
-        ]
-    },
     "aws": {
         "key": "key",
         "secret": "secret",
@@ -109,93 +104,19 @@ The `src/main/resources/pipeline` folder contains all the job scripts (each in t
 
 There are a few different type of processors that are implemented in each pipeline:
 
-### IntakeProcessor
-
-The `IntakeProcessor` is strictly for use within the `intake` pipeline. This is a processor that reads from Kafka and does processes each record.
-
-### UploadProcessor
-
-The `UploadProcessor` is a specific type of `IntakeProcessor`. It assumes that the Kafka topic being consumed is uploading datasets and adheres to a very specific protocol: CREATE, UPLOAD, and COMMIT. Each message will be JSON and will contain the unique ID of the dataset, a method (CREATE, UPLOAD, or COMMIT), and a body that is unique per method.
-
-The first record for a dataset on the topic will be the `COMMIT` message:
-
-```js
-{
-  "id": "unique_dataset_id",
-  "method": "COMMIT",
-  "body": {
-    // metadata for this dataset
-  }
-}
-```
-
-When this message is encountered, any existing data in S3 for this dataset is deleted and a new directory is created with a single `metadata` file containing the contents of `body`. This is done per-topic. For example, the `variants` topic would end up writing to:
-
-```
-s3://dig-analysis-data/variants/unique_dataset_id/metadata
-```
-
-Next, zero or more `UPLOAD` messages are sent:
-
-```js
-{
-  "id": "unique_dataset_id",
-  "method": "UPLOAD",
-  "body": {
-    "count": 100,
-    "data": [
-      {
-        // a single entry for this dataset
-      },
-
-      // ...(count-1) more items...
-    ]
-  }
-}
-```
-
-These messages are read by the `UploadProcessor` and the entries are written to a single file in the directory for the dataset. Each line of the file is a single JSON object intended to be processed by Spark:
-
-```
-{entry-1}
-{entry-2}
-{entry-3}
-...
-```
-
-The filename given to each is `data-<offset>`, where `<offset>` is the partition offset this record is at, guaranteeing uniqueness across all files in the dataset.
-
-Finally, a `COMMIT` message is sent (with no `body`). This signals that the dataset is done and can now be processed further by other processors in across all pipelines.
-
-### JobProcessor
-
-A `JobProcessor` is simply a processor that has resources that need to be uploaded to S3 (e.g. PySpark scripts) before the processor can run.
-
 ### DatasetProcessor
 
-Once a dataset has been completely uploaded and committed to HDFS (S3), it can then be processed by a `DatasetProcessor` (a subclass of `JobProcessor`). Dataset processors look for any new datasets committed to a given topic and take the next step necessary to prepare it for future use. 
+Once a dataset has been completely uploaded and committed to HDFS (S3), it can then be processed by a `DatasetProcessor`. Dataset processors look for any new datasets committed to a given topic and take the next step necessary to prepare it for future use. 
 
-DatasetProcessors are (typically) the first processor in a pipeline to run as they have no dependencies other than a new dataset being uploaded.
+A dataset processors (typically) is first processor in a pipeline to run as they have no dependencies other than a new dataset being uploaded.
 
 ### RunProcessor
 
-A `RunProcessor` is a `JobProcessor` that has other processors as dependencies. It waits until a dependency processor has new output, then uses that output as input for its own process. After a `DatasetProcessor` executes, run processors typically make up the rest of the process "graph" for a pipeline.
+A `RunProcessor` is a `Processor` that has other processors as dependencies. It waits until a dependency processor has new output, then uses that output as input for its own process. After a `DatasetProcessor` executes, run processors typically make up the rest of the process "graph" for a pipeline.
 
-## Processor Database
+## Aggregator Database
 
 Each processor knows how to save its current state and how to either pick up where it left off or check for new work to be processed.
-
-An `IntakeProcessor` uses the `offsets` table in the database. It tracks what offsets (for each partition on a given topic) have already been successfully processed. A `RunProcessor` uses the `runs` table keeps track of what inputs have been processed by each processor already. Consider the following example:
-
-> The `VariantProcessor` (an `UploadProcessor`) reads from the topic `varaints` in Kafka and uploads datasets to S3. As it consumes messages, it writes to the `offsets` table each offset consumed for each partition.
->
-> Once the `VariantProcessor` receives the `COMMIT` message, it sends that message back to the `commits` topic in Kafka, and the `CommitProcessor` (an `IntakeProcessor`) gets it and writes it to the database.
->
-> At this point, the `metaanalysis.VariantPartitionProcessor` (a `DatasetProcessor`) can see in the `commits` table that a dataset has been added that it hasn't yet processed (there is no `runs` entry for it, it the existing entry for that dataset is out of date as the dataset has been updated). It then runs, using the dataset as input and producing an output (in this example, a phenotype) and writes the run to the database.
->
-> Next, the `metaanalysis.AncestrySpecificProcessor`, which depends on the variant partition processor, discovers that one of its dependencies has produced a new output that it hasn't yet processed, and starts to run.
->
-> This continues until the entire meta-analysis pipeline is complete...
 
 # fin.
 

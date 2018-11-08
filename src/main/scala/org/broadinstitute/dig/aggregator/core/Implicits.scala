@@ -2,6 +2,8 @@ package org.broadinstitute.dig.aggregator.core
 
 import cats.effect._
 
+import fs2._
+
 import java.net.URI
 import java.nio.file.Paths
 

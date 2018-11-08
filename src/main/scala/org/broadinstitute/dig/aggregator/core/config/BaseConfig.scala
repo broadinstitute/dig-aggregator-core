@@ -21,7 +21,7 @@ trait BaseConfig {
  * Companion object for loading configuration files.
  */
 object BaseConfig {
-  implicit val formats: Formats = DefaultFormats
+  implicit val formats: Formats = DefaultFormats ++ emr.EmrConfig.customSerializers
 
   /**
    * Load and parse a configuration file.

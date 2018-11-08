@@ -1,5 +1,9 @@
 package org.broadinstitute.dig.aggregator.core.config
 
+import java.net.URI
+
+import org.broadinstitute.dig.aggregator.core.config.emr._
+
 /**
  * AWS configuration settings.
  */
@@ -7,16 +11,6 @@ final case class AWSConfig(
     key: String,
     secret: String,
     region: String,
-    emr: EMR,
-    s3: S3
+    bucket: String,
+    emr: EmrConfig,
 )
-
-/**
- * Optional AWS EMR settings.
- */
-final case class EMR(cluster: String)
-
-/**
- * Optional AWS S3 settings.
- */
-final case class S3(bucket: String)
