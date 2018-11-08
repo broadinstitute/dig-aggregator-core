@@ -86,15 +86,21 @@ object Run {
    * of them together.
    */
   private def resultsOf(xa: Transactor[IO], deps: Seq[Processor.Name]): IO[Seq[Result]] = {
-    val qs = deps.map { dep =>
-      sql"SELECT `app`, `output`, `timestamp` FROM `runs` WHERE app=$dep"
+    val selects = deps.map { dep =>
+      fr"SELECT `app`, `output`, `timestamp` FROM `runs` WHERE `app`=$dep"
     }
 
+    // join all the dependencies together
+    val union  = selects.toList.intercalate(fr"UNION ALL")
+    val select = fr"SELECT `inputs`.`app`, `inputs`.`output`, MAX(`inputs`.`timestamp`) AS `timestamp`"
+    val from   = fr"FROM (" ++ union ++ fr") AS `inputs`"
+    val group  = fr"GROUP BY `inputs`.`app`, `inputs`.`output`"
+
     // run a select query for each application
-    val results = qs.map(_.query[Result].to[Seq].transact(xa))
+    val q = (select ++ from ++ group).query[Result].to[Seq]
 
     // join all the results together into a single list
-    results.toList.sequence.map(_.reduce(_ ++ _))
+    q.transact(xa)
   }
 
   /**
@@ -106,7 +112,7 @@ object Run {
                         deps: Seq[Processor.Name],
                         notProcessedBy: Processor.Name): IO[Seq[Result]] = {
     val selects = deps.map { dep =>
-      fr"SELECT `app`, `output`, `timestamp` FROM runs WHERE app=$dep"
+      fr"SELECT `app`, `output`, `timestamp` FROM `runs` WHERE `app`=$dep"
     }
 
     // join all the dependencies together

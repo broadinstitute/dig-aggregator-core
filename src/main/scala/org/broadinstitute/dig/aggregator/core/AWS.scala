@@ -272,7 +272,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   }
 
   /**
-   * Every 5 seconds, send a request to the cluster to determine the state
+   * Every few minutes, send a request to the cluster to determine the state
    * of all the steps in the job. Only return once the state is one of the
    * following for the last/current step:
    *
@@ -289,7 +289,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       .withClusterId(job.getJobFlowId)
 
     // wait a little bit then request status
-    val req = for (_ <- IO.sleep(5.seconds)) yield emr.listSteps(request)
+    val req = for (_ <- IO.sleep(2.minutes)) yield emr.listSteps(request)
 
     /*
      * The step summaries are returned in reverse order. The job is complete
