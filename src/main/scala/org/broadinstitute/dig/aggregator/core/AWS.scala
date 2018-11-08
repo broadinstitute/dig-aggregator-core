@@ -242,7 +242,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       val job = emr.runJobFlow(request)
 
       // show the ID of the cluster being created
-      logger.debug(s"Creating EMR cluster ${job.getJobFlowId}...")
+      logger.debug(s"Creating EMR cluster for job ${job.getJobFlowId}...")
 
       // return the job
       job
@@ -309,10 +309,12 @@ final class AWS(config: AWSConfig) extends LazyLogging {
 
       // the current step stopped for some reason
       case Some(step) if step.isStopped =>
-        logger.error(s"Job failed on ${job.getJobFlowId}: ${step.stopReason}")
+        logger.error(s"Job ${job.getJobFlowId} failed: ${step.stopReason}")
         logger.error(s"View output logs from the master node of the cluster by running:")
         logger.error(s"  yarn logs --applicationId <id>")
-        IO.fromEither(Left(new Throwable(step.stopReason)))
+
+        // terminate the program
+        IO.raiseError(new Exception(step.stopReason))
 
       // still waiting for the current step to complete
       case Some(step) =>
@@ -323,7 +325,8 @@ final class AWS(config: AWSConfig) extends LazyLogging {
 
         // if the step/state has changed, log the change
         if (changed) {
-          logger.debug(s"...${job.getJobFlowId} (${step.getName}; ${step.getId}): ${step.getStatus.getState}")
+          val args = step.getConfig.getArgs.asScala.mkString(" ")
+          logger.debug(s"...${job.getJobFlowId} ${step.getStatus.getState}: ${step.getName} $args (${step.getId})")
         }
 
         // continue waiting
