@@ -2,10 +2,6 @@ package org.broadinstitute.dig.aggregator.core.emr
 
 import com.amazonaws.services.elasticmapreduce.model.Application
 
-import java.net.URI
-
-import scala.collection.JavaConverters._
-
 /** An application that can be pre-installed on the cluster. */
 sealed case class ApplicationName(value: String) {
 

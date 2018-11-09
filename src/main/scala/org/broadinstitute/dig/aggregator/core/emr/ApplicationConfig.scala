@@ -2,8 +2,6 @@ package org.broadinstitute.dig.aggregator.core.emr
 
 import com.amazonaws.services.elasticmapreduce.model.Configuration
 
-import java.net.URI
-
 import scala.collection.JavaConverters._
 
 /**
