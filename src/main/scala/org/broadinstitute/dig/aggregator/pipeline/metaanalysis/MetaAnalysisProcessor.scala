@@ -63,13 +63,15 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
       val cluster = Cluster(
         name = name.toString,
         bootstrapScripts = Seq(bootstrapScript),
-        amiId = Some(AmiId("ami-0f4a13be672c13cbd")),
+        configurations = Seq(
+          ApplicationConfig.sparkDefaults.withProperties("spark.network.timeout" -> "3600"),
+        ),
       )
 
       // first run ancestry-specific and then trans-ethnic
       val steps = Seq(
         JobStep.PySpark(script, "--ancestry-specific", phenotype),
-        //JobStep.PySpark(script, "--trans-ethnic", phenotype),
+        JobStep.PySpark(script, "--trans-ethnic", phenotype),
       )
 
       for {

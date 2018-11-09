@@ -1,8 +1,11 @@
 package org.broadinstitute.dig.aggregator.core.emr
 
-import com.amazonaws.services.elasticmapreduce
+import com.amazonaws.services.elasticmapreduce.model.Application
+import com.amazonaws.services.elasticmapreduce.model.Configuration
 
 import java.net.URI
+
+import scala.collection.JavaConverters._
 
 /**
  * Parameterized configuration for an EMR cluster. Constant settings are
@@ -14,7 +17,8 @@ final case class Cluster(
     instances: Int = 3,
     masterInstanceType: InstanceType = InstanceType.m5_4xlarge,
     slaveInstanceType: InstanceType = InstanceType.m5_2xlarge,
-    applications: Seq[Cluster.App] = Cluster.defaultApplications,
+    applications: Seq[ApplicationName] = Cluster.defaultApplications,
+    configurations: Seq[ApplicationConfig] = Cluster.defaultConfigurations,
     bootstrapScripts: Seq[URI] = Seq(),
     keepAliveWhenNoSteps: Boolean = false,
     visibleToAllUsers: Boolean = true,
@@ -25,17 +29,15 @@ final case class Cluster(
  */
 object Cluster {
 
-  /** An application that can be pre-installed on the cluster. */
-  sealed case class App(value: String) {
-    def application = new elasticmapreduce.model.Application().withName(value)
-  }
-
-  /** Applications understood by AWS to be installed with the cluster. */
-  val hadoop: App = App("Hadoop")
-  val spark: App  = App("Spark")
-  val hive: App   = App("Hive")
-  val pig: App    = App("Pig")
-
   /** The default set used by pretty much every cluster. */
-  val defaultApplications = Seq(hadoop, spark, hive, pig)
+  val defaultApplications: Seq[ApplicationName] = Seq(
+    ApplicationName.hadoop,
+    ApplicationName.spark,
+    ApplicationName.hive,
+    ApplicationName.pig,
+    ApplicationName.hue,
+  )
+
+  /** The default configurations for applications. */
+  val defaultConfigurations: Seq[ApplicationConfig] = Seq()
 }

@@ -9,7 +9,7 @@ import org.json4s._
 final case class EmrConfig(
     sshKeyName: String,
     subnetId: SubnetId,
-    releaseLabel: ReleaseLabel = ReleaseLabel.emr_5_17_0,
+    releaseLabel: ReleaseLabel = ReleaseLabel.emr_latest,
     securityGroupIds: Seq[SecurityGroupId] = Seq(),
     serviceRoleId: RoleId = RoleId.defaultRole,
     jobFlowRoleId: RoleId = RoleId.ec2DefaultRole,

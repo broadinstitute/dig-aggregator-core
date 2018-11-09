@@ -4,11 +4,10 @@ import cats._
 import cats.effect._
 import cats.implicits._
 
-import com.sendgrid._
-
 import com.typesafe.scalalogging.LazyLogging
 
-import org.broadinstitute.dig.aggregator.core.config.BaseConfig
+import org.broadinstitute.dig.aggregator.core.Email
+import org.broadinstitute.dig.aggregator.core.config._
 import org.broadinstitute.dig.aggregator.core.processors.Processor
 import org.broadinstitute.dig.aggregator.pipeline._
 
@@ -42,7 +41,7 @@ object Main extends IOApp with LazyLogging {
         if (!confirm) IO.unit
         else
           run(opts.processor, opts).guaranteeCase {
-            case ExitCase.Error(err) => fail(opts.processor, opts.config, err)
+            case ExitCase.Error(err) => fail(opts.processor, err, opts)
             case _                   => IO.unit
           }
       }
@@ -96,30 +95,13 @@ object Main extends IOApp with LazyLogging {
   }
 
   /**
-   * Reports an exception by sending an email.
+   * Reports an exception on the log and optionally sending an email.
    */
-  private def fail(pipeline: String, config: BaseConfig, err: Throwable): IO[Unit] = {
-    val subject   = s"$pipeline terminated!"
-    val client    = new SendGrid(config.sendgrid.key)
-    val fromEmail = new Email(config.sendgrid.from)
-    val content   = new Content("text/plain", err.getMessage)
-
-    val ios = for (to <- config.sendgrid.emails) yield {
-      val mail = new Mail(fromEmail, subject, new Email(to), content)
-      val req  = new Request()
-
-      IO {
-        req.setMethod(Method.POST)
-        req.setEndpoint("mail/send")
-        req.setBody(mail.build)
-
-        // send the email
-        //client.api(req)
-        logger.error(err.getMessage)
-      }
+  private def fail(pipeline: String, err: Throwable, opts: Opts): IO[Unit] = {
+    if (opts.emailOnFailure()) {
+      new Email(opts.config.sendgrid).send(s"$pipeline terminated", err.getMessage)
+    } else {
+      IO(logger.error(s"$pipeline terminated: ${err.getMessage}"))
     }
-
-    // send each of the emails in parallel
-    ios.toList.parSequence >> IO.unit
   }
 }

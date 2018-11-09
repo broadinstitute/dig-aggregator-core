@@ -162,12 +162,17 @@ object Implicits {
      */
     def isFailure: Boolean = state == StepState.FAILED
 
+    /** 
+     * True if the step hasn't started yet.
+     */
+    def isPending: Boolean = state == StepState.PENDING
+
     /**
      * If failed, this is the reason why.
      */
     def failureReason: Option[String] = {
       Option(summary.getStatus).map(_.getFailureDetails).flatMap { details =>
-        Option(details.getMessage)
+        Option(details).flatMap(d => Option(d.getMessage))
       }
     }
 

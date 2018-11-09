@@ -36,6 +36,9 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   /** Only process a single input with a given name (good for debugging). */
   val only: ScallopOption[String] = opt("only")
 
+  /** Email errors. */
+  val emailOnFailure: ScallopOption[Boolean] = opt("email-on-failure")
+
   /** The processor (or pipeline if --pipeline specified) to run. */
   val processorName: ScallopOption[String] = trailArg(required = false)
 

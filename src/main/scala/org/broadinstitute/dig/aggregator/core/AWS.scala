@@ -229,6 +229,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       .withName(cluster.name)
       .withBootstrapActions(bootstrapActions.asJava)
       .withApplications(cluster.applications.map(_.application).asJava)
+      .withConfigurations(cluster.configurations.map(_.configuration).asJava)
       .withReleaseLabel(config.emr.releaseLabel.value)
       .withServiceRole(config.emr.serviceRoleId.value)
       .withJobFlowRole(config.emr.jobFlowRoleId.value)
@@ -246,7 +247,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       }
 
       // show the ID of the cluster being created
-      logger.debug(s"Creating EMR cluster for ${cluster.name} (${job.getJobFlowId})...")
+      logger.debug(s"Provisioning ${cluster.name} (${job.getJobFlowId}); logging to ${logUri(cluster)}/${job.getJobFlowId}...")
 
       // return the job
       job
@@ -258,22 +259,6 @@ final class AWS(config: AWSConfig) extends LazyLogging {
    */
   def runJob(cluster: Cluster, step: JobStep): IO[RunJobFlowResult] = {
     runJob(cluster, Seq(step))
-  }
-
-  /**
-   * Given a sequence of jobs, run them in parallel, but limit the maximum
-   * concurrency so too many clusters aren't created at once.
-   */
-  def waitForJobs(jobs: Seq[IO[RunJobFlowResult]], maxClusters: Int = 4): IO[Unit] = {
-    import Implicits.contextShift
-
-    Stream
-      .emits(jobs)
-      .covary[IO]
-      .mapAsyncUnordered(maxClusters)(job => job.flatMap(waitForJob(_)))
-      .compile
-      .toList
-      .as(())
   }
 
   /**
@@ -301,7 +286,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
      * when all the steps have their status set to COMPLETED, at which point
      * the curStep will be None.
      */
-    val curStep = req.map(_.getSteps.asScala).map(_.find(!_.isComplete))
+    val curStep = req.map(_.getSteps.asScala.reverse).map(_.find(!_.isComplete))
 
     /*
      * If the current step has failed, interrupted, or cancelled, then the
@@ -314,12 +299,14 @@ final class AWS(config: AWSConfig) extends LazyLogging {
 
       // the current step stopped for some reason
       case Some(step) if step.isStopped =>
-        logger.error(s"Job ${job.getJobFlowId} failed: ${step.stopReason}")
-        logger.error(s"View output logs from the master node of the cluster by running:")
-        logger.error(s"  yarn logs --applicationId <id>")
+        logger.error(s"Job ${job.getJobFlowId} failed: ${step.stopReason}; logs are in S3 and visible from the EMR web console.")
 
         // terminate the program
         IO.raiseError(new Exception(step.stopReason))
+      
+      // hasn't started yet; cluster is still provisioning, continue waiting
+      case Some(step) if step.isPending =>
+        waitForJob(job, Some(step))
 
       // still waiting for the current step to complete
       case Some(step) =>
@@ -331,12 +318,28 @@ final class AWS(config: AWSConfig) extends LazyLogging {
         if (changed) {
           val jar = step.getConfig.getJar
           val args = step.getConfig.getArgs.asScala.mkString(" ")
-          
+
           logger.debug(s"...${job.getJobFlowId} ${step.getStatus.getState}: $jar $args (${step.getId})")
         }
 
         // continue waiting
         waitForJob(job, Some(step))
     }
+  }
+
+  /**
+   * Given a sequence of jobs, run them in parallel, but limit the maximum
+   * concurrency so too many clusters aren't created at once.
+   */
+  def waitForJobs(jobs: Seq[IO[RunJobFlowResult]], maxClusters: Int = 4): IO[Unit] = {
+    import Implicits.contextShift
+
+    Stream
+      .emits(jobs)
+      .covary[IO]
+      .mapAsyncUnordered(maxClusters)(job => job.flatMap(waitForJob(_)))
+      .compile
+      .toList
+      .as(())
   }
 }
