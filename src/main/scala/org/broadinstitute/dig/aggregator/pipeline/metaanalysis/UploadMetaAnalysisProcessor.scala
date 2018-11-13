@@ -86,7 +86,6 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
       }
 
       // where the result files are to upload
-      val frequency  = s"out/metaanalysis/ancestry-specific/$phenotype"
       val bottomLine = s"out/metaanalysis/trans-ethnic/$phenotype"
 
       for {
