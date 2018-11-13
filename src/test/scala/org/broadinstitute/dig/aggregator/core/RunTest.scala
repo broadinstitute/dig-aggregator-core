@@ -75,7 +75,7 @@ final class RunTest extends DbFunSuite {
 
     // find all the processor c needs to process still (depends on a and b)
     val deps    = Seq(TestProcessor.a, TestProcessor.b)
-    val results = Run.resultsOf(xa, deps, Some(TestProcessor.c)).unsafeRunSync
+    val results = Run.resultsOf(pool, deps, Some(TestProcessor.c)).unsafeRunSync
 
     assert(results.isEmpty)
   }
@@ -93,7 +93,7 @@ final class RunTest extends DbFunSuite {
 
     // find all the processor c needs to process still (depends on a and b)
     val deps    = Seq(TestProcessor.a, TestProcessor.b)
-    val results = Run.resultsOf(xa, deps, Some(TestProcessor.c)).unsafeRunSync
+    val results = Run.resultsOf(pool, deps, Some(TestProcessor.c)).unsafeRunSync
 
     // should need to process o4 and o2
     assert(results.size == 2)

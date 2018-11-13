@@ -19,7 +19,7 @@ final case class Provenance(source: String, branch: String, commit: String) {
   /**
    * Insert a new provenance row for a given run.
    */
-  def insert(xa: Transactor[IO], runId: Long, app: Processor.Name): IO[Int] = {
+  def insert(pool: DbPool, runId: Long, app: Processor.Name): IO[Int] = {
     val q = sql"""|INSERT INTO `provenance`
                   |  ( `run`
                   |  , `app`
@@ -42,7 +42,7 @@ final case class Provenance(source: String, branch: String, commit: String) {
                   |  `commit` = VALUES(`commit`)
                   |""".stripMargin.update
 
-    q.run.transact(xa)
+    pool.exec(q.run)
   }
 }
 
@@ -80,7 +80,7 @@ object Provenance {
   /**
    * Get the provenance for a particular processor run.
    */
-  def ofRun(xa: Transactor[IO], run: Long, app: Processor.Name): IO[Seq[Provenance]] = {
+  def ofRun(pool: DbPool, run: Long, app: Processor.Name): IO[Seq[Provenance]] = {
     val q = sql"""|SELECT  `source`,
                   |        `branch`,
                   |        `commit`
@@ -91,6 +91,6 @@ object Provenance {
                   |AND     `app` = $app
                   |""".stripMargin.query[Provenance].to[Seq]
 
-    q.transact(xa)
+    pool.exec(q)
   }
 }

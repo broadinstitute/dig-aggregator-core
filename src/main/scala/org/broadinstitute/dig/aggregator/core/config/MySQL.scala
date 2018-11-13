@@ -1,9 +1,5 @@
 package org.broadinstitute.dig.aggregator.core.config
 
-import cats.effect._
-
-import doobie._
-
 /**
  * MysQL configuration settings.
  */
@@ -23,20 +19,7 @@ final case class MySQLConfig(
     .mkString("&")
 
   /**
-   * Create a new connection to the database for running queries.
-   *
-   * A connection pool here isn't really all that big a deal because queries
-   * are run serially while processing Kafka messages.
+   * The connection string to use for JDBC.
    */
-  def newTransactor()(implicit cs: ContextShift[IO]): Transactor[IO] = {
-    val connectionString = s"jdbc:mysql://$url/$schema?$qs"
-
-    // create the connection
-    Transactor.fromDriverManager[IO](
-      driver,
-      connectionString,
-      user,
-      password,
-    )
-  }
+  val connectionString = s"jdbc:mysql://$url/$schema?$qs"
 }

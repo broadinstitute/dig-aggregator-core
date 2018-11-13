@@ -46,6 +46,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
   override val resources: Seq[String] = Seq(
     "pipeline/metaanalysis/cluster-bootstrap.sh",
     "pipeline/metaanalysis/runAnalysis.py",
+    "pipeline/metaanalysis/loadAnalysis.py",
   )
 
   /**
@@ -53,31 +54,37 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val bootstrapScript = aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh")
-    val script          = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
+    val runScript       = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
+    val loadScript      = aws.uriOf("resources/pipeline/metaanalysis/loadAnalysis.py")
 
     // collect unique phenotypes across all results to process
     val phenotypes = results.map(_.output).distinct
 
     // create a set of jobs for each phenotype
     val runs = for (phenotype <- phenotypes) yield {
+      val sparkConf = ApplicationConfig.sparkEnv.withProperties(
+        "PYSPARK_PYTHON" -> "/usr/bin/python3",
+      )
+
+      //
       val cluster = Cluster(
         name = name.toString,
         bootstrapScripts = Seq(bootstrapScript),
-        configurations = Seq(
-          ApplicationConfig.sparkDefaults.withProperties("spark.network.timeout" -> "3600"),
-        ),
+        configurations = Seq(sparkConf),
       )
 
-      // first run ancestry-specific and then trans-ethnic
+      // first run+load ancestry-specific and then trans-ethnic
       val steps = Seq(
-        JobStep.PySpark(script, "--ancestry-specific", phenotype),
-        JobStep.PySpark(script, "--trans-ethnic", phenotype),
+        JobStep.Script(runScript, "--ancestry-specific", phenotype),
+        JobStep.PySpark(loadScript, "--ancestry-specific", phenotype),
+        JobStep.Script(runScript, "--trans-ethnic", phenotype),
+        JobStep.PySpark(loadScript, "--trans-ethnic", phenotype),
       )
 
       for {
         _      <- IO(logger.info(s"Processing phenotype $phenotype..."))
         result <- aws.runJob(cluster, steps)
-        _      <- Run.insert(xa, name, Seq(phenotype), phenotype)
+        _      <- Run.insert(pool, name, Seq(phenotype), phenotype)
       } yield result
     }
 

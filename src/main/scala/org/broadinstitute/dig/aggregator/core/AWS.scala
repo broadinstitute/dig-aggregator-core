@@ -115,10 +115,15 @@ final class AWS(config: AWSConfig) extends LazyLogging {
     val contentsIo: IO[String] = {
       val streamIo = IO(getClass.getClassLoader.getResourceAsStream(resource))
 
-      def closeStream(stream: InputStream): IO[Unit] = IO(stream.close())
+      // load the contents of the file, treat as text, ensure unix line-endings
+      def getContents(stream: InputStream): IO[String] = 
+        IO(Source.fromInputStream(stream).mkString.replace("\r\n", "\n"))
 
-      def getContents(stream: InputStream): IO[String] = IO(Source.fromInputStream(stream).mkString)
+      // close the stream to free resources
+      def closeStream(stream: InputStream): IO[Unit] = 
+        IO(stream.close())
 
+      // open, load, and ensure closed
       streamIo.bracket(getContents(_))(closeStream(_))
     }
 
@@ -279,7 +284,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       .withClusterId(job.getJobFlowId)
 
     // wait a little bit then request status
-    val req = for (_ <- IO.sleep(2.minutes)) yield emr.listSteps(request)
+    val req = for (_ <- IO.sleep(1.minutes)) yield emr.listSteps(request)
 
     /*
      * The step summaries are returned in reverse order. The job is complete

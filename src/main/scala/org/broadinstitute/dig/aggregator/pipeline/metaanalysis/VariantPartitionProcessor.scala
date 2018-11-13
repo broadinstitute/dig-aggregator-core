@@ -86,7 +86,7 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
     for {
       _ <- IO(logger.info(s"Processing $phenotype datasets..."))
       _ <- aws.waitForJobs(jobs)
-      _ <- Run.insert(xa, name, inputs, phenotype)
+      _ <- Run.insert(pool, name, inputs, phenotype)
       _ <- IO(logger.info("Done"))
     } yield ()
   }

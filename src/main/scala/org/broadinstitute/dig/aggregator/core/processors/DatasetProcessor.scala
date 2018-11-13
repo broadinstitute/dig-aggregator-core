@@ -34,7 +34,7 @@ abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extend
   /**
    * Database transactor for loading state, etc.
    */
-  protected val xa: Transactor[IO] = config.mysql.newTransactor()
+  protected val pool: DbPool = DbPool.fromMySQLConfig(config.mysql)
 
   /**
    * AWS client for uploading resources and running jobs.
@@ -51,7 +51,7 @@ abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extend
    */
   override def getWork(reprocess: Boolean, only: Option[String]): IO[Seq[Dataset]] = {
     for {
-      datasets <- Dataset.datasetsOf(xa, topic, if (reprocess) None else Some(name))
+      datasets <- Dataset.datasetsOf(pool, topic, if (reprocess) None else Some(name))
     } yield {
       datasets.filter(d => only.getOrElse(d.dataset) == d.dataset)
     }

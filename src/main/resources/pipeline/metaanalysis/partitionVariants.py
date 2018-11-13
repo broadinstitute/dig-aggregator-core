@@ -36,7 +36,9 @@ if __name__ == '__main__':
     # slurp all the variant batches
     df = spark.read.json('%s/part-*' % srcdir)
 
-    # remove all null pValue, beta values
+    # remove all null pValue, beta values, select the order of the columns so
+    # when they are written out in part files without a header it will be
+    # known exactly what order they are in
     df = df \
         .filter(df.pValue.isNotNull()) \
         .filter(df.beta.isNotNull()) \
@@ -60,13 +62,13 @@ if __name__ == '__main__':
     rare = df.filter(df.maf.isNotNull() & (df.maf < 0.05))
     common = df.filter(df.maf.isNull() | (df.maf >= 0.05))
 
-    # output the rare variants as a single CSV
+    # output the rare variants as CSV part files
     rare.write \
         .mode('overwrite') \
         .partitionBy('ancestry') \
         .csv('%s/rare' % outdir, sep='\t')
 
-    # output the common variants as a single CSV
+    # output the common variants as CSV part files
     common.write \
         .mode('overwrite') \
         .partitionBy('ancestry') \

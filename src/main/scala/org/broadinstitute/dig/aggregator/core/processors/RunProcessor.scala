@@ -36,7 +36,7 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Pr
   /**
    * Database transactor for loading state, etc.
    */
-  protected val xa: Transactor[IO] = config.mysql.newTransactor()
+  protected val pool: DbPool = DbPool.fromMySQLConfig(config.mysql)
 
   /**
    * AWS client for uploading resources and running jobs.
@@ -54,7 +54,7 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Pr
    */
   override def getWork(reprocess: Boolean, only: Option[String]): IO[Seq[Run.Result]] = {
     for {
-      results <- Run.resultsOf(xa, dependencies, if (reprocess) None else Some(name))
+      results <- Run.resultsOf(pool, dependencies, if (reprocess) None else Some(name))
     } yield {
       results.filter(r => only.getOrElse(r.output) == r.output)
     }

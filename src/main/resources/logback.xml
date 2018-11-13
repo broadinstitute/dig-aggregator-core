@@ -42,7 +42,7 @@
 
     <logger name="org.broadinstitute.dig.aggregator.core" level="${aggregator-log-level:-DEBUG}"/>
 
-    <logger name="org.apache.kafka" level="WARN"/>
+    <logger name="com.zaxxer.hikari" level="WARN"/>
 
     <root level="${aggregator-log-level:-INFO}">
         <appender-ref ref="STDOUT"/>

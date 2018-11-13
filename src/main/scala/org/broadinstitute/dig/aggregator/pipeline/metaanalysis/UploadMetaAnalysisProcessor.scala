@@ -39,6 +39,31 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
   override val resources: Seq[String] = Nil
 
   /**
+   * When loading the CSV files from HDFS, they don't have a header attached
+   * to them, so this is the definitive ordering of the columns a
+   */
+  private val fields: Seq[String] = Array[String](
+    "varId",
+    "chromosome",
+    "position",
+    "reference",
+    "alt",
+    "phenotype",
+    "pValue",
+    "beta",
+    "eaf",
+    "maf",
+    "stdErr",
+    "n",
+    "top",
+  )
+
+  /**
+   * Lookup a field index by name.
+   */
+  private def field(name: String): Int = fields.indexOf(name)
+
+  /**
    * Take all the phenotype results from the dependencies and process them.
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
@@ -50,8 +75,8 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
       val driver   = config.neo4j.newDriver
 
       // where the result files are to upload
-      val frequency  = s"out/metaanalysis/$phenotype/ancestry-specific/"
-      val bottomLine = s"out/metaanalysis/$phenotype/trans-ethnic/"
+      val frequency  = s"out/metaanalysis/ancestry-specific/$phenotype"
+      val bottomLine = s"out/metaanalysis/trans-ethnic/$phenotype"
 
       for {
         _ <- IO(logger.info(s"Preparing upload of $phenotype meta-analysis..."))
@@ -66,7 +91,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
         _ <- analysis.uploadParts(aws, driver, id, bottomLine)(uploadBottomLineResults)
 
         // add the result to the database
-        _ <- Run.insert(xa, name, Seq(phenotype), analysis.name)
+        _ <- Run.insert(pool, name, Seq(phenotype), analysis.name)
         _ <- IO(logger.info("Done"))
       } yield ()
     }

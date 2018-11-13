@@ -12,14 +12,14 @@ final class PipelineTest extends FunSuite {
      * there are no duplicate processor names.
      */
 
-    assert(Pipeline("LDscore").isDefined)
-    assert(Pipeline("MetaAnalysis").isDefined)
+    assert(Pipeline("LDScorePipeline").isDefined)
+    assert(Pipeline("MetaAnalysisPipeline").isDefined)
   }
 
   test("pipeline - list processors") {
     import metaanalysis.MetaAnalysisPipeline
 
-    val metaanalysisPipeline   = Pipeline("MetaAnalysis").get
+    val metaanalysisPipeline   = Pipeline("MetaAnalysisPipeline").get
     val metaanalysisProcessors = metaanalysisPipeline.processors
     val expectedProcessors = Set(
       MetaAnalysisPipeline.variantPartitionProcessor,

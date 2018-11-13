@@ -36,7 +36,7 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
   }
 
   def insertRun(app: Processor.Name, inputs: Seq[String], output: String): Long = {
-    Run.insert(xa, app, inputs, output).unsafeRunSync
+    Run.insert(pool, app, inputs, output).unsafeRunSync
   }
 
   def allResults: Seq[Run.Result] = {
@@ -44,33 +44,33 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
                   |FROM   `runs`
                   |""".stripMargin.query[Run.Result].to[Seq]
 
-    q.transact(xa).unsafeRunSync
+    pool.exec(q).unsafeRunSync
   }
 
   def runResults(run: Long): Seq[Run.Result] = {
-    Run.resultsOfRun(xa, run).unsafeRunSync
+    Run.resultsOfRun(pool, run).unsafeRunSync
   }
 
   def allProvenance: Seq[(Long, Processor.Name)] = {
     val q = sql"SELECT `run`, `app` FROM `provenance`".query[(Long, Processor.Name)].to[Seq]
 
-    q.transact(xa).unsafeRunSync
+    pool.exec(q).unsafeRunSync
   }
 
   def runProvenance(run: Long, app: Processor.Name): Seq[Provenance] = {
-    Provenance.ofRun(xa, run, app).unsafeRunSync
+    Provenance.ofRun(pool, run, app).unsafeRunSync
   }
 
   private def makeTables(): Unit = {
     import DbFunSuite._
 
-    Tables.all.foreach(dropAndCreate(xa))
+    Tables.all.foreach(dropAndCreate(pool))
   }
 }
 
 object DbFunSuite {
-  private def dropAndCreate(xa: Transactor[IO])(table: Table): Unit = {
-    (table.drop, table.create).mapN(_ + _).transact(xa).unsafeRunSync()
+  private def dropAndCreate(pool: DbPool)(table: Table): Unit = {
+    pool.exec((table.drop, table.create).mapN(_ + _)).unsafeRunSync()
     ()
   }
 
