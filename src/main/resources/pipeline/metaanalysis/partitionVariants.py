@@ -8,7 +8,6 @@ from pyspark.sql import SparkSession
 from pyspark.sql.types import DoubleType
 from pyspark.sql.functions import col, concat, lit  # pylint: disable=E0611
 
-efsdir = '/mnt/efs'
 s3dir = 's3://dig-analysis-data'
 
 # entry point

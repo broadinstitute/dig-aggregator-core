@@ -59,9 +59,11 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
   )
 
   /**
-   * Lookup a field index by name.
+   * Create a column mapper for a given row variable.
    */
-  private def field(name: String): Int = fields.indexOf(name)
+  private def columnMapper(name: String) = new Object {
+    def apply(col: String) = s"$name[${fields.indexOf(col)}]"
+  }
 
   /**
    * Take all the phenotype results from the dependencies and process them.
@@ -73,6 +75,15 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
     val ios = for (phenotype <- phenotypes) yield {
       val analysis = new Analysis(s"MetaAnalysis/$phenotype", Provenance.thisBuild)
       val driver   = config.neo4j.newDriver
+
+      // the ancestries for each phenotype
+      val ancestries = Seq("AA", "AF", "EU", "HS", "EA", "SA")
+
+      // for each ancestry, collect upload the part files for it
+      def frequencies(id: Int) = for (ancestry <- ancestries) yield {
+        val parts  = s"out/metaanalysis/ancestry-specific/$phenotype/ancestry=$ancestry"
+        analysis.uploadParts(aws, driver, id, parts)(uploadFrequencyResults(ancestry))
+      }
 
       // where the result files are to upload
       val frequency  = s"out/metaanalysis/ancestry-specific/$phenotype"
@@ -86,7 +97,9 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
 
         // find all the part files to upload for the analysis
         _ <- IO(logger.info(s"Uploading frequencies for $phenotype..."))
-        _ <- analysis.uploadParts(aws, driver, id, frequency)(uploadFrequencyResults)
+        _ <- frequencies(id).toList.sequence
+
+        // find and upload all the bottom-line result part files
         _ <- IO(logger.info(s"Uploading bottom-line results for $phenotype..."))
         _ <- analysis.uploadParts(aws, driver, id, bottomLine)(uploadBottomLineResults)
 
@@ -103,27 +116,30 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
   /**
    * Given a part file, upload it and create all the frequency nodes.
    */
-  def uploadFrequencyResults(driver: Driver, id: Int, part: String): StatementResult = {
+  def uploadFrequencyResults(ancestry: String)(driver: Driver, id: Int, part: String): StatementResult = {
+    import scala.language.reflectiveCalls
+
+    val r = columnMapper("r")
     val q = s"""|USING PERIODIC COMMIT
-                |LOAD CSV WITH HEADERS FROM '$part' AS r
+                |LOAD CSV FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
                 |// die if the ancestry or phenotype doesn't exist
-                |MATCH (a:Ancestry {name: r.ancestry})
-                |MATCH (p:Phenotype {name: r.phenotype})
+                |MATCH (a:Ancestry {name: '$ancestry'})
+                |MATCH (p:Phenotype {name: ${r("phenotype")}})
                 |
                 |// create the variant node if it doesn't exist
-                |MERGE (v:Variant {name: r.varId})
+                |MERGE (v:Variant {name: ${r("varId")}})
                 |ON CREATE SET
-                |  v.chromosome=r.chromosome,
-                |  v.position=toInteger(r.position),
-                |  v.reference=r.reference,
-                |  v.alt=r.alt
+                |  v.chromosome=${r("chromosome")},
+                |  v.position=toInteger(${r("position")}),
+                |  v.reference=${r("reference")},
+                |  v.alt=${r("alt")}
                 |
-                |WITH q, a, p, v, toFloat(r.eaf) AS eaf
+                |WITH q, a, p, v, toFloat(${r("eaf")}) AS eaf
                 |
                 |// create the Frequency node, calculate MAF
                 |CREATE (n:Frequency {
@@ -147,31 +163,33 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
    * Given a part file, upload it and create all the bottom-line nodes.
    */
   def uploadBottomLineResults(driver: Driver, id: Int, part: String): StatementResult = {
+    import scala.language.reflectiveCalls
+
+    val r = columnMapper("r")
     val q = s"""|USING PERIODIC COMMIT
-                |LOAD CSV WITH HEADERS FROM '$part' AS r
+                |LOAD CSV FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
                 |// die if the phenotype doesn't exist
-                |MATCH (p:Phenotype {name: r.phenotype})
+                |MATCH (p:Phenotype {name: ${r("phenotype")}})
                 |
                 |// create the variant node if it doesn't exist
-                |MERGE (v:Variant {name: r.varId})
+                |MERGE (v:Variant {name: ${r("varId")}})
                 |ON CREATE SET
-                |  v.chromosome=r.chromosome,
-                |  v.position=toInteger(r.position),
-                |  v.reference=r.reference,
-                |  v.alt=r.alt
+                |  v.chromosome=${r("chromosome")},
+                |  v.position=toInteger(${r("position")}),
+                |  v.reference=${r("reference")},
+                |  v.alt=${r("alt")}
                 |
                 |// create the MetaAnalysis analysis node
                 |CREATE (n:MetaAnalysis {
-                |  pValue: toFloat(r.pValue),
-                |  beta: toFloat(r.beta),
-                |  zScore: toFloat(r.zScore),
-                |  stdErr: toFloat(r.stdErr),
-                |  n: toInteger(r.n)
+                |  pValue: toFloat(${r("pValue")}),
+                |  beta: toFloat(${r("beta")}),
+                |  stdErr: toFloat(${r("stdErr")}),
+                |  n: toInteger(${r("n")})
                 |})
                 |
                 |// create the relationship to the analysis node
@@ -181,7 +199,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |CREATE (p)<-[:FOR_PHENOTYPE]-(n)-[:FOR_VARIANT]->(v)
                 |
                 |// if a top result, mark it as such
-                |FOREACH(i IN (CASE toBoolean(r.top) WHEN true THEN [1] ELSE [] END) |
+                |FOREACH(i IN (CASE toBoolean(${r("top")}) WHEN true THEN [1] ELSE [] END) |
                 |  CREATE (v)<-[:TOP_VARIANT]-(n)
                 |)
                 |""".stripMargin
