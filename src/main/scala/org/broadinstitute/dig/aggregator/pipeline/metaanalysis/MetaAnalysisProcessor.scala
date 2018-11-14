@@ -66,7 +66,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
         "PYSPARK_PYTHON" -> "/usr/bin/python3",
       )
 
-      //
+      // EMR cluster to run the job steps on
       val cluster = Cluster(
         name = s"${name.toString}/$phenotype",
         bootstrapScripts = Seq(bootstrapScript),
