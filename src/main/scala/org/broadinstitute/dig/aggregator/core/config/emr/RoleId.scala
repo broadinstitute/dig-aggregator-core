@@ -3,12 +3,12 @@ package org.broadinstitute.dig.aggregator.core.config.emr
 import org.json4s._
 
 /**
- *
+ * Custom role ID for a cluster setting.
  */
 final case class RoleId(value: String)
 
 /**
- *
+ * Companion object containing global roles.
  */
 object RoleId {
 
