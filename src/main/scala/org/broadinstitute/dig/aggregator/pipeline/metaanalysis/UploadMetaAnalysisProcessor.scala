@@ -82,7 +82,11 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
       // for each ancestry, collect upload the part files for it
       def frequencies(id: Int) = for (ancestry <- ancestries) yield {
         val parts  = s"out/metaanalysis/ancestry-specific/$phenotype/ancestry=$ancestry"
-        analysis.uploadParts(aws, driver, id, parts)(uploadFrequencyResults(ancestry))
+
+        for {
+          _ <- IO(logger.info(s"...Uploading $phenotype frequencies for $ancestry"))
+          _ <- analysis.uploadParts(aws, driver, id, parts)(uploadFrequencyResults(ancestry))
+        } yield()
       }
 
       // where the result files are to upload
