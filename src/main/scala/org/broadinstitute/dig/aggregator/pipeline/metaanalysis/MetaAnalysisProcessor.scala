@@ -68,7 +68,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
 
       //
       val cluster = Cluster(
-        name = name.toString,
+        name = s"${name.toString}/$phenotype",
         bootstrapScripts = Seq(bootstrapScript),
         configurations = Seq(sparkConf),
       )
