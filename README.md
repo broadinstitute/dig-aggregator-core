@@ -48,11 +48,13 @@ The default configuration parameter is `config.json`, but can be overridden with
         "key": "key",
         "secret": "secret",
         "region": "US_EAST_1",
+        "bucket": "s3-bucket-name",
         "emr": {
-            "cluster": "j-cluster-id"
-        },
-        "s3": {
-            "bucket": "s3-bucket-name"
+            "subnetId": "subnet-xxxx",
+            "sshKeyName": "AWS SSH key name",
+            "securityGroupIds": [
+                "sg-xxxx"
+            ]
         }
     },
     "mysql": {
