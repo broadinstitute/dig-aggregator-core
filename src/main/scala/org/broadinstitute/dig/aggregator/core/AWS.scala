@@ -276,7 +276,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
    *   StepState.INTERRUPTED
    *   StepState.CANCELLED
    */
-  def waitForJob(job: RunJobFlowResult, prevStep: Option[StepSummary] = None): IO[Unit] = {
+  def waitForJob(job: RunJobFlowResult, prevStep: Option[StepSummary] = None): IO[RunJobFlowResult] = {
     import Implicits.timer
 
     // create the job request
@@ -300,7 +300,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
     curStep.flatMap {
       case None =>
         logger.debug(s"Job ${job.getJobFlowId} complete")
-        IO.unit
+        IO(job)
 
       // the current step stopped for some reason
       case Some(step) if step.isStopped =>
