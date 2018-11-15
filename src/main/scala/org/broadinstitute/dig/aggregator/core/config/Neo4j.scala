@@ -19,6 +19,7 @@ final case class Neo4jConfig(url: String, user: String, password: String) {
    */
   def newDriver(): Driver = {
     val config = Config.build
+      .withMaxConnectionLifetime(24, TimeUnit.HOURS)
       .withConnectionLivenessCheckTimeout(2, TimeUnit.MINUTES)
 
     GraphDatabase.driver(url, auth, config.toConfig)

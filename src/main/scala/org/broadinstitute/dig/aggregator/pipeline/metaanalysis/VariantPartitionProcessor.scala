@@ -76,7 +76,7 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
    */
   private def processDataset(dataset: String, phenotype: String): IO[RunJobFlowResult] = {
     val script  = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
-    val cluster = Cluster(name = s"${name.toString} - $dataset/$phenotype")
+    val cluster = Cluster(name = name.toString)
     val step    = JobStep.PySpark(script, dataset, phenotype)
 
     for {
