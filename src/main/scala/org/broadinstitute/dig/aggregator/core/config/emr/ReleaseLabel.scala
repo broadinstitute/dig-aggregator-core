@@ -20,7 +20,7 @@ object ReleaseLabel {
   val emr_5_19_0: ReleaseLabel = ReleaseLabel("emr-5.19.0")
 
   /** Default EMR instance release version. */
-  val emr_latest: ReleaseLabel = emr_5_19_0
+  val emrLatest: ReleaseLabel = emr_5_19_0
 
   /** Convert a JSON value to an ReleaseLabel. */
   val deserialize: PartialFunction[JValue, ReleaseLabel] = {
