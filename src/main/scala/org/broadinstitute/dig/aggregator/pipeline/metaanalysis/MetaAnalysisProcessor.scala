@@ -87,7 +87,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
 
     // EMR cluster to run the job steps on
     val cluster = Cluster(
-      name = s"${name.toString}/$phenotype",
+      name = s"${name.toString} - $phenotype",
       bootstrapScripts = Seq(bootstrapScript),
       configurations = Seq(sparkConf),
     )
