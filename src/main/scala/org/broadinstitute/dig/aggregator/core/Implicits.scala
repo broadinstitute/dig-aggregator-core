@@ -24,12 +24,12 @@ object Implicits {
   /**
    * Needed for IO.sleep.
    */
-  implicit val timer = IO.timer(ExecutionContext.global)
+  implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
 
   /**
    * Needed for IO.parSequence.
    */
-  implicit val contextShift = IO.contextShift(ExecutionContext.global)
+  implicit val contextShift: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
   /**
    * Helper functions for S3 objects.
