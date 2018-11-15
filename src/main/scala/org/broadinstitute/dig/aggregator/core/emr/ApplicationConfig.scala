@@ -9,7 +9,7 @@ import scala.collection.JavaConverters._
  *
  * See: https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-configure-apps.html
  */
-sealed case class ApplicationConfig(classification: String, properties: (String, String)*) {
+final case class ApplicationConfig(classification: String, properties: (String, String)*) {
 
   /** Create a new App with additional configuration properties. */
   def withProperties(props: (String, String)*): ApplicationConfig = {
