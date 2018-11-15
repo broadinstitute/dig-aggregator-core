@@ -7,6 +7,8 @@ import cats.implicits._
 import doobie._
 import doobie.implicits._
 
+import java.util.UUID.randomUUID
+
 import org.broadinstitute.dig.aggregator.core.processors.Processor
 
 /**
@@ -26,35 +28,30 @@ object Run {
    * is never actually used outside of insertion. Use `Run.Result` for getting
    * data out of the `runs` table.
    */
-  private case class Entry(run: Long, app: Processor.Name, input: String, output: String)
+  private case class Entry(run: String, app: Processor.Name, input: String, output: String)
 
   /**
    * Run entries are created and inserted atomically for a single output.
    */
-  def insert(pool: DbPool, app: Processor.Name, inputs: Seq[String], output: String): IO[Long] = {
-    val sql = s"""|INSERT INTO `runs`
-                  |  ( `run`
-                  |  , `app`
-                  |  , `input`
-                  |  , `output`
-                  |  )
-                  |
-                  |VALUES
-                  |  (?, ?, ?, ?)
-                  |
-                  |ON DUPLICATE KEY UPDATE
-                  |  `run` = VALUES(`run`),
-                  |  `output` = VALUES(`output`),
-                  |  `timestamp` = NOW()
+  def insert(pool: DbPool, app: Processor.Name, inputs: Seq[String], output: String): IO[String] = {
+    val del = sql"""|DELETE FROM `runs`
+                    |WHERE       `app` = $app
+                    |AND         `output` = $output
+                    |""".stripMargin
+
+    // insert after deleting, replacing all the inputs for this output
+    val ins = s"""|INSERT INTO `runs` (`run`, `app`, `input`, `output`)
+                  |VALUES             (?, ?, ?, ?)
                   |""".stripMargin
 
     // create a run for each input, use the time in milliseconds as the ID
-    val runId   = System.currentTimeMillis()
+    val runId   = randomUUID.toString
     val entries = inputs.map(Entry(runId, app, _, output))
-    val update  = Update[Entry](sql).updateMany(entries.toList)
+    val insert  = Update[Entry](ins).updateMany(entries.toList)
 
     for {
-      _ <- pool.exec(update)
+      // delete then update in the same transaction
+      _ <- pool.exec(del.update.run >> insert)
 
       // insert the provenance row, but should be part of same transaction
       _ <- Provenance.thisBuild.insert(pool, runId, app)
@@ -73,7 +70,7 @@ object Run {
    * Lookup all the results for a given run id. This is mostly used for
    * testing.
    */
-  def resultsOfRun(pool: DbPool, run: Long): IO[Seq[Result]] = {
+  def resultsOfRun(pool: DbPool, run: String): IO[Seq[Result]] = {
     val q = sql"""|SELECT `app`, `output`, `timestamp`
                   |FROM   `runs`
                   |WHERE  `run`=$run

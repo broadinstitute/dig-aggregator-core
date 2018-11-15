@@ -4,6 +4,8 @@ import cats._
 import cats.effect._
 import cats.implicits._
 
+import com.amazonaws.services.elasticmapreduce.model.RunJobFlowResult
+
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.emr._
@@ -53,42 +55,54 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
    * Take all the phenotype results from the dependencies and process them.
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+    val phenotypes = results.map(_.output).distinct
+
+    // create a set of jobs to process the phenotypes
+    val jobs = phenotypes.map(processPhenotype)
+
+    // create an IO to insert all the results
+    val runs = phenotypes.map { phenotype =>
+      Run.insert(pool, name, Seq(phenotype), phenotype)
+    }
+
+    // wait for all the jobs to complete, then insert all the results
+    for {
+      _ <- aws.waitForJobs(jobs)
+      _ <- runs.toList.sequence
+      _ <- IO(logger.info("Done"))
+    } yield ()
+  }
+
+  /**
+   * Create a cluster and process a single phenotype.
+   */
+  private def processPhenotype(phenotype: String): IO[RunJobFlowResult] = {
     val bootstrapScript = aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh")
     val runScript       = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
     val loadScript      = aws.uriOf("resources/pipeline/metaanalysis/loadAnalysis.py")
 
-    // collect unique phenotypes across all results to process
-    val phenotypes = results.map(_.output).distinct
+    val sparkConf = ApplicationConfig.sparkEnv.withProperties(
+      "PYSPARK_PYTHON" -> "/usr/bin/python3",
+    )
 
-    // create a set of jobs for each phenotype
-    val runs = for (phenotype <- phenotypes) yield {
-      val sparkConf = ApplicationConfig.sparkEnv.withProperties(
-        "PYSPARK_PYTHON" -> "/usr/bin/python3",
-      )
+    // EMR cluster to run the job steps on
+    val cluster = Cluster(
+      name = s"${name.toString}/$phenotype",
+      bootstrapScripts = Seq(bootstrapScript),
+      configurations = Seq(sparkConf),
+    )
 
-      // EMR cluster to run the job steps on
-      val cluster = Cluster(
-        name = s"${name.toString}/$phenotype",
-        bootstrapScripts = Seq(bootstrapScript),
-        configurations = Seq(sparkConf),
-      )
+    // first run+load ancestry-specific and then trans-ethnic
+    val steps = Seq(
+      JobStep.Script(runScript, "--ancestry-specific", phenotype),
+      JobStep.PySpark(loadScript, "--ancestry-specific", phenotype),
+      JobStep.Script(runScript, "--trans-ethnic", phenotype),
+      JobStep.PySpark(loadScript, "--trans-ethnic", phenotype),
+    )
 
-      // first run+load ancestry-specific and then trans-ethnic
-      val steps = Seq(
-        JobStep.Script(runScript, "--ancestry-specific", phenotype),
-        JobStep.PySpark(loadScript, "--ancestry-specific", phenotype),
-        JobStep.Script(runScript, "--trans-ethnic", phenotype),
-        JobStep.PySpark(loadScript, "--trans-ethnic", phenotype),
-      )
-
-      for {
-        _      <- IO(logger.info(s"Processing phenotype $phenotype..."))
-        result <- aws.runJob(cluster, steps)
-        _      <- Run.insert(pool, name, Seq(phenotype), phenotype)
-      } yield result
-    }
-
-    // process each phenotype (could be done in parallel!)
-    aws.waitForJobs(runs)
+    for {
+      _   <- IO(logger.info(s"Processing phenotype $phenotype..."))
+      job <- aws.runJob(cluster, steps)
+    } yield job
   }
 }

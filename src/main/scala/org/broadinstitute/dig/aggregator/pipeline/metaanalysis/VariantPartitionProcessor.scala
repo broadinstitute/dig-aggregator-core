@@ -4,6 +4,8 @@ import cats._
 import cats.effect._
 import cats.implicits._
 
+import com.amazonaws.services.elasticmapreduce.model.RunJobFlowResult
+
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.emr.Cluster
@@ -39,55 +41,47 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
   override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
     val pattern = raw"([^/]+)/(.*)".r
 
-    // extract the root and the phenotype from each "root/phenotype" dataset
+    // get a list of all the dataset/phenotype pairs
     val datasetPhenotypes = datasets.map(_.dataset).distinct.collect {
-      case pattern(root, phenotype) => (root, phenotype)
+      case pattern(dataset, phenotype) => (dataset, phenotype)
     }
 
-    // create a map of the unique phenotypes and the roots mapping to them
-    val phenotypes = datasetPhenotypes.map(_._2).distinct
-
-    // process each phenotype as a separate "run"
-    val phenotypeJobs = for (phenotype <- phenotypes) yield {
-      processPhenotype(phenotype, datasetPhenotypes.filter(_._2 == phenotype).map(_._1))
+    // create all the job to process each one
+    val jobs = datasetPhenotypes.map {
+      case (dataset, phenotype) => processDataset(dataset, phenotype)
     }
 
-    // process each phenotype (this could be done in parallel!)
-    phenotypeJobs.toList.sequence >> IO.unit
-  }
-
-  /**
-   * Process all the datasets for a given phenotype. This ensures that the
-   * output for downstream processors is the phenotype and that it is
-   * completely ready to be processed once done.
-   */
-  def processPhenotype(phenotype: String, datasets: Seq[String]): IO[Unit] = {
-    import Implicits.contextShift
-
-    val script = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
-
-    // create a job for each dataset
-    val jobs = datasets.map { dataset =>
-      val cluster = Cluster(name = name.toString)
-      val step    = JobStep.PySpark(script, dataset, phenotype)
-
-      for {
-        _      <- IO(logger.info(s"...$dataset/$phenotype"))
-        result <- aws.runJob(cluster, step)
-      } yield result
+    // get a mapping of all the datasets (inputs) for each phenotype (output)
+    val outputs = datasetPhenotypes.groupBy(_._2).mapValues { list =>
+      list.map {
+        case (dataset, phenotype) => s"$dataset/$phenotype"
+      }
     }
 
-    // create a unique list of dataset/phenotype pairs as inputs
-    val inputs = datasets.map { dataset =>
-      s"$dataset/$phenotype"
+    // create a list of all the results to write to the database
+    val runs = outputs.toList.map {
+      case (output, inputs) => Run.insert(pool, name, inputs, output)
     }
 
     // run all the jobs (note: this could be done in parallel!)
     for {
-      _ <- IO(logger.info(s"Processing $phenotype datasets..."))
       _ <- aws.waitForJobs(jobs)
-      _ <- Run.insert(pool, name, inputs, phenotype)
+      _ <- runs.sequence
       _ <- IO(logger.info("Done"))
     } yield ()
+  }
+
+  /**
+   * Spin up a cluster to process a single dataset.
+   */
+  private def processDataset(dataset: String, phenotype: String): IO[RunJobFlowResult] = {
+    val script  = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
+    val cluster = Cluster(name = name.toString)
+    val step    = JobStep.PySpark(script, dataset, phenotype)
+
+    for {
+      _   <- IO(logger.info(s"Partitioning $dataset/$phenotype..."))
+      job <- aws.runJob(cluster, step)
+    } yield job
   }
 }

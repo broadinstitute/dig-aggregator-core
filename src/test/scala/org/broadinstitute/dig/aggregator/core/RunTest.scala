@@ -41,7 +41,7 @@ final class RunTest extends DbFunSuite {
 
   dbTest("insert - provenance update") {
     val r0 = insertRun(TestProcessor.a, Seq("i0", "i1", "i2"), "o0")
-    val r1 = insertRun(TestProcessor.a, Seq("i0", "i1", "i2"), "o1")
+    val r1 = insertRun(TestProcessor.a, Seq("i0", "i1", "i2", "i3"), "o0")
 
     // there should be 1 provenance row
     val p    = Provenance.thisBuild
@@ -52,9 +52,9 @@ final class RunTest extends DbFunSuite {
     assert(run1 == Seq(p))
   }
 
-  dbTest("insert - on duplicate key update") {
+  dbTest("insert - replace outputs") {
     val r0 = insertRun(TestProcessor.a, Seq("i0"), "o0")
-    val r1 = insertRun(TestProcessor.a, Seq("i0"), "o1")
+    val r1 = insertRun(TestProcessor.a, Seq("i1"), "o0")
 
     assert(allResults.size == 1)
 
@@ -63,7 +63,6 @@ final class RunTest extends DbFunSuite {
 
     assert(r0results.isEmpty)
     assert(r1results.size == 1)
-    assert(r1results(0).output == "o1")
   }
 
   dbTest("lookup work to be done 1") {
@@ -89,7 +88,7 @@ final class RunTest extends DbFunSuite {
     val r3 = insertRun(TestProcessor.c, Seq("o0", "o1"), "o3")
 
     // update the output of r1
-    val r4 = insertRun(TestProcessor.b, Seq("i1"), "o4")
+    val r4 = insertRun(TestProcessor.b, Seq("i3"), "o1")
 
     // find all the processor c needs to process still (depends on a and b)
     val deps    = Seq(TestProcessor.a, TestProcessor.b)
@@ -98,6 +97,6 @@ final class RunTest extends DbFunSuite {
     // should need to process o4 and o2
     assert(results.size == 2)
     assert(results.find(_.output == "o2").isDefined)
-    assert(results.find(_.output == "o4").isDefined)
+    assert(results.find(_.output == "o1").isDefined)
   }
 }

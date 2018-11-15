@@ -35,7 +35,7 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     def insert(a: A): IO[_]
   }
 
-  def insertRun(app: Processor.Name, inputs: Seq[String], output: String): Long = {
+  def insertRun(app: Processor.Name, inputs: Seq[String], output: String): String = {
     Run.insert(pool, app, inputs, output).unsafeRunSync
   }
 
@@ -47,7 +47,7 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     pool.exec(q).unsafeRunSync
   }
 
-  def runResults(run: Long): Seq[Run.Result] = {
+  def runResults(run: String): Seq[Run.Result] = {
     Run.resultsOfRun(pool, run).unsafeRunSync
   }
 
@@ -57,7 +57,7 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     pool.exec(q).unsafeRunSync
   }
 
-  def runProvenance(run: Long, app: Processor.Name): Seq[Provenance] = {
+  def runProvenance(run: String, app: Processor.Name): Seq[Provenance] = {
     Provenance.ofRun(pool, run, app).unsafeRunSync
   }
 
@@ -103,7 +103,7 @@ object DbFunSuite {
       override val create: ConnectionIO[Int] =
         sql"""|CREATE TABLE `runs` (
               |  `ID` int(11) NOT NULL AUTO_INCREMENT,
-              |  `run` bigint(20) NOT NULL,
+              |  `run` varchar(36) NOT NULL,
               |  `app` varchar(180) NOT NULL,
               |  `input` varchar(800) NOT NULL,
               |  `output` varchar(800) NOT NULL,
@@ -119,7 +119,7 @@ object DbFunSuite {
       override val create: ConnectionIO[Int] = {
         sql"""|CREATE TABLE `provenance` (
               |  `ID` int(11) NOT NULL AUTO_INCREMENT,
-              |  `run` bigint(20) NOT NULL,
+              |  `run` varchar(36) NOT NULL,
               |  `app` varchar(180) NOT NULL,
               |  `source` varchar(1024) DEFAULT NULL,
               |  `branch` varchar(180) DEFAULT NULL,
