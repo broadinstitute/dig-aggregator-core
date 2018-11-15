@@ -34,24 +34,34 @@ object Run {
    * Run entries are created and inserted atomically for a single output.
    */
   def insert(pool: DbPool, app: Processor.Name, inputs: Seq[String], output: String): IO[String] = {
-    val del = sql"""|DELETE FROM `runs`
-                    |WHERE       `app` = $app
-                    |AND         `output` = $output
-                    |""".stripMargin
+    val select = sql"""|SELECT `input`
+                       |FROM   `runs`
+                       |WHERE  `app` = $app
+                       |AND    `output` = $output
+                       |""".stripMargin.query[String].to[Seq]
+
+    // delete all the existing inputs for this output
+    val delete = sql"""|DELETE FROM `runs`
+                       |WHERE       `app` = $app
+                       |AND         `output` = $output
+                       |""".stripMargin
 
     // insert after deleting, replacing all the inputs for this output
-    val ins = s"""|INSERT INTO `runs` (`run`, `app`, `input`, `output`)
-                  |VALUES             (?, ?, ?, ?)
-                  |""".stripMargin
-
-    // create a run for each input, use the time in milliseconds as the ID
-    val runId   = randomUUID.toString
-    val entries = inputs.map(Entry(runId, app, _, output))
-    val insert  = Update[Entry](ins).updateMany(entries.toList)
+    val insert = s"""|INSERT INTO `runs` (`run`, `app`, `input`, `output`)
+                     |VALUES             (?, ?, ?, ?)
+                     |""".stripMargin
 
     for {
+      prevInputs <- pool.exec(select)
+
+      // create the run, and combine all the inputs together
+      runId     = randomUUID.toString
+      newInputs = (prevInputs ++ inputs).distinct
+      entries   = newInputs.map(Entry(runId, app, _, output))
+      update    = Update[Entry](insert).updateMany(entries.toList)
+
       // delete then update in the same transaction
-      _ <- pool.exec(del.update.run >> insert)
+      _ <- pool.exec(delete.update.run >> update)
 
       // insert the provenance row, but should be part of same transaction
       _ <- Provenance.thisBuild.insert(pool, runId, app)
