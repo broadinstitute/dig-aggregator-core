@@ -26,8 +26,8 @@ if __name__ == '__main__':
     args = opts.parse_args()
 
     # get the source and output directories
-    srcdir = 's3://dig-analysis-data/variants/%s/%s' % (args.dataset, args.phenotype)
-    outdir = 's3://dig-analysis-data/out/metaanalysis/variants/%s/%s' % (args.phenotype, args.dataset)
+    srcdir = '%s/variants/%s/%s' % (s3dir, args.dataset, args.phenotype)
+    outdir = '%s/out/metaanalysis/variants/%s/%s' % (s3dir, args.phenotype, args.dataset)
 
     # create a spark session
     spark = SparkSession.builder.appName('metaanalysis').getOrCreate()
