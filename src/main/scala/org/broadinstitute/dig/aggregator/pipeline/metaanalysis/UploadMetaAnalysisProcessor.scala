@@ -74,7 +74,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
     // create runs for every phenotype
     val ios = for (phenotype <- phenotypes) yield {
       val analysis = new Analysis(s"MetaAnalysis/$phenotype", Provenance.thisBuild)
-      val driver   = config.neo4j.newDriver
+      val graph   = new GraphDb(config.neo4j)
 
       // the ancestries for each phenotype
       val ancestries = Seq("AA", "AF", "EU", "HS", "EA", "SA")
@@ -85,7 +85,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
 
         for {
           _ <- IO(logger.info(s"...Uploading $phenotype frequencies for $ancestry"))
-          _ <- analysis.uploadParts(aws, driver, id, parts)(uploadFrequencyResults(ancestry))
+          _ <- analysis.uploadParts(aws, graph, id, parts)(uploadFrequencyResults(ancestry))
         } yield()
       }
 
@@ -96,7 +96,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
         _ <- IO(logger.info(s"Preparing upload of $phenotype meta-analysis..."))
 
         // delete the existing analysis and recreate it
-        id <- analysis.create(driver)
+        id <- analysis.create(graph)
 
         // find all the part files to upload for the analysis
         _ <- IO(logger.info(s"Uploading frequencies for $phenotype..."))
@@ -104,7 +104,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
 
         // find and upload all the bottom-line result part files
         _ <- IO(logger.info(s"Uploading bottom-line results for $phenotype..."))
-        _ <- analysis.uploadParts(aws, driver, id, bottomLine)(uploadBottomLineResults)
+        _ <- analysis.uploadParts(aws, graph, id, bottomLine)(uploadBottomLineResults)
 
         // add the result to the database
         _ <- Run.insert(pool, name, Seq(phenotype), analysis.name)
@@ -119,7 +119,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
   /**
    * Given a part file, upload it and create all the frequency nodes.
    */
-  def uploadFrequencyResults(ancestry: String)(driver: Driver, id: Int, part: String): StatementResult = {
+  def uploadFrequencyResults(ancestry: String)(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
     import scala.language.reflectiveCalls
 
     val r = columnMapper("r")
@@ -159,13 +159,13 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |CREATE (p)<-[:FOR_PHENOTYPE]-(n)
                 |""".stripMargin
 
-    driver.session.run(q)
+    graph.run(q)
   }
 
   /**
    * Given a part file, upload it and create all the bottom-line nodes.
    */
-  def uploadBottomLineResults(driver: Driver, id: Int, part: String): StatementResult = {
+  def uploadBottomLineResults(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
     import scala.language.reflectiveCalls
 
     val r = columnMapper("r")
@@ -207,6 +207,6 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |)
                 |""".stripMargin
 
-    driver.session.run(q)
+    graph.run(q)
   }
 }

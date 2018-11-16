@@ -34,34 +34,33 @@ object Run {
    * Run entries are created and inserted atomically for a single output.
    */
   def insert(pool: DbPool, app: Processor.Name, inputs: Seq[String], output: String): IO[String] = {
-    val select = sql"""|SELECT `input`
-                       |FROM   `runs`
-                       |WHERE  `app` = $app
-                       |AND    `output` = $output
-                       |""".stripMargin.query[String].to[Seq]
+    val q = s"""|INSERT INTO `runs`
+                |  ( `run`
+                |  , `app`
+                |  , `input`
+                |  , `output`
+                |  )
+                |
+                |VALUES (?, ?, ?, ?)
+                |""".stripMargin
 
-    // delete all the existing inputs for this output
-    val delete = sql"""|DELETE FROM `runs`
-                       |WHERE       `app` = $app
-                       |AND         `output` = $output
-                       |""".stripMargin
+    // for each input, delete the previous one that existed
+    val deletes = inputs.map { input =>
+      sql"""|DELETE FROM `runs`
+            |
+            |WHERE       `app` = $app
+            |AND         `input` = $input
+            |""".stripMargin.update.run
+    }
 
-    // insert after deleting, replacing all the inputs for this output
-    val insert = s"""|INSERT INTO `runs` (`run`, `app`, `input`, `output`)
-                     |VALUES             (?, ?, ?, ?)
-                     |""".stripMargin
+    // generate the run ID and an insert-multi update
+    val runId   = randomUUID.toString
+    val entries = inputs.map(Entry(runId, app, _, output))
+    val insert  = Update[Entry](q).updateMany(entries.toList)
 
     for {
-      prevInputs <- pool.exec(select)
-
-      // create the run, and combine all the inputs together
-      runId     = randomUUID.toString
-      newInputs = (prevInputs ++ inputs).distinct
-      entries   = newInputs.map(Entry(runId, app, _, output))
-      update    = Update[Entry](insert).updateMany(entries.toList)
-
-      // delete then update in the same transaction
-      _ <- pool.exec(delete.update.run >> update)
+      // delete the old inputs + insert the new ones in a single transaction
+      _ <- pool.exec(deletes.toList.sequence >> insert)
 
       // insert the provenance row, but should be part of same transaction
       _ <- Provenance.thisBuild.insert(pool, runId, app)

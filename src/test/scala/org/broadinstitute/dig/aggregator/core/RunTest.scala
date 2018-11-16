@@ -52,9 +52,9 @@ final class RunTest extends DbFunSuite {
     assert(run1 == Seq(p))
   }
 
-  dbTest("insert - replace outputs") {
+  dbTest("insert - replace inputs") {
     val r0 = insertRun(TestProcessor.a, Seq("i0"), "o0")
-    val r1 = insertRun(TestProcessor.a, Seq("i1"), "o0")
+    val r1 = insertRun(TestProcessor.a, Seq("i0"), "o1")
 
     assert(allResults.size == 1)
 
@@ -63,6 +63,7 @@ final class RunTest extends DbFunSuite {
 
     assert(r0results.isEmpty)
     assert(r1results.size == 1)
+    assert(r1results.find(_.output == "o1").isDefined)
   }
 
   dbTest("lookup work to be done 1") {
