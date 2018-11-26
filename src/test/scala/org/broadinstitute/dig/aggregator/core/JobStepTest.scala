@@ -1,7 +1,9 @@
 package org.broadinstitute.dig.aggregator.core
 
 import org.scalatest.FunSuite
+
 import java.net.URI
+
 import com.amazonaws.services.elasticmapreduce.model.StepConfig
 import com.amazonaws.services.elasticmapreduce.model.ActionOnFailure
 import com.amazonaws.services.elasticmapreduce.model.HadoopJarStepConfig
