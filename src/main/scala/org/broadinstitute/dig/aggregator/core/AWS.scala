@@ -48,7 +48,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
    * The same region and bucket are used for all operations.
    */
   val region: Regions = Regions.valueOf(config.region)
-  val bucket: String  = config.bucket
+  val bucket: String  = config.s3.bucket
 
   /**
    * AWS IAM credentials provider.
