@@ -26,6 +26,11 @@ final class AwsTest extends AwsFunSuite {
   override protected val aws = new AWS(opts.config.aws)
 
   /**
+   * Create a cluster and run a simple script job.
+   */
+  testWithCluster("Simple Cluster", "test_script.py")
+
+  /**
    * Put() an object, then get() it
    */
   testWithPseudoDirIO("PutGet") {
