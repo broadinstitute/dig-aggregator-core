@@ -83,4 +83,12 @@ final class EmrTest extends FunSuite {
       testSerialize(InstanceType.apply, it.value)
     }
   }
+
+  test("EMR types - Cluster name") {
+    val clusterOK  = Try(Cluster(name = "foo"))
+    val clusterErr = Try(Cluster(name = "foo bar"))
+
+    assert(clusterOK.isSuccess)
+    assert(clusterErr.isFailure)
+  }
 }

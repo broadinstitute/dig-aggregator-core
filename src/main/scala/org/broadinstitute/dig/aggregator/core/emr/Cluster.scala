@@ -22,7 +22,9 @@ final case class Cluster(
     bootstrapScripts: Seq[URI] = Seq(),
     keepAliveWhenNoSteps: Boolean = false,
     visibleToAllUsers: Boolean = true,
-)
+) {
+  require(name.matches("[A-Za-z_]+[A-Za-z0-9_]*"), s"Illegal cluster name: $name")
+}
 
 /**
  * Companion object for creating an EMR cluster.
