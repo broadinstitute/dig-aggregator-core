@@ -28,6 +28,12 @@ sbt "run --reprocess <processor>"
 
 _Again, note that the above will only show the work that would be done, pass `--yes` along with `--reprocess` to actually do the work._
 
+When testing changes to processors, it can be quite a pain to run over _everything_. You can pass `--only` along with an input parameter to limit what inputs actually get processed to a single one for testing purposes:
+
+```bash
+sbt "run --yes --only T2D MetaAnalysisProcessor"
+```
+
 ## Running Pipelines
 
 If `--pipeline` is present on the command line, then instead of a `<processor>` name, the program will expect the name of a pipeline and will run the entire pipeline. Each processor in the pipeline will perform any work that needs to be done (in order) until there is no more work left.
