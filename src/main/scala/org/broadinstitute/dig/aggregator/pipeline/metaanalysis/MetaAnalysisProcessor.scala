@@ -4,8 +4,11 @@ import cats._
 import cats.effect._
 import cats.implicits._
 
+import com.amazonaws.services.elasticmapreduce.model.RunJobFlowResult
+
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
+import org.broadinstitute.dig.aggregator.core.emr._
 import org.broadinstitute.dig.aggregator.core.processors._
 
 /**
@@ -22,11 +25,11 @@ import org.broadinstitute.dig.aggregator.core.processors._
  *
  * The output of the ancestry-specific analysis is written to:
  *
- *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/ancestry-specific/<ancestry>
+ *  s3://dig-analysis-data/out/metaanalysis/ancestry-specific/<phenotype>/ancestry=?
  *
  * The output of the trans-ethnic analysis is written to:
  *
- *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/trans-ethnic
+ *  s3://dig-analysis-data/out/metaanalysis/trans-ethnic/<phenotype>
  *
  * The inputs and outputs for this processor are expected to be phenotypes.
  */
@@ -43,37 +46,63 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
    * All the job scripts that need to be uploaded to AWS.
    */
   override val resources: Seq[String] = Seq(
+    "pipeline/metaanalysis/cluster-bootstrap.sh",
     "pipeline/metaanalysis/runAnalysis.py",
+    "pipeline/metaanalysis/loadAnalysis.py",
   )
 
   /**
    * Take all the phenotype results from the dependencies and process them.
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
-    val script = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
-
-    // collect unique phenotypes across all results to process
     val phenotypes = results.map(_.output).distinct
 
-    // create a set of jobs for each phenotype
-    val runs = for (phenotype <- phenotypes) yield {
-      val steps = Seq(
-        JobStep.PySpark(script, "--ancestry-specific", phenotype),
-        JobStep.PySpark(script, "--trans-ethnic", phenotype),
-      )
+    // create a set of jobs to process the phenotypes
+    val jobs = phenotypes.map(processPhenotype)
 
-      for {
-        _ <- IO(logger.info(s"Processing phenotype $phenotype..."))
-
-        // first run ancestry-specific analysis, followed by trans-ethnic
-        _ <- aws.runJobAndWait(steps)
-
-        // add the result to the database
-        _ <- Run.insert(xa, name, Seq(phenotype), phenotype)
-      } yield logger.info("Done")
+    // create an IO to insert all the results
+    val runs = phenotypes.map { phenotype =>
+      Run.insert(pool, name, Seq(phenotype), phenotype)
     }
 
-    // process each phenotype (could be done in parallel!)
-    runs.toList.sequence >> IO.unit
+    // wait for all the jobs to complete, then insert all the results
+    for {
+      _ <- aws.waitForJobs(jobs)
+      _ <- runs.toList.sequence
+      _ <- IO(logger.info("Done"))
+    } yield ()
+  }
+
+  /**
+   * Create a cluster and process a single phenotype.
+   */
+  private def processPhenotype(phenotype: String): IO[RunJobFlowResult] = {
+    val bootstrapScript = aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh")
+    val runScript       = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
+    val loadScript      = aws.uriOf("resources/pipeline/metaanalysis/loadAnalysis.py")
+
+    val sparkConf = ApplicationConfig.sparkEnv.withProperties(
+      "PYSPARK_PYTHON" -> "/usr/bin/python3",
+    )
+
+    // EMR cluster to run the job steps on
+    val cluster = Cluster(
+      name = name.toString,
+      bootstrapScripts = Seq(bootstrapScript),
+      configurations = Seq(sparkConf),
+    )
+
+    // first run+load ancestry-specific and then trans-ethnic
+    val steps = Seq(
+      JobStep.Script(runScript, "--ancestry-specific", phenotype),
+      JobStep.PySpark(loadScript, "--ancestry-specific", phenotype),
+      JobStep.Script(runScript, "--trans-ethnic", phenotype),
+      JobStep.PySpark(loadScript, "--trans-ethnic", phenotype),
+    )
+
+    for {
+      _   <- IO(logger.info(s"Processing phenotype $phenotype..."))
+      job <- aws.runJob(cluster, steps)
+    } yield job
   }
 }

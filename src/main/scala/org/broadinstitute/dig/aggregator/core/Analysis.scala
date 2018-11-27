@@ -29,8 +29,8 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
    *  * ...create a new analysis node;
    *  * ...call the upload function for each part file;
    */
-  def uploadParts(aws: AWS, driver: Driver, analysisId: Int, s3path: String)(
-      uploadPart: (Driver, Int, String) => StatementResult): IO[Unit] = {
+  def uploadParts(aws: AWS, graph: GraphDb, analysisId: Int, s3path: String)(
+      uploadPart: (GraphDb, Int, String) => IO[StatementResult]): IO[Unit] = {
     for {
       listing <- aws.ls(s3path)
 
@@ -41,16 +41,15 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
       _ <- IO(logger.debug(s"Uploading ${parts.size} part files..."))
 
       // create an IO statement for each part and upload it
-      uploads = for ((part, n) <- parts.zipWithIndex)
-        yield
-          IO {
-            val result   = uploadPart(driver, analysisId, aws.publicUrlOf(part))
-            val counters = result.consume.counters
-            val nodes    = counters.nodesCreated
-            val edges    = counters.relationshipsCreated
+      uploads = for ((part, n) <- parts.zipWithIndex) yield {
+        for (result <- uploadPart(graph, analysisId, aws.publicUrlOf(part))) yield {
+          val counters = result.consume.counters
+          val nodes    = counters.nodesCreated
+          val edges    = counters.relationshipsCreated
 
-            logger.debug(s"...$nodes nodes & $edges relationships created (${n + 1}/${parts.size})")
-          }
+          logger.debug(s"...$nodes nodes & $edges relationships created (${n + 1}/${parts.size})")
+        }
+      }
 
       // upload each part serially
       _ <- uploads.toList.sequence
@@ -63,7 +62,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
    * ID of the node created (or updated) so that any result nodes can link to
    * it explicitly.
    */
-  def create(driver: Driver): IO[Int] = {
+  def create(graph: GraphDb): IO[Int] = {
     val q = s"""|CREATE (n:Analysis {
                 |  name: '$name',
                 |  source: '${provenance.source}',
@@ -79,28 +78,29 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
     // run the query, return the node ID
     for {
       _ <- IO(logger.debug(s"Deleting existing analysis for '$name'"))
-      _ <- delete(driver)
+      _ <- delete(graph)
       _ <- IO(logger.debug(s"Creating new analysis for '$name'"))
-    } yield driver.session.run(q).single.get(0).asInt
+      r <- graph.run(q)
+    } yield r.single.get(0).asInt
   }
 
   /**
    * Detatch and delete all nodes produced by a given :Analysis node. Does not
    * delete the analysis node as it assumes it is being updated.
    */
-  def delete(driver: Driver): IO[Unit] = {
+  def delete(graph: GraphDb): IO[Unit] = {
 
     // tail-recursive accumulator helper method to count total deletions
     def deleteResults(total: Int): IO[Int] = {
       val q = s"""|MATCH (n)-[:PRODUCED_BY]->(:Analysis {name: '$name'})
                   |WITH n
-                  |LIMIT 10000
+                  |LIMIT 50000
                   |DETACH DELETE n
                   |""".stripMargin
 
       // run the query
-      val io = IO {
-        val counters = driver.session.run(q).consume.counters
+      val io = for (result <- graph.run(q)) yield {
+        val counters = result.consume.counters
         val nodes    = counters.nodesDeleted
         val edges    = counters.relationshipsDeleted
 
@@ -128,7 +128,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
               |""".stripMargin
 
       // delete the actual node
-      _ <- IO(driver.session.run(q))
+      _ <- graph.run(q)
 
       // how how many result nodes and relationships were delete
       _ <- IO(logger.debug(s"Deleted $totalDeleted nodes and relationships"))

@@ -7,6 +7,8 @@ import cats.implicits._
 import doobie._
 import doobie.implicits._
 
+import java.util.UUID.randomUUID
+
 import org.broadinstitute.dig.aggregator.core.processors.Processor
 
 /**
@@ -26,37 +28,42 @@ object Run {
    * is never actually used outside of insertion. Use `Run.Result` for getting
    * data out of the `runs` table.
    */
-  private case class Entry(run: Long, app: Processor.Name, input: String, output: String)
+  private case class Entry(run: String, app: Processor.Name, input: String, output: String)
 
   /**
    * Run entries are created and inserted atomically for a single output.
    */
-  def insert(xa: Transactor[IO], app: Processor.Name, inputs: Seq[String], output: String): IO[Long] = {
-    val sql = s"""|INSERT INTO `runs`
-                  |  ( `run`
-                  |  , `app`
-                  |  , `input`
-                  |  , `output`
-                  |  )
-                  |
-                  |VALUES
-                  |  (?, ?, ?, ?)
-                  |
-                  |ON DUPLICATE KEY UPDATE
-                  |  `run` = VALUES(`run`),
-                  |  `output` = VALUES(`output`),
-                  |  `timestamp` = NOW()
-                  |""".stripMargin
+  def insert(pool: DbPool, app: Processor.Name, inputs: Seq[String], output: String): IO[String] = {
+    val q = s"""|INSERT INTO `runs`
+                |  ( `run`
+                |  , `app`
+                |  , `input`
+                |  , `output`
+                |  )
+                |
+                |VALUES (?, ?, ?, ?)
+                |""".stripMargin
 
-    // create a run for each input, use the time in milliseconds as the ID
-    val runId   = System.currentTimeMillis()
+    // for each input, delete the previous one that existed
+    val deletes = inputs.map { input =>
+      sql"""|DELETE FROM `runs`
+            |
+            |WHERE       `app` = $app
+            |AND         `input` = $input
+            |""".stripMargin.update.run
+    }
+
+    // generate the run ID and an insert-multi update
+    val runId   = randomUUID.toString
     val entries = inputs.map(Entry(runId, app, _, output))
+    val insert  = Update[Entry](q).updateMany(entries.toList)
 
     for {
-      _ <- Update[Entry](sql).updateMany(entries.toList).transact(xa)
+      // delete the old inputs + insert the new ones in a single transaction
+      _ <- pool.exec(deletes.toList.sequence >> insert)
 
       // insert the provenance row, but should be part of same transaction
-      _ <- Provenance.thisBuild.insert(xa, runId, app)
+      _ <- Provenance.thisBuild.insert(pool, runId, app)
     } yield runId
   }
 
@@ -72,29 +79,35 @@ object Run {
    * Lookup all the results for a given run id. This is mostly used for
    * testing.
    */
-  def resultsOfRun(xa: Transactor[IO], run: Long): IO[Seq[Result]] = {
+  def resultsOfRun(pool: DbPool, run: String): IO[Seq[Result]] = {
     val q = sql"""|SELECT `app`, `output`, `timestamp`
                   |FROM   `runs`
                   |WHERE  `run`=$run
                   |""".stripMargin.query[Result].to[Seq]
 
-    q.transact(xa)
+    pool.exec(q)
   }
 
   /**
    * Given a list of applications, determine all the outputs produced by all
    * of them together.
    */
-  private def resultsOf(xa: Transactor[IO], deps: Seq[Processor.Name]): IO[Seq[Result]] = {
-    val qs = deps.map { dep =>
-      sql"SELECT `app`, `output`, `timestamp` FROM `runs` WHERE app=$dep"
+  private def resultsOf(pool: DbPool, deps: Seq[Processor.Name]): IO[Seq[Result]] = {
+    val selects = deps.map { dep =>
+      fr"SELECT `app`, `output`, `timestamp` FROM `runs` WHERE `app`=$dep"
     }
 
+    // join all the dependencies together
+    val union  = selects.toList.intercalate(fr"UNION ALL")
+    val select = fr"SELECT `inputs`.`app`, `inputs`.`output`, MAX(`inputs`.`timestamp`) AS `timestamp`"
+    val from   = fr"FROM (" ++ union ++ fr") AS `inputs`"
+    val group  = fr"GROUP BY `inputs`.`app`, `inputs`.`output`"
+
     // run a select query for each application
-    val results = qs.map(_.query[Result].to[Seq].transact(xa))
+    val q = (select ++ from ++ group).query[Result].to[Seq]
 
     // join all the results together into a single list
-    results.toList.sequence.map(_.reduce(_ ++ _))
+    pool.exec(q)
   }
 
   /**
@@ -102,11 +115,9 @@ object Run {
    * what outputs have been produced by the dependencies that have yet to be
    * processed by it.
    */
-  private def resultsOf(xa: Transactor[IO],
-                        deps: Seq[Processor.Name],
-                        notProcessedBy: Processor.Name): IO[Seq[Result]] = {
+  private def resultsOf(pool: DbPool, deps: Seq[Processor.Name], notProcessedBy: Processor.Name): IO[Seq[Result]] = {
     val selects = deps.map { dep =>
-      fr"SELECT `app`, `output`, `timestamp` FROM runs WHERE app=$dep"
+      fr"SELECT `app`, `output`, `timestamp` FROM `runs` WHERE `app`=$dep"
     }
 
     // join all the dependencies together
@@ -125,19 +136,17 @@ object Run {
     val q = (select ++ from ++ join ++ where ++ group).query[Result].to[Seq]
 
     // run the query
-    q.transact(xa)
+    pool.exec(q)
   }
 
   /**
    * Helper function where the "notProcessedBy" is optional and calls the
    * correct query accordingly.
    */
-  def resultsOf(xa: Transactor[IO],
-                deps: Seq[Processor.Name],
-                notProcessedBy: Option[Processor.Name]): IO[Seq[Result]] = {
+  def resultsOf(pool: DbPool, deps: Seq[Processor.Name], notProcessedBy: Option[Processor.Name]): IO[Seq[Result]] = {
     notProcessedBy match {
-      case Some(app) => resultsOf(xa, deps, app)
-      case None      => resultsOf(xa, deps)
+      case Some(app) => resultsOf(pool, deps, app)
+      case None      => resultsOf(pool, deps)
     }
   }
 }

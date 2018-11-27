@@ -10,8 +10,6 @@ import doobie.implicits._
 import java.io.File
 import java.io.PrintWriter
 
-import org.apache.kafka.clients.consumer.ConsumerRecord
-
 import org.broadinstitute.dig.aggregator.core.processors.Processor
 
 import org.json4s._
@@ -46,7 +44,7 @@ case class Dataset(dataset: String, topic: String) {
    * Insert this dataset to the database. This should only be done after all
    * its part files have been completely uploaded to HDFS.
    */
-  def insert(xa: Transactor[IO]): IO[Int] = {
+  def insert(pool: DbPool): IO[Int] = {
     val q = sql"""INSERT INTO `commits`
                  |  ( `dataset`
                  |  , `topic`
@@ -61,7 +59,7 @@ case class Dataset(dataset: String, topic: String) {
                  |  `timestamp` = NOW()
                  |""".stripMargin.update
 
-    q.run.transact(xa)
+    pool.exec(q.run)
   }
 }
 
@@ -74,7 +72,7 @@ object Dataset {
   /**
    * Get all the datasets committed for a given topic.
    */
-  private def datasetsOf(xa: Transactor[IO], topic: String): IO[Seq[Dataset]] = {
+  private def datasetsOf(pool: DbPool, topic: String): IO[Seq[Dataset]] = {
     val q = sql"""|SELECT    `dataset`, `topic`
                   |FROM      `datasets`
                   |
@@ -83,13 +81,13 @@ object Dataset {
                   |ORDER BY  `timestamp`
                   |""".stripMargin.query[Dataset].to[Seq]
 
-    q.transact(xa)
+    pool.exec(q)
   }
 
   /**
    * Get all datasets committed for a given topic not yet processed by an app.
    */
-  private def datasetsOf(xa: Transactor[IO], topic: String, notProcessedBy: Processor.Name): IO[Seq[Dataset]] = {
+  private def datasetsOf(pool: DbPool, topic: String, notProcessedBy: Processor.Name): IO[Seq[Dataset]] = {
     val q = sql"""|SELECT           `datasets`.`dataset`,
                   |                 `datasets`.`topic`
                   |
@@ -106,17 +104,17 @@ object Dataset {
                   |ORDER BY         `datasets`.`timestamp`
                   |""".stripMargin.query[Dataset].to[Seq]
 
-    q.transact(xa)
+    pool.exec(q)
   }
 
   /**
    * Helper function where the "notProcessedBy" is optional and calls the
    * correct query accordingly.
    */
-  def datasetsOf(xa: Transactor[IO], topic: String, notProcessedBy: Option[Processor.Name]): IO[Seq[Dataset]] = {
+  def datasetsOf(pool: DbPool, topic: String, notProcessedBy: Option[Processor.Name]): IO[Seq[Dataset]] = {
     notProcessedBy match {
-      case Some(app) => datasetsOf(xa, topic, app)
-      case None      => datasetsOf(xa, topic)
+      case Some(app) => datasetsOf(pool, topic, app)
+      case None      => datasetsOf(pool, topic)
     }
   }
 }

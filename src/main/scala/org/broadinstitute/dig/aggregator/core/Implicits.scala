@@ -1,9 +1,14 @@
 package org.broadinstitute.dig.aggregator.core
 
+import cats.effect._
+
+import fs2._
+
 import java.net.URI
 import java.nio.file.Paths
 
 import scala.collection.JavaConverters._
+import scala.concurrent.ExecutionContext
 import scala.io.Source
 import scala.util.Try
 
@@ -15,6 +20,16 @@ import com.amazonaws.services.s3.model.ObjectListing
 import com.amazonaws.services.s3.model.S3Object
 
 object Implicits {
+
+  /**
+   * Needed for IO.sleep.
+   */
+  implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
+
+  /**
+   * Needed for IO.parSequence.
+   */
+  implicit val contextShift: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
   /**
    * Helper functions for S3 objects.
@@ -147,12 +162,17 @@ object Implicits {
      */
     def isFailure: Boolean = state == StepState.FAILED
 
+    /** 
+     * True if the step hasn't started yet.
+     */
+    def isPending: Boolean = state == StepState.PENDING
+
     /**
      * If failed, this is the reason why.
      */
     def failureReason: Option[String] = {
       Option(summary.getStatus).map(_.getFailureDetails).flatMap { details =>
-        Option(details.getMessage)
+        Option(details).flatMap(d => Option(d.getMessage))
       }
     }
 

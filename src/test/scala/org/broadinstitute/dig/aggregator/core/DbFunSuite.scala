@@ -35,20 +35,8 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     def insert(a: A): IO[_]
   }
 
-  private object Insertable {
-    implicit object CommitsAreInsertable extends Insertable[Commit] {
-      override def insert(c: Commit): IO[_] = c.insert(xa)
-    }
-  }
-
-  def allCommits: Seq[Commit] = {
-    val q = sql"SELECT `commit`,`topic`,`partition`,`offset`,`dataset` FROM `commits`".query[Commit].to[List]
-
-    q.transact(xa).unsafeRunSync()
-  }
-
-  def insertRun(app: Processor.Name, inputs: Seq[String], output: String): Long = {
-    Run.insert(xa, app, inputs, output).unsafeRunSync
+  def insertRun(app: Processor.Name, inputs: Seq[String], output: String): String = {
+    Run.insert(pool, app, inputs, output).unsafeRunSync
   }
 
   def allResults: Seq[Run.Result] = {
@@ -56,33 +44,33 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
                   |FROM   `runs`
                   |""".stripMargin.query[Run.Result].to[Seq]
 
-    q.transact(xa).unsafeRunSync
+    pool.exec(q).unsafeRunSync
   }
 
-  def runResults(run: Long): Seq[Run.Result] = {
-    Run.resultsOfRun(xa, run).unsafeRunSync
+  def runResults(run: String): Seq[Run.Result] = {
+    Run.resultsOfRun(pool, run).unsafeRunSync
   }
 
   def allProvenance: Seq[(Long, Processor.Name)] = {
     val q = sql"SELECT `run`, `app` FROM `provenance`".query[(Long, Processor.Name)].to[Seq]
 
-    q.transact(xa).unsafeRunSync
+    pool.exec(q).unsafeRunSync
   }
 
-  def runProvenance(run: Long, app: Processor.Name): Seq[Provenance] = {
-    Provenance.ofRun(xa, run, app).unsafeRunSync
+  def runProvenance(run: String, app: Processor.Name): Seq[Provenance] = {
+    Provenance.ofRun(pool, run, app).unsafeRunSync
   }
 
   private def makeTables(): Unit = {
     import DbFunSuite._
 
-    Tables.all.foreach(dropAndCreate(xa))
+    Tables.all.foreach(dropAndCreate(pool))
   }
 }
 
 object DbFunSuite {
-  private def dropAndCreate(xa: Transactor[IO])(table: Table): Unit = {
-    (table.drop, table.create).mapN(_ + _).transact(xa).unsafeRunSync()
+  private def dropAndCreate(pool: DbPool)(table: Table): Unit = {
+    pool.exec((table.drop, table.create).mapN(_ + _)).unsafeRunSync()
     ()
   }
 
@@ -115,7 +103,7 @@ object DbFunSuite {
       override val create: ConnectionIO[Int] =
         sql"""|CREATE TABLE `runs` (
               |  `ID` int(11) NOT NULL AUTO_INCREMENT,
-              |  `run` bigint(20) NOT NULL,
+              |  `run` varchar(36) NOT NULL,
               |  `app` varchar(180) NOT NULL,
               |  `input` varchar(800) NOT NULL,
               |  `output` varchar(800) NOT NULL,
@@ -131,7 +119,7 @@ object DbFunSuite {
       override val create: ConnectionIO[Int] = {
         sql"""|CREATE TABLE `provenance` (
               |  `ID` int(11) NOT NULL AUTO_INCREMENT,
-              |  `run` bigint(20) NOT NULL,
+              |  `run` varchar(36) NOT NULL,
               |  `app` varchar(180) NOT NULL,
               |  `source` varchar(1024) DEFAULT NULL,
               |  `branch` varchar(180) DEFAULT NULL,

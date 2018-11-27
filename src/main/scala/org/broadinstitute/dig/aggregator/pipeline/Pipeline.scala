@@ -6,6 +6,7 @@ import cats.implicits._
 
 import com.typesafe.scalalogging.LazyLogging
 
+import org.broadinstitute.dig.aggregator.core.Implicits
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.processors.Processor
 import org.broadinstitute.dig.aggregator.core.processors.RunProcessor
@@ -39,11 +40,20 @@ trait Pipeline extends LazyLogging {
    * to happen downstream.
    */
   def showWork(config: BaseConfig, reprocess: Boolean): IO[Unit] = {
-    val work = for (name <- processors) yield {
-      Processor(name.toString)(config).get.showWork(reprocess)
+    val allProcessors = processors.map(Processor(_)(config).get).toSet
+
+    // get the set of processors that have known work
+    val knownWork = Pipeline.getKnownWork(allProcessors, reprocess)
+
+    // from that, determine the processors that can actually run
+    val showWork = knownWork.flatMap { toRun =>
+      val processorsToRun = Pipeline.getShouldRun(allProcessors, toRun)
+
+      // output the work for those processors
+      processorsToRun.map(_.showWork(reprocess, None)).toList.sequence
     }
 
-    work.toList.sequence >> IO.unit
+    showWork >> IO.unit
   }
 
   /**
@@ -55,38 +65,26 @@ trait Pipeline extends LazyLogging {
    * done doing their work and have nothing left to do.
    */
   def run(config: BaseConfig, reprocess: Boolean): IO[Unit] = {
-    val ps = processors.map(n => n -> Processor(n)(config).get).toMap
+    val allProcessors = processors.map(Processor(_)(config).get).toSet
 
     // recursive helper function
     def runProcessors(reprocess: Boolean): IO[Unit] = {
-      val fetchWork = for ((name, p) <- ps) yield {
-        p.hasWork(reprocess).map { work =>
-          if (work) Some(name) else None
-        }
-      }
+      import Implicits._
+
+      // get a list of all processors that have known work
+      val knownWork: IO[Set[Processor]] = Pipeline.getKnownWork(allProcessors, reprocess)
 
       // determine the list of all processors that have work
-      fetchWork.toList.parSequence.map(_.flatten).flatMap { dependenciesToRun =>
-        if (dependenciesToRun.isEmpty) {
+      knownWork.flatMap { toRun =>
+        if (toRun.isEmpty) {
           IO(logger.info("Everything up to date."))
         } else {
+          val shouldRun = Pipeline.getShouldRun(allProcessors, toRun)
 
-          /*
-           * If a processor that has work has a dependency that also has work,
-           * then it shouldn't run yet. Only processors with no dependencies -
-           * or with dependencies that have no work - should run.
-           */
-          val shouldRun = dependenciesToRun.filter { name =>
-            ps(name) match {
-              case r: RunProcessor => r.dependencies.forall(!dependenciesToRun.contains(_))
-              case _               => true
-            }
-          }
-
-          // run everything in parallel
+          // all the processors that can run can do so in parallel
           val io = shouldRun.isEmpty match {
             case true => IO.raiseError(new Exception("There's work to do, but nothing ran!"))
-            case _    => shouldRun.map(ps(_).run(reprocess)).toList.parSequence
+            case _    => shouldRun.map(_.run(reprocess, None)).toList.parSequence
           }
 
           // after they finish, recursively try again (don't reprocess!)
@@ -110,8 +108,8 @@ object Pipeline {
    * The global list of all pipelines.
    */
   def pipelines(): Map[String, Pipeline] = Map(
-    "MetaAnalysis" -> metaanalysis.MetaAnalysisPipeline,
-    "LDscore"      -> ldscore.LDScorePipeline,
+    "MetaAnalysisPipeline" -> metaanalysis.MetaAnalysisPipeline,
+    "LDScorePipeline"      -> ldscore.LDScorePipeline,
   )
 
   /**
@@ -119,5 +117,50 @@ object Pipeline {
    */
   def apply(pipeline: String): Option[Pipeline] = {
     pipelines.get(pipeline)
+  }
+
+  /**
+   * Given a set of processors, filter those that have work.
+   */
+  private def getKnownWork(processors: Set[Processor], reprocess: Boolean): IO[Set[Processor]] = {
+    val work = processors.map { p =>
+      p.hasWork(reprocess).map {
+        case true  => Some(p)
+        case false => None
+      }
+    }
+
+    work.toList.sequence.map(_.flatten.toSet)
+  }
+
+  /**
+   * Find all processors NOT represented in `toRun` that will run due to a
+   * a dependency that is in the `toRun` set.
+   */
+  private def getShouldRun(allProcessors: Set[Processor], toRun: Set[Processor]): Set[Processor] = {
+
+    // true if immediate dependency is in the `toRun` set
+    def dependencyWillRun(r: Processor) = r match {
+      case r: RunProcessor => r.dependencies.exists(dep => toRun.exists(_.name == dep))
+      case p               => false
+    }
+
+    // find all processors not yet set to run that have a dependency that will
+    val inferred = (allProcessors -- toRun).filter(dependencyWillRun)
+
+    /*
+     * If processors were inferred that will end up having work due to a
+     * dependency that will run, add them to the set of processors `toRun` and
+     * recurse.
+     *
+     * Otherwise, return the set of processors in the `toRun` set that either
+     * have no dependencies, or dependencies that will not run.
+     */
+
+    if (inferred.nonEmpty) {
+      getShouldRun(allProcessors, toRun ++ inferred)
+    } else {
+      toRun.filter(!dependencyWillRun(_))
+    }
   }
 }

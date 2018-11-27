@@ -27,10 +27,10 @@ object JobStep {
   import Implicits._
 
   def toJobName(uri: URI): String = uri.basename.trim match {
-    case "" => uri.toString
+    case ""       => uri.toString
     case nonEmpty => nonEmpty
   }
-  
+
   /**
    * Create a new Map Reduce step given a JAR (S3 path) the main class to
    * run, and any command line arguments to pass along to the JAR.
@@ -93,8 +93,6 @@ object JobStep {
         "spark-submit",
         "--deploy-mode",
         "cluster",
-        "--conf",
-        "PYSPARK_PYTHON=/usr/bin/python3",
         script.toString
       )
 

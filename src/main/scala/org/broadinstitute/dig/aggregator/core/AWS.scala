@@ -1,8 +1,8 @@
 package org.broadinstitute.dig.aggregator.core
 
 import cats._
+import cats.data._
 import cats.effect._
-import cats.effect.concurrent._
 import cats.implicits._
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider
@@ -13,17 +13,25 @@ import com.amazonaws.services.s3.model._
 import com.amazonaws.services.elasticmapreduce._
 import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsRequest
 import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsResult
+import com.amazonaws.services.elasticmapreduce.model.BootstrapActionConfig
 import com.amazonaws.services.elasticmapreduce.model.JobFlowDetail
+import com.amazonaws.services.elasticmapreduce.model.JobFlowInstancesConfig
 import com.amazonaws.services.elasticmapreduce.model.ListStepsRequest
+import com.amazonaws.services.elasticmapreduce.model.RunJobFlowRequest
+import com.amazonaws.services.elasticmapreduce.model.RunJobFlowResult
+import com.amazonaws.services.elasticmapreduce.model.ScriptBootstrapActionConfig
 import com.amazonaws.services.elasticmapreduce.model.StepState
 import com.amazonaws.services.elasticmapreduce.model.StepSummary
 
 import com.typesafe.scalalogging.LazyLogging
 
+import fs2._
+
 import java.io.InputStream
 import java.net.URI
 
 import org.broadinstitute.dig.aggregator.core.config.AWSConfig
+import org.broadinstitute.dig.aggregator.core.emr.Cluster
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
@@ -70,6 +78,11 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   def uriOf(key: String): URI = new URI(s"s3://$bucket/$key")
 
   /**
+   * Create a URI for a cluster log.
+   */
+  def logUri(cluster: Cluster): URI = uriOf(s"logs/${cluster.name}")
+
+  /**
    * Test whether or not a key exists.
    */
   def exists(key: String): IO[Boolean] = IO {
@@ -99,16 +112,21 @@ final class AWS(config: AWSConfig) extends LazyLogging {
     //An IO that will produce the contents of the classpath resource at `resource` as a string,
     //and will close the InputStream backed by the resource when reading the resource's data is
     //done, either successfully or due to an error.
-    val contentsIo: IO[String] = { 
+    val contentsIo: IO[String] = {
       val streamIo = IO(getClass.getClassLoader.getResourceAsStream(resource))
-      
-      def closeStream(stream: InputStream): IO[Unit] = IO(stream.close())
-      
-      def getContents(stream: InputStream): IO[String] = IO(Source.fromInputStream(stream).mkString)
-      
+
+      // load the contents of the file, treat as text, ensure unix line-endings
+      def getContents(stream: InputStream): IO[String] = 
+        IO(Source.fromInputStream(stream).mkString.replace("\r\n", "\n"))
+
+      // close the stream to free resources
+      def closeStream(stream: InputStream): IO[Unit] = 
+        IO(stream.close())
+
+      // open, load, and ensure closed
       streamIo.bracket(getContents(_))(closeStream(_))
     }
-    
+
     for {
       _ <- IO(logger.debug(s"Uploading $resource to S3..."))
       // load the resource in the IO context
@@ -184,25 +202,72 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   }
 
   /**
-   * Given a set of steps, start a job.
+   * Create a job request that will be used to create a new EMR cluster and
+   * run a series of steps.
    */
-  def runJob(steps: Seq[JobStep]): IO[AddJobFlowStepsResult] = {
-    val request = new AddJobFlowStepsRequest()
-      .withJobFlowId(config.emr.cluster)
+  def runJob(cluster: Cluster, steps: Seq[JobStep]): IO[RunJobFlowResult] = {
+    import Implicits.RichURI
+
+    // create all the bootstrap actions for this cluster
+    val bootstrapActions = cluster.bootstrapScripts.map { uri =>
+      val action = new ScriptBootstrapActionConfig().withPath(uri.toString)
+
+      // create the config
+      new BootstrapActionConfig()
+        .withScriptBootstrapAction(action)
+        .withName(uri.basename)
+    }
+
+    // create all the instances
+    val instances = new JobFlowInstancesConfig()
+      .withAdditionalMasterSecurityGroups(config.emr.securityGroupIds.map(_.value): _*)
+      .withAdditionalSlaveSecurityGroups(config.emr.securityGroupIds.map(_.value): _*)
+      .withEc2SubnetId(config.emr.subnetId.value)
+      .withEc2KeyName(config.emr.sshKeyName.value)
+      .withInstanceCount(cluster.instances)
+      .withKeepJobFlowAliveWhenNoSteps(cluster.keepAliveWhenNoSteps)
+      .withMasterInstanceType(cluster.masterInstanceType.value)
+      .withSlaveInstanceType(cluster.slaveInstanceType.value)
+
+    // create the request for the cluster
+    val request = new RunJobFlowRequest()
+      .withName(cluster.name)
+      .withBootstrapActions(bootstrapActions.asJava)
+      .withApplications(cluster.applications.map(_.application).asJava)
+      .withConfigurations(cluster.configurations.map(_.configuration).asJava)
+      .withReleaseLabel(config.emr.releaseLabel.value)
+      .withServiceRole(config.emr.serviceRoleId.value)
+      .withJobFlowRole(config.emr.jobFlowRoleId.value)
+      .withAutoScalingRole(config.emr.autoScalingRoleId.value)
+      .withLogUri(logUri(cluster).toString)
+      .withVisibleToAllUsers(cluster.visibleToAllUsers)
+      .withInstances(instances)
       .withSteps(steps.map(_.config).asJava)
 
+    // create the IO action to launch the instance
     IO {
-      val job = emr.addJobFlowSteps(request)
+      val job = cluster.amiId match {
+        case Some(id) => emr.runJobFlow(request.withCustomAmiId(id.value))
+        case None     => emr.runJobFlow(request)
+      }
 
-      // show the job ID so it can be referenced in the AWS console
-      logger.debug(s"Submitted job with ${steps.size} steps...")
+      // show the ID of the cluster being created
+      logger.debug(s"Provisioning ${cluster.name} (${job.getJobFlowId}); logging to ${logUri(cluster)}/${job.getJobFlowId}...")
 
+      // return the job
       job
     }
   }
 
   /**
-   * Every 20 seconds, send a request to the cluster to determine the state
+   * Helper: create a job that's a single step.
+   */
+  def runJob(cluster: Cluster, step: JobStep): IO[RunJobFlowResult] = {
+    runJob(cluster, Seq(step))
+  }
+
+  /**
+   * Every few minutes, send a request to the cluster to determine the state
    * of all the steps in the job. Only return once the state is one of the
    * following for the last/current step:
    *
@@ -211,22 +276,22 @@ final class AWS(config: AWSConfig) extends LazyLogging {
    *   StepState.INTERRUPTED
    *   StepState.CANCELLED
    */
-  def waitForJob(job: AddJobFlowStepsResult, prevStep: Option[StepSummary] = None): IO[Unit] = {
-    import Implicits._
+  def waitForJob(job: RunJobFlowResult, prevStep: Option[StepSummary] = None): IO[RunJobFlowResult] = {
+    import Implicits.timer
 
+    // create the job request
     val request = new ListStepsRequest()
-      .withClusterId(config.emr.cluster)
-      .withStepIds(job.getStepIds)
+      .withClusterId(job.getJobFlowId)
 
     // wait a little bit then request status
-    val req = for (_ <- IO.sleep(5.seconds)) yield emr.listSteps(request)
+    val req = for (_ <- IO.sleep(1.minutes)) yield emr.listSteps(request)
 
     /*
      * The step summaries are returned in reverse order. The job is complete
      * when all the steps have their status set to COMPLETED, at which point
      * the curStep will be None.
      */
-    val curStep = req.map(_.getSteps.asScala).map(_.find(!_.isComplete))
+    val curStep = req.map(_.getSteps.asScala.reverse).map(_.find(!_.isComplete))
 
     /*
      * If the current step has failed, interrupted, or cancelled, then the
@@ -234,15 +299,19 @@ final class AWS(config: AWSConfig) extends LazyLogging {
      */
     curStep.flatMap {
       case None =>
-        logger.debug(s"Job complete")
-        IO.unit
+        logger.debug(s"Job ${job.getJobFlowId} complete")
+        IO(job)
 
       // the current step stopped for some reason
       case Some(step) if step.isStopped =>
-        logger.error(s"Job failed: ${step.stopReason}")
-        logger.error(s"View output logs from the master node of the cluster by running:")
-        logger.error(s"  yarn logs --applicationId <id>")
-        IO.fromEither(Left(new Throwable(step.stopReason)))
+        logger.error(s"Job ${job.getJobFlowId} failed: ${step.stopReason}; logs are in S3 and visible from the EMR web console.")
+
+        // terminate the program
+        IO.raiseError(new Exception(step.stopReason))
+      
+      // hasn't started yet; cluster is still provisioning, continue waiting
+      case Some(step) if step.isPending =>
+        waitForJob(job, Some(step))
 
       // still waiting for the current step to complete
       case Some(step) =>
@@ -251,9 +320,11 @@ final class AWS(config: AWSConfig) extends LazyLogging {
           case None       => true
         }
 
-        // if the step/state has changed, log the change
         if (changed) {
-          logger.debug(s"...${step.getName} (${step.getId}): ${step.getStatus.getState}")
+          val jar = step.getConfig.getJar
+          val args = step.getConfig.getArgs.asScala.mkString(" ")
+
+          logger.debug(s"...${job.getJobFlowId} ${step.getStatus.getState}: $jar $args (${step.getId})")
         }
 
         // continue waiting
@@ -262,23 +333,18 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   }
 
   /**
-   * Helper: runs a job and waits for the results to complete.
+   * Given a sequence of jobs, run them in parallel, but limit the maximum
+   * concurrency so too many clusters aren't created at once.
    */
-  def runJobAndWait(steps: Seq[JobStep]): IO[Unit] = {
-    runJob(steps).flatMap(waitForJob(_))
-  }
+  def waitForJobs(jobs: Seq[IO[RunJobFlowResult]], maxClusters: Int = 4): IO[Unit] = {
+    import Implicits.contextShift
 
-  /**
-   * Helper: run a single step as a job.
-   */
-  def runStep(step: JobStep): IO[AddJobFlowStepsResult] = {
-    runJob(List(step))
-  }
-
-  /**
-   * Helper: run a single step and wait for it to complete.
-   */
-  def runStepAndWait(step: JobStep): IO[Unit] = {
-    runStep(step).flatMap(waitForJob(_))
+    Stream
+      .emits(jobs)
+      .covary[IO]
+      .mapAsyncUnordered(maxClusters)(job => job.flatMap(waitForJob(_)))
+      .compile
+      .toList
+      .as(())
   }
 }

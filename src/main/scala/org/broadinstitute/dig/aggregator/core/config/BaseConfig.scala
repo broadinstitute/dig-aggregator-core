@@ -11,7 +11,6 @@ import scala.io.Source
  * Private configuration settings required by pretty much everything.
  */
 trait BaseConfig {
-  val kafka: KafkaConfig
   val aws: AWSConfig
   val mysql: MySQLConfig
   val neo4j: Neo4jConfig
@@ -22,7 +21,7 @@ trait BaseConfig {
  * Companion object for loading configuration files.
  */
 object BaseConfig {
-  implicit val formats: Formats = DefaultFormats
+  implicit val formats: Formats = DefaultFormats ++ emr.EmrConfig.customSerializers
 
   /**
    * Load and parse a configuration file.

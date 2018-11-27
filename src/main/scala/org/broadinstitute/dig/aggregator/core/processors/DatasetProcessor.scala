@@ -18,6 +18,7 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
  * DatasetProcessors are always the entry point to a pipeline.
  */
 abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name) {
+  import Implicits.contextShift
 
   /**
    * All topic committed datasets come from.
@@ -33,7 +34,7 @@ abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extend
   /**
    * Database transactor for loading state, etc.
    */
-  protected val xa: Transactor[IO] = config.mysql.newTransactor()
+  protected val pool: DbPool = DbPool.fromMySQLConfig(config.mysql)
 
   /**
    * AWS client for uploading resources and running jobs.
@@ -48,18 +49,22 @@ abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extend
   /**
    * Calculates the set of things this processor needs to process.
    */
-  override def getWork(reprocess: Boolean): IO[Seq[Dataset]] = {
-    Dataset.datasetsOf(xa, topic, if (reprocess) None else Some(name))
+  override def getWork(reprocess: Boolean, only: Option[String]): IO[Seq[Dataset]] = {
+    for {
+      datasets <- Dataset.datasetsOf(pool, topic, if (reprocess) None else Some(name))
+    } yield {
+      datasets.filter(d => only.getOrElse(d.dataset) == d.dataset)
+    }
   }
 
   /**
    * Determine the list of datasets that need processing, process them, and
    * write to the database that they were processed.
    */
-  override def run(reprocess: Boolean): IO[Unit] = {
+  override def run(reprocess: Boolean, only: Option[String]): IO[Unit] = {
     for {
       _ <- resources.map(aws.upload(_)).toList.sequence
-      _ <- getWork(reprocess).flatMap(processDatasets)
+      _ <- getWork(reprocess, only).flatMap(processDatasets)
     } yield ()
   }
 }

@@ -18,12 +18,12 @@ object TestProcessor {
       /**
        * There is no work for this processor.
        */
-      def getWork(reprocess: Boolean): IO[Seq[_]] = IO(Seq())
+      override def getWork(reprocess: Boolean, only: Option[String]): IO[Seq[_]] = IO(Seq())
 
       /**
        * Does nothing, just here for the trait.
        */
-      def run(reprocess: Boolean): IO[Unit] = {
+      override def run(reprocess: Boolean, only: Option[String]): IO[Unit] = {
         IO(println(name.toString))
       }
     }
