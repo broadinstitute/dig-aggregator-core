@@ -48,7 +48,9 @@ The default configuration parameter is `config.json`, but can be overridden with
         "key": "key",
         "secret": "secret",
         "region": "US_EAST_1",
-        "bucket": "s3-bucket-name",
+        "s3": {
+            "bucket": "s3-bucket-name"
+        },
         "emr": {
             "subnetId": "subnet-xxxx",
             "sshKeyName": "AWS SSH key name",
