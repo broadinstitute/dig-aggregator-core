@@ -41,7 +41,7 @@ trait AwsFunSuite extends FunSuite {
       val cluster = Cluster(
         name = "IntegrationTest",
         instances = 1,
-        masterInstanceType = InstanceType.m5_large,
+        masterInstanceType = InstanceType.m5_2xlarge,
       )
 
       val ioa = for {

@@ -72,10 +72,7 @@ final class EmrTest extends FunSuite {
 
   test("EMR types - InstanceType") {
     val someKnownInstanceTypes = List(
-      InstanceType.m5_large,
-      InstanceType.m5_xlarge,
       InstanceType.m5_2xlarge,
-      InstanceType.c5_large,
       InstanceType.c5_9xlarge,
     )
 
@@ -85,8 +82,8 @@ final class EmrTest extends FunSuite {
   }
 
   test("EMR types - Cluster name") {
-    val clusterOK  = Try(Cluster(name = "foo"))
-    val clusterErr = Try(Cluster(name = "foo bar"))
+    val clusterOK  = Try(Cluster(name = "_foo12_abc"))
+    val clusterErr = Try(Cluster(name = "_foo12_abc bar"))
 
     assert(clusterOK.isSuccess)
     assert(clusterErr.isFailure)
