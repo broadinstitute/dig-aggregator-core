@@ -39,7 +39,7 @@ trait AwsFunSuite extends FunSuite {
   def testWithCluster(name: String, scriptResource: String): Unit = {
     test(name) {
       val cluster = Cluster(
-        name = "Integration Test",
+        name = "IntegrationTest",
         instances = 1,
         masterInstanceType = InstanceType.m5_large,
       )
