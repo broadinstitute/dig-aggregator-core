@@ -108,8 +108,9 @@ object Pipeline {
    * The global list of all pipelines.
    */
   def pipelines(): Map[String, Pipeline] = Map(
-    "MetaAnalysisPipeline" -> metaanalysis.MetaAnalysisPipeline,
-    "LDScorePipeline"      -> ldscore.LDScorePipeline,
+    "MetaAnalysisPipeline"  -> metaanalysis.MetaAnalysisPipeline,
+    "LDScorePipeline"       -> ldscore.LDScorePipeline,
+    "VariantEffectPipeline" -> varianteffect.VariantEffectPipeline,
   )
 
   /**
