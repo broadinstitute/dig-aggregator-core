@@ -14,7 +14,7 @@ mkdir -p /home/hadoop/bin
 mkdir -p /home/hadoop/scripts
 
 # get a pre-built version of metal from S3
-aws s3 cp s3://dig-analysis-data/bin/metaanalysis/metal-2018-08-28.tgz /home/hadoop
+aws s3 cp s3://dig-analysis-data/bin/metal/metal-2018-08-28.tgz /home/hadoop
 tar zxf /home/hadoop/metal-2018-08-28.tgz -C /home/hadoop
 
 # install it to the bin folder for use and make it executable

@@ -20,11 +20,18 @@ sudo docker pull ensemblorg/ensembl-vep
 # enable users to run docker commands
 sudo usermod -a -G docker hadoop
 
-# which reference genome to install
+# which reference genome to install (see: https://www.gencodegenes.org/human/release_29lift37.html)
 GENOME=homo_sapiens_vep_94_GRCh37.tar.gz
+FASTA=GRCh37.primary_assembly.genome.fa.gz
 
-# where the VEP reference genome cache will be installed
-VEP_DATA=/mnt/efs/varianteffect/vep_data
+# where the VEP reference genome cache and plugins will be installed
+VEP_DATA=/mnt/efs/bin/vep_data
+
+# install VCF reader
+sudo python3 -m pip install PyVCF
+
+# create a bin folder for docker to be able to execute code
+mkdir -p "$VEP_DATA/bin"
 
 # copy the VEP cache from S3 and unpack it if needed
 if [ ! -d "$VEP_DATA/homo_sapiens/94_GRCh37" ] 
@@ -33,9 +40,68 @@ then
     cd "$VEP_DATA"
     
     # download the reference genome cache from S3 and unpack it
-    aws s3 cp "s3://dig-analysis-data/bin/vep/$GENOME" "$VEP_DATA"
+    aws s3 cp "s3://dig-analysis-data/bin/GRCh37/vep/$GENOME" "$VEP_DATA"
     tar xzf "$GENOME"
 
     # save money and nuke the genome file
     rm "$GENOME"
+fi
+
+# install samtools if needed
+if [ ! -d "$VEP_DATA/samtools" ]
+then
+    mkdir -p "$VEP_DATA/samtools"
+    cd "$VEP_DATA/samtools"
+
+    # download and extract the built version
+    aws s3 cp "s3://dig-analysis-data/bin/samtools/samtools-1.9.tar.gz" .
+    tar zxvf "samtools-1.9.tar.gz"
+
+    # link to the bin folder
+    ln -s "$VEP_DATA/samtools/samtools-1.9/samtools" "$VEPDATA/bin"
+fi
+
+# copy the FASTA file and unpack it if needed
+if [ ! -d "$VEP_DATA/fasta" ]
+then
+    mkdir -p "$VEP_DATA/fasta"
+    cd "$VEP_DATA/fasta"
+
+    # needs write access for docker to write lock file
+    chmod a+w "$VEP_DATA/fasta"
+
+    # download and unpack
+    aws s3 cp "s3://dig-analysis-data/bin/GRCh37/fasta/$FASTA" .
+    gunzip "$FASTA"
+fi
+
+# install the dbNSFP database
+if [ ! -d "$VEP_DATA/dbNSFP" ]
+then
+    mkdir -p "$VEP_DATA/dbNSFP"
+    cd "$VEP_DATA/dbNSFP"
+
+    # the database and tabix index file
+    aws s3 cp "s3://dig-analysis-data/bin/GRCh37/dbNSFP/dbNSFP_hg19.gz" .
+    aws s3 cp "s3://dig-analysis-data/bin/GRCh37/dbNSFP/dbNSFP_hg19.gz.tbi" .
+fi
+
+# where VEP plugins will be placed (must be within VEP_DATA)
+VEP_PLUGINS="$VEP_DATA/Plugins"
+
+if [ ! -d "$VEP_PLUGINS" ]
+then
+    sudo yum install -y wget zip
+
+    # create the plugins directory
+    mkdir -p "$VEP_PLUGINS"
+    cd "$VEP_PLUGINS"
+
+    # download dbNSFP plugin from S3
+    aws s3 cp s3://dig-analysis-data/bin/vep/plugins/dbNSFP.pm .
+
+    # download LOF plugin from GitHub, unpack, and link it
+    aws s3 cp s3://dig-analysis-data/bin/vep/plugins/loftee-0.3-beta.tar.gz .
+    tar zxf loftee-0.3-beta.tar.gz
+    ln -s loftee-0.3-beta/LoF.pm .
 fi

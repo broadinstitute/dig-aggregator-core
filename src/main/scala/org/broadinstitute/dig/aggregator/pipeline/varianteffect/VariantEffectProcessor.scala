@@ -18,11 +18,11 @@ import org.broadinstitute.dig.aggregator.core.processors._
  *
  * VEP TSV files written to:
  *
- *  s3://dig-analysis-data/out/varianteffect/<dataset>/variants
+ *  s3://dig-analysis-data/out/varianteffect/variants
  *
- * VEP output files written to:
+ * VEP output CSV files written to:
  *
- *  s3://dig-analysis-data/out/varianteffect/<dataset>/effects
+ *  s3://dig-analysis-data/out/varianteffect/effects
  */
 class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends DatasetProcessor(name, config) {
 
@@ -37,55 +37,28 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends D
   override val resources: Seq[String] = Seq(
     "pipeline/varianteffect/cluster-bootstrap.sh",
     "pipeline/varianteffect/master-bootstrap.sh",
-    "pipeline/varianteffect/prepareDataset.py",
+    "pipeline/varianteffect/prepareDatasets.py",
     "pipeline/varianteffect/runVEP.py",
+    "pipeline/varianteffect/loadVariantEffects.py",
   )
 
   /**
-   * Take all the datasets that need to be processed, determine the phenotype
-   * for each, and create a mapping of (phenotype -> datasets).
+   * All that matters is that there are new datasets. The input datasets are
+   * actually ignored, and _everything_ is reprocessed. This is done because
+   * there is only a single analysis node for all variants.
    */
   override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
-    val pattern = raw"([^/]+)/(.*)".r
-
-    // get a unique list of all the dataset names
-    val datasetNames = datasets.map(_.dataset).distinct
-
-    // get the distinct list of study/phenotypes
-    val studyPhenotypes = datasetNames.collect {
-      case pattern(study, phenotype) => (study, phenotype)
-    }
-
-    // create all the job to process each one
-    val jobs = studyPhenotypes.map {
-      case (study, phenotype) => processDataset(study, phenotype)
-    }
-
-    // create a list of all the results to write to the database
-    val runs = datasetNames.map { dataset =>
-      Run.insert(pool, name, Seq(dataset), dataset)
-    }
-
-    // run all the jobs (note: this could be done in parallel!)
-    for {
-      _ <- aws.waitForJobs(jobs)
-      _ <- runs.toList.sequence
-      _ <- IO(logger.info("Done"))
-    } yield ()
-  }
-
-  /**
-   * Spin up a cluster to process a single study across all phenotypes.
-   */
-  private def processDataset(study: String, phenotype: String): IO[RunJobFlowResult] = {
     val clusterBootstrap = aws.uriOf("resources/pipeline/varianteffect/cluster-bootstrap.sh")
     val masterBootstrap  = aws.uriOf("resources/pipeline/varianteffect/master-bootstrap.sh")
-    val prepareScript    = aws.uriOf("resources/pipeline/varianteffect/prepareDataset.py")
+    val prepareScript    = aws.uriOf("resources/pipeline/varianteffect/prepareDatasets.py")
     val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.py")
+    val loadScript       = aws.uriOf("resources/pipeline/varianteffect/loadVariantEffects.py")
 
     // build the cluster definition
     val cluster = Cluster(
       name = name.toString,
+      masterInstanceType = InstanceType.c5_4xlarge,
+      instances = 3,
       bootstrapScripts = Seq(
         new BootstrapScript(clusterBootstrap),
         new BootstrapScript(masterBootstrap) // TODO: Use MasterBootstrapScript once AWS fixes their bug!
@@ -94,13 +67,18 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends D
 
     // first prepare, then run VEP, finally, load VEP to S3
     val steps = Seq(
-      //JobStep.PySpark(prepareScript, study, phenotype),
-      JobStep.Script(runScript, study, phenotype),
+      //JobStep.PySpark(prepareScript),
+      JobStep.Script(runScript),
+      JobStep.PySpark(loadScript),
     )
 
+    // run all the jobs (note: this could be done in parallel!)
     for {
-      _   <- IO(logger.info(s"Running VEP on $study/$phenotype..."))
+      _   <- IO(logger.info(s"Running VEP..."))
       job <- aws.runJob(cluster, steps)
-    } yield job
+      _   <- aws.waitForJob(job)
+      _   <- Run.insert(pool, name, datasets.map(_.dataset), "out/varianteffect/effects")
+      _   <- IO(logger.info("Done"))
+    } yield ()
   }
 }

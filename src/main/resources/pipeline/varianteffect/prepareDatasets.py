@@ -13,27 +13,41 @@ s3dir = 's3://dig-analysis-data'
 # entry point
 if __name__ == '__main__':
     """
-    @param study e.g. `ExChip_CAMP`
-    @param phenotype e.g. `T2D`
+    By default all datasets will be used, but optionally can be limited to 
+    a single study and phenotype.
     """
     print('Python version: %s' % platform.python_version())
 
     opts = argparse.ArgumentParser()
-    opts.add_argument('study')
-    opts.add_argument('phenotype')
+    opts.add_argument('study', default='*')
+    opts.add_argument('phenotype', default='*')
 
-    # parse the command line parameters
+    # parse command line arguments
     args = opts.parse_args()
 
     # get the source and output directories
     srcdir = '%s/variants/%s/%s' % (s3dir, args.study, args.phenotype)
-    outdir = '%s/out/varianteffect/%s/%s/variants' % (s3dir, args.study, args.phenotype)
+    outdir = '%s/out/varianteffect/variants' % s3dir
 
     # create a spark session
     spark = SparkSession.builder.appName('varianteffect').getOrCreate()
 
-    # slurp all the variant batches
-    df = spark.read.json('%s/part-*' % srcdir)
+    # slurp all the variants across ALL datasets, but only locus information
+    df = spark.read.json('%s/part-*' % srcdir) \
+        .select(
+            'varId',
+            'chromosome',
+            'position',
+            'reference',
+            'alt',
+        )
+
+    # only keep each variant once, doesn't matter what dataset it came from
+    df = df.rdd \
+        .keyBy(lambda v: v.varId) \
+        .reduceByKey(lambda a, b: a) \
+        .map(lambda v: v[1]) \
+        .toDF()
 
     # get the length of the reference and alternate alleles
     ref_len = length(df.reference)

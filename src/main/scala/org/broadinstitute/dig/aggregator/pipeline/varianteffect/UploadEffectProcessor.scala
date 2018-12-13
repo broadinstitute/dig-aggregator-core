@@ -21,7 +21,7 @@ import org.neo4j.driver.v1.StatementResult
  *
  * The source tables are read from:
  *
- *  s3://dig-analysis-data/out/varianteffects/<dataset>
+ *  s3://dig-analysis-data/out/varianteffects/<dataset>/<phenotype>/effects
  */
 class UploadEffectProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
@@ -38,42 +38,19 @@ class UploadEffectProcessor(name: Processor.Name, config: BaseConfig) extends Ru
   override val resources: Seq[String] = Nil
 
   /**
-   * When loading the CSV files from HDFS, they don't have a header attached
-   * to them, so this is the definitive ordering of the columns a
-   */
-  private val fields: Seq[String] = Array[String](
-    "varId",
-    "chromosome",
-    "position",
-    "reference",
-    "alt",
-    "phenotype",
-    "pValue",
-    "beta",
-    "eaf",
-    "maf",
-    "stdErr",
-    "n",
-    "top",
-  )
-
-  /**
-   * Create a column mapper for a given row variable.
-   */
-  private def columnMapper(name: String) = new Object {
-    def apply(col: String) = s"$name[${fields.indexOf(col)}]"
-  }
-
-  /**
    * Take all the phenotype results from the dependencies and process them.
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val datasets = results.map(_.output).distinct
 
     val ios = for (dataset <- datasets) yield {
-      val analysis = new Analysis(s"VariantEffects/$dataset", Provenance.thisBuild)
+      val analysis = new Analysis(s"VEP", Provenance.thisBuild)
       val graph    = new GraphDb(config.neo4j)
-      val parts    = s"out/varianteffects/$dataset"
+
+      // where the output is located
+      val effects            = s"out/varianteffect/effects"
+      val regulatoryFeatures = s"$effects/regulatory_feature_consequences"
+      val transcripts        = s"$effects/transcript_consequences"
 
       for {
         _ <- IO(logger.info(s"Preparing upload of variant effects..."))
@@ -82,8 +59,12 @@ class UploadEffectProcessor(name: Processor.Name, config: BaseConfig) extends Ru
         id <- analysis.create(graph)
 
         // find all the part files to upload for the analysis
-        _ <- IO(logger.info(s"Uploading variant effects..."))
-        _ <- analysis.uploadParts(aws, graph, id, parts)(uploadResults)
+        _ <- IO(logger.info(s"Uploading regulatory feature consequences..."))
+        _ <- analysis.uploadParts(aws, graph, id, regulatoryFeatures)(uploadRegulatoryFeatures)
+
+        // find all the part files to upload for the analysis
+        //_ <- IO(logger.info(s"Uploading transcript consequences..."))
+        //_ <- analysis.uploadParts(aws, graph, id, transcripts)(uploadTranscripts)
 
         // add the result to the database
         _ <- Run.insert(pool, name, datasets, analysis.name)
@@ -96,48 +77,52 @@ class UploadEffectProcessor(name: Processor.Name, config: BaseConfig) extends Ru
   }
 
   /**
-   * Given a part file, upload it and create all the variant effect nodes.
+   * Given a part file, upload it and create all the regulatory feature nodes.
    */
-  def uploadResults(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
-    import scala.language.reflectiveCalls
-
-    val r = columnMapper("r")
+  def uploadRegulatoryFeatures(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT
-                |LOAD CSV FROM '$part' AS r
+                |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
-                |// die if the phenotype doesn't exist
-                |MATCH (p:Phenotype {name: ${r("phenotype")}})
+                |// die if the variant doesn't exist
+                |MATCH (v:Variant {name: r.id})
                 |
-                |// create the variant node if it doesn't exist
-                |MERGE (v:Variant {name: ${r("varId")}})
+                |// create the RegulatoryFeature analysis node
+                |MERGE (n:RegulatoryFeature)-[:FOR_VARIANT]->(v)
                 |ON CREATE SET
-                |  v.chromosome=${r("chromosome")},
-                |  v.position=toInteger(${r("position")}),
-                |  v.reference=${r("reference")},
-                |  v.alt=${r("alt")}
-                |
-                |// create the MetaAnalysis analysis node
-                |CREATE (n:MetaAnalysis {
-                |  pValue: toFloat(${r("pValue")}),
-                |  beta: toFloat(${r("beta")}),
-                |  stdErr: toFloat(${r("stdErr")}),
-                |  n: toInteger(${r("n")})
-                |})
+                |  biotype=r.biotype,
+                |  consequenceTerms=split(r.consequence_terms, ','),
+                |  impact=r.impact,
+                |  featureId=r.regulatory_feature_id,
+                |  pick=toInteger(r.pick) = 1
                 |
                 |// create the relationship to the analysis node
-                |CREATE (q)<-[:PRODUCED_BY]-(n)
+                |MERGE (q)<-[:PRODUCED_BY]-(n)
                 |
-                |// create the relationship to the trait and variant
-                |CREATE (p)<-[:FOR_PHENOTYPE]-(n)-[:FOR_VARIANT]->(v)
+                |// create the relationship to the variant
+                |MERGE (v)<-[:FOR_VARIANT]-(n)
+                |""".stripMargin
+
+    graph.run(q)
+  }
+
+  /**
+   * Given a part file, upload it and create all the transcript nodes.
+   */
+  def uploadTranscripts(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
+    val q = s"""|USING PERIODIC COMMIT
+                |LOAD CSV WITH HEADERS FROM '$part' AS r
+                |FIELDTERMINATOR '\t'
                 |
-                |// if a top result, mark it as such
-                |FOREACH(i IN (CASE toBoolean(${r("top")}) WHEN true THEN [1] ELSE [] END) |
-                |  CREATE (v)<-[:TOP_VARIANT]-(n)
-                |)
+                |// lookup the analysis node
+                |MATCH (q:Analysis) WHERE ID(q)=$id
+                |
+                |// die if the variant doesn't exist
+                |MATCH (v:Variant {name: r.id})
+                |
                 |""".stripMargin
 
     graph.run(q)
