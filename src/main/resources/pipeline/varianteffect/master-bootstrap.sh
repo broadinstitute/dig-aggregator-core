@@ -30,9 +30,6 @@ VEP_DATA=/mnt/efs/bin/vep_data
 # install VCF reader
 sudo python3 -m pip install PyVCF
 
-# create a bin folder for docker to be able to execute code
-mkdir -p "$VEP_DATA/bin"
-
 # copy the VEP cache from S3 and unpack it if needed
 if [ ! -d "$VEP_DATA/homo_sapiens/94_GRCh37" ] 
 then
@@ -48,17 +45,13 @@ then
 fi
 
 # install samtools if needed
-if [ ! -d "$VEP_DATA/samtools" ]
+if [ ! -d "$VEP_DATA/samtools-1.9" ]
 then
-    mkdir -p "$VEP_DATA/samtools"
-    cd "$VEP_DATA/samtools"
-
+    cd "$VEP_DATA"
+    
     # download and extract the built version
     aws s3 cp "s3://dig-analysis-data/bin/samtools/samtools-1.9.tar.gz" .
     tar zxvf "samtools-1.9.tar.gz"
-
-    # link to the bin folder
-    ln -s "$VEP_DATA/samtools/samtools-1.9/samtools" "$VEPDATA/bin"
 fi
 
 # copy the FASTA file and unpack it if needed

@@ -67,7 +67,7 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends D
 
     // first prepare, then run VEP, finally, load VEP to S3
     val steps = Seq(
-      //JobStep.PySpark(prepareScript),
+      JobStep.PySpark(prepareScript),
       JobStep.Script(runScript),
       JobStep.PySpark(loadScript),
     )

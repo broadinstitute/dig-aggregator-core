@@ -15,5 +15,5 @@ object VariantEffectPipeline extends Pipeline {
    * Register all intake processors.
    */
   val variantEffectProcessor: Name = register("VariantEffectProcessor", new VariantEffectProcessor(_, _))
-  val uploadEffectProcessor: Name  = register("UploadEffectProcessor", new UploadEffectProcessor(_, _))
+  val uploadEffectProcessor: Name  = register("UploadVariantEffectProcessor", new UploadVariantEffectProcessor(_, _))
 }

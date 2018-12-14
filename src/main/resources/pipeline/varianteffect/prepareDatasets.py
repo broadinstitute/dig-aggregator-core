@@ -18,15 +18,8 @@ if __name__ == '__main__':
     """
     print('Python version: %s' % platform.python_version())
 
-    opts = argparse.ArgumentParser()
-    opts.add_argument('study', default='*')
-    opts.add_argument('phenotype', default='*')
-
-    # parse command line arguments
-    args = opts.parse_args()
-
     # get the source and output directories
-    srcdir = '%s/variants/%s/%s' % (s3dir, args.study, args.phenotype)
+    srcdir = '%s/variants/*/*' % s3dir
     outdir = '%s/out/varianteffect/variants' % s3dir
 
     # create a spark session

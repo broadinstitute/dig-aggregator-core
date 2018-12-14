@@ -172,26 +172,22 @@ dbnsfp_fields = [
 dbnsfp_args = ['%s/dbNSFP/dbNSFP_hg19.gz' % voldir] + dbnsfp_fields
 
 
-def docker_cmd(input_pathname, output_pathname):
+def create_container(data_path, out_path):
     """
-    Construct the command line for VEP to run in Docker.
+    Create the container to run VEP in.
     """
-    in_path, in_file = os.path.split(input_pathname)
-    out_path, out_file = os.path.split(output_pathname)
-
-    os.getenv
-
-    return [
+    cmd = [
         'sudo',
         'docker',
         'run',
 
-        # interactive mode
+        # detached and interactive
+        '-d',
         '-i',
 
         # mount input directory to /data in container
         '-v',
-        '%s:/data' % in_path,
+        '%s:/data' % data_path,
 
         # mount output directory to /out in container
         '-v',
@@ -203,12 +199,67 @@ def docker_cmd(input_pathname, output_pathname):
 
         # the image name
         'ensemblorg/ensembl-vep',
+    ]
 
-        # add a bin folder in vep_data to the path
-        'export',
-        'PATH=%s/bin:$PATH' % voldir,
+    # run and return the container ID
+    return subprocess.check_output(cmd).decode().strip()
 
-        # perl flags
+
+def exec_container(container, *cmd, as_root=False):
+    """
+    Execute a shell command from within the container.
+    """
+    print('Executing in container %s: `%s`' % (container[:12], ' '.join(cmd)))
+
+    # base command
+    docker_cmd = ['sudo', 'docker', 'exec']
+
+    # optionally run as root
+    if as_root:
+        docker_cmd += ['-u', 'root']
+
+    # add the container name
+    docker_cmd.append(container)
+
+    # run it
+    subprocess.check_call(docker_cmd + list(cmd))
+
+
+def stop_container(container):
+    """
+    Stop and remove the container.
+    """
+    subprocess.check_call(['sudo', 'docker', 'stop', container])
+    subprocess.check_call(['sudo', 'docker', 'rm', container])
+    print('Stopped container %s' % container[:12])
+
+
+def run_vep_in_docker(data_pathname, output_pathname):
+    """
+    Construct the command line for VEP to run in Docker.
+    """
+    data_path, data_file = os.path.split(data_pathname)
+    out_path, out_file = os.path.split(output_pathname)
+
+    # initialize and start the container
+    container = create_container(data_path, out_path)
+    print('Created container: ' + container[:12])
+
+    # software to install into PATH
+    programs = [
+        '%s/samtools-1.9/samtools' % voldir,
+    ]
+
+    # where in the PATH to install the programs (must have privs)
+    #path = '/opt/vep/src/ensembl-vep'
+    path = '/usr/local/bin'
+
+    # install samtools somewhere in PATH
+    for program in programs:
+        exec_container(container, 'ln', '-s', program, path, as_root=True)
+
+    # VEP command
+    vep = [
         'perl',
         '-I',
         '%s/Plugins/loftee-0.3-beta' % voldir,
@@ -242,10 +293,14 @@ def docker_cmd(input_pathname, output_pathname):
         '--fields',
         ','.join(csq_fields + lof_fields + dbnsfp_fields),
         '-i',
-        '/data/%s' % in_file,
+        '/data/%s' % data_file,
         '-o',
         '/out/%s' % out_file,
     ]
+
+    # run it then stop the container
+    exec_container(container, *vep)
+    stop_container(container)
 
 
 def run_vep(input_path, output_path):
@@ -267,17 +322,16 @@ def run_vep(input_path, output_path):
             out_json = '%s/%s.json' % (output_path, out_basename)
 
             # run VEP
-            cmd = docker_cmd(part, out_json)
-
-            # log the docker command
-            print('Running: `%s`' % ' '.join(cmd))
-
-            # run the docker command
-            job = executor.submit(subprocess.check_call, cmd)
+            job = executor.submit(run_vep_in_docker, part, out_json)
             jobs.append(job)
 
         # wait for all the jobs to finish (or for one to fail)
         concurrent.futures.wait(jobs, return_when=concurrent.futures.FIRST_EXCEPTION)
+
+        # check for any exceptions
+        for job in jobs:
+            if job.exception() is not None:
+                raise job.exception()
 
 
 if __name__ == '__main__':
