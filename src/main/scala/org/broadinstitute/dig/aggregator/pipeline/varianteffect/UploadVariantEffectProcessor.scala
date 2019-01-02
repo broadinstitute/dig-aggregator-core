@@ -59,12 +59,12 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
         id <- analysis.create(graph)
 
         // find all the part files to upload for the analysis
-        _ <- IO(logger.info(s"Uploading regulatory feature consequences..."))
-        _ <- analysis.uploadParts(aws, graph, id, regulatoryFeatures)(uploadRegulatoryFeatures)
-
-        // find all the part files to upload for the analysis
         _ <- IO(logger.info(s"Uploading transcript consequences..."))
         _ <- analysis.uploadParts(aws, graph, id, transcripts)(uploadTranscripts)
+
+        // find all the part files to upload for the analysis
+        _ <- IO(logger.info(s"Uploading regulatory feature consequences..."))
+        _ <- analysis.uploadParts(aws, graph, id, regulatoryFeatures)(uploadRegulatoryFeatures)
 
         // add the result to the database
         _ <- Run.insert(pool, name, datasets, analysis.name)
@@ -87,8 +87,16 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
-                |// die if the variant doesn't exist
-                |MATCH (v:Variant {name: r.id})
+                |// split the ID into chrom, pos, reference, allele (CPRA)
+                |WITH q, r, split(r.id, ':') AS cpra
+                |
+                |// create the variant node if it doesn't exist
+                |MERGE (v:Variant {name: r.id})
+                |ON CREATE SET
+                |  v.chromosome=cpra[0],
+                |  v.position=toInteger(cpra[1]),
+                |  v.reference=cpra[2],
+                |  v.alt=cpra[3]
                 |
                 |// create the RegulatoryFeature analysis node
                 |CREATE (n:RegulatoryFeature {
@@ -120,8 +128,16 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
-                |// die if the variant doesn't exist
-                |MATCH (v:Variant {name: r.id})
+                |// split the ID into chrom, pos, reference, allele (CPRA)
+                |WITH q, r, split(r.id, ':') AS cpra
+                |
+                |// create the variant node if it doesn't exist
+                |MERGE (v:Variant {name: r.id})
+                |ON CREATE SET
+                |  v.chromosome=cpra[0],
+                |  v.position=toInteger(cpra[1]),
+                |  v.reference=cpra[2],
+                |  v.alt=cpra[3]
                 |
                 |// create the RegulatoryFeature analysis node
                 |CREATE (n:TranscriptConsequence {
@@ -151,7 +167,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |  eigenRaw: toFloat(r['eigen-raw']),
                 |  fathmmConvertedRankscore: toFloat(r.fathmm_converted_rankscore),
                 |  fathmmPred: split(r.fathmm_pred, ','),
-                |  fathmmScore: [x in split(r.fathmm_score, ',') where x <> '' | case x when '.' then 0.0 else toFloat(x) end],
+                |  fathmmScore: split(r.fatmm_score, ','),
                 |  fathmmMklCodingGroup: r['fathmm-mkl_coding_group'],
                 |  fathmmMklCodingPred: r['fathmm-mkl_coding_group'],
                 |  fathmmMklCodingRankscore: toFloat(r['fathmm-mkl_coding_group']),
@@ -223,13 +239,13 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |  proteinEnd: toInteger(r.protein_end),
                 |  proteinStart: toInteger(r.protein_start),
                 |  proveanConvertedRankscore: toFloat(r.provean_converted_rankscore),
-                |  proveanPred: r.provean_pred,
-                |  proveanScore: toFloat(r.provean_score),
+                |  proveanPred: split(r.provean_pred, ','),
+                |  proveanScore: split(r.provean_score, ','),
                 |  reliabilityIndex: toInteger(r.reliability_index),
                 |  siftConvertedRankscore: toFloat(r.sift_converted_rankscore),
-                |  siftPred: r.sift_pred,
+                |  siftPred: split(r.sift_pred, ','),
                 |  siftPrediction: r.sift_prediction,
-                |  siftScore: toFloat(r.sift_score),
+                |  siftScore: split(r.sift_score, ','),
                 |  siphy29WayLogodds: toFloat(r.siphy_29way_logodds),
                 |  siphy29WayLogoddsRankscore: toFloat(r.siphy_29way_logodds_rankscore),
                 |  siphy29WayPi: [x in split(r.siphy_29way_pi, ':') where x <> '' | toFloat(x)],
