@@ -21,7 +21,11 @@ import org.neo4j.driver.v1.StatementResult
  *
  * The source tables are read from:
  *
- *  s3://dig-analysis-data/out/varianteffects/<dataset>/<phenotype>/effects
+ *  s3://dig-analysis-data/out/varianteffects/effects/regulatory_feature_consequences
+ *
+ * and:
+ *
+ *  s3://dig-analysis-data/out/varianteffects/effects/transcript_consequences
  */
 class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
