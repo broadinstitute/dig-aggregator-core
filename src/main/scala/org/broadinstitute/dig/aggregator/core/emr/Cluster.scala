@@ -19,7 +19,7 @@ final case class Cluster(
     slaveInstanceType: InstanceType = InstanceType.m5_2xlarge,
     applications: Seq[ApplicationName] = Cluster.defaultApplications,
     configurations: Seq[ApplicationConfig] = Cluster.defaultConfigurations,
-    bootstrapScripts: Seq[URI] = Seq(),
+    bootstrapScripts: Seq[BootstrapScript] = Seq(),
     keepAliveWhenNoSteps: Boolean = false,
     visibleToAllUsers: Boolean = true,
 ) {

@@ -77,9 +77,9 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
    * Create a cluster and process a single phenotype.
    */
   private def processPhenotype(phenotype: String): IO[RunJobFlowResult] = {
-    val bootstrapScript = aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh")
-    val runScript       = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
-    val loadScript      = aws.uriOf("resources/pipeline/metaanalysis/loadAnalysis.py")
+    val bootstrapUri = aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh")
+    val runUri       = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
+    val loadUri      = aws.uriOf("resources/pipeline/metaanalysis/loadAnalysis.py")
 
     val sparkConf = ApplicationConfig.sparkEnv.withProperties(
       "PYSPARK_PYTHON" -> "/usr/bin/python3",
@@ -88,16 +88,16 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
     // EMR cluster to run the job steps on
     val cluster = Cluster(
       name = name.toString,
-      bootstrapScripts = Seq(bootstrapScript),
+      bootstrapScripts = Seq(new BootstrapScript(bootstrapUri)),
       configurations = Seq(sparkConf),
     )
 
     // first run+load ancestry-specific and then trans-ethnic
     val steps = Seq(
-      JobStep.Script(runScript, "--ancestry-specific", phenotype),
-      JobStep.PySpark(loadScript, "--ancestry-specific", phenotype),
-      JobStep.Script(runScript, "--trans-ethnic", phenotype),
-      JobStep.PySpark(loadScript, "--trans-ethnic", phenotype),
+      JobStep.Script(runUri, "--ancestry-specific", phenotype),
+      JobStep.PySpark(loadUri, "--ancestry-specific", phenotype),
+      JobStep.Script(runUri, "--trans-ethnic", phenotype),
+      JobStep.PySpark(loadUri, "--trans-ethnic", phenotype),
     )
 
     for {

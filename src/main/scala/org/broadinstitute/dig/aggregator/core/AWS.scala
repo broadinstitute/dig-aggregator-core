@@ -116,11 +116,11 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       val streamIo = IO(getClass.getClassLoader.getResourceAsStream(resource))
 
       // load the contents of the file, treat as text, ensure unix line-endings
-      def getContents(stream: InputStream): IO[String] = 
+      def getContents(stream: InputStream): IO[String] =
         IO(Source.fromInputStream(stream).mkString.replace("\r\n", "\n"))
 
       // close the stream to free resources
-      def closeStream(stream: InputStream): IO[Unit] = 
+      def closeStream(stream: InputStream): IO[Unit] =
         IO(stream.close())
 
       // open, load, and ensure closed
@@ -209,14 +209,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
     import Implicits.RichURI
 
     // create all the bootstrap actions for this cluster
-    val bootstrapActions = cluster.bootstrapScripts.map { uri =>
-      val action = new ScriptBootstrapActionConfig().withPath(uri.toString)
-
-      // create the config
-      new BootstrapActionConfig()
-        .withScriptBootstrapAction(action)
-        .withName(uri.basename)
-    }
+    val bootstrapConfigs = cluster.bootstrapScripts.map(_.config)
 
     // create all the instances
     val instances = new JobFlowInstancesConfig()
@@ -232,7 +225,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
     // create the request for the cluster
     val request = new RunJobFlowRequest()
       .withName(cluster.name)
-      .withBootstrapActions(bootstrapActions.asJava)
+      .withBootstrapActions(bootstrapConfigs.asJava)
       .withApplications(cluster.applications.map(_.application).asJava)
       .withConfigurations(cluster.configurations.map(_.configuration).asJava)
       .withReleaseLabel(config.emr.releaseLabel.value)
@@ -308,7 +301,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
 
         // terminate the program
         IO.raiseError(new Exception(step.stopReason))
-      
+
       // hasn't started yet; cluster is still provisioning, continue waiting
       case Some(step) if step.isPending =>
         waitForJob(job, Some(step))
