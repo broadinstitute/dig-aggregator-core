@@ -63,12 +63,18 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
         id <- analysis.create(graph)
 
         // find all the part files to upload for the analysis
+        _ <- IO(logger.info(s"Uploading regulatory feature consequences..."))
+        _ <- analysis.uploadParts(aws, graph, id, regulatoryFeatures)(uploadRegulatoryFeatures)
+
+        // find all the part files to upload for the analysis
         _ <- IO(logger.info(s"Uploading transcript consequences..."))
         _ <- analysis.uploadParts(aws, graph, id, transcripts)(uploadTranscripts)
 
-        // find all the part files to upload for the analysis
-        _ <- IO(logger.info(s"Uploading regulatory feature consequences..."))
-        _ <- analysis.uploadParts(aws, graph, id, regulatoryFeatures)(uploadRegulatoryFeatures)
+        // connect transcript consequences to genes
+        _ <- IO(logger.info(s"Connecting transcript consequences to genes..."))
+        _ <- connectGenes(graph)
+
+        // TODO: connect transcriptId and regulatoryFeatureId as well
 
         // add the result to the database
         _ <- Run.insert(pool, name, datasets, analysis.name)
@@ -102,7 +108,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |  v.reference=cpra[2],
                 |  v.alt=cpra[3]
                 |
-                |// create the RegulatoryFeature analysis node
+                |// create the feature result node
                 |CREATE (n:RegulatoryFeature {
                 |  biotype: r.biotype,
                 |  consequenceTerms: split(r.consequence_terms, ','),
@@ -143,7 +149,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |  v.reference=cpra[2],
                 |  v.alt=cpra[3]
                 |
-                |// create the RegulatoryFeature analysis node
+                |// create the consequence result node
                 |CREATE (n:TranscriptConsequence {
                 |  aminoAcids: r.amino_acids,
                 |  biotype: r.biotype,
@@ -269,5 +275,26 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |""".stripMargin
 
     graph.run(q)
+  }
+
+  /**
+   * Connect all transcript consequences to existing genes.
+   */
+  def connectGenes(graph: GraphDb): IO[StatementResult] = {
+    val q = s"""|MATCH (n:TranscriptConsequence),
+                |      (g:Gene {ensemblId: n.geneId})
+                |
+                |// consequences referencing a gene, but has no connection
+                |WHERE exists(n.geneId) AND NOT ((n)-[:FOR_GENE]->(g))
+                |
+                |// limit the size for each call (using APOC)
+                |WITH n, g LIMIT {limit}
+                |
+                |// connect the transcript consequence to the gene
+                |MERGE (n)-[:FOR_GENE]->(g)
+                |""".stripMargin
+
+    // run the query using the APOC function
+    graph.run(s"call apoc.periodic.commit('$q', {limit: 10000}))")
   }
 }
