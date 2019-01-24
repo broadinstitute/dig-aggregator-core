@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+import functools
 import glob
 import os.path
 import platform
@@ -178,6 +179,32 @@ def load_analysis(spark, path, overlap=False):
     return samplesize_analysis.join(stderr_analysis, 'varId')
 
 
+def test_path(path):
+    """
+    Run `hadoop fs -test -s` to see if any files exist matching the pathspec.
+    """
+    try:
+        subprocess.check_call(['hadoop', 'fs', '-test', '-s', path])
+    except subprocess.CalledProcessError:
+        return False
+
+    # a exit-code of 0 is success
+    return True
+
+
+def find_parts(path):
+    """
+    Run `hadoop fs -ls -C` to find all the files that match a particular path.
+    """
+    try:
+        return subprocess.check_output(['hadoop', 'fs', '-ls', '-C', path]) \
+            .decode('UTF-8') \
+            .strip() \
+            .split('\n')
+    except subprocess.CalledProcessError:
+        return []
+
+
 def load_ancestry_specific_analysis(spark, phenotype):
     """
     Load the METAL results for each ancestry into a single DataFrame.
@@ -185,12 +212,12 @@ def load_ancestry_specific_analysis(spark, phenotype):
     srcdir = '%s/ancestry-specific/%s' % (localdir, phenotype)
     outdir = '%s/ancestry-specific/%s' % (s3_path, phenotype)
 
-    # the final dataframe
-    df = None
+    # the final dataframe for each ancestry
+    df = []
 
     # find all the _analysis directories
     for path in glob.glob('%s/*/_analysis' % srcdir):
-        ancestry = re.search(r'/([^/]+)/_analysis', path).group(1)
+        ancestry = re.search(r'/ancestry=([^/]+)/_analysis', path).group(1)
 
         # NOTE: The columns from the analysis and rare variants need to be
         #       in the same order before unioning the sets together. To
@@ -204,28 +231,36 @@ def load_ancestry_specific_analysis(spark, phenotype):
             .withColumn('phenotype', lit(phenotype)) \
             .select(*columns)
 
-        # read the rare variants from S3 across all datasets for this ancestry
-        rare_variants = spark.read \
-            .csv(
-                '%s/variants/%s/*/rare/ancestry=%s' % (s3_path, phenotype, ancestry),
-                sep='\t',
-                schema=variants_schema,
-            ) \
-            .select(*columns)
+        # location of rare variants for this phenotype+ancestry
+        rare_path = '%s/variants/%s/*/rare/ancestry=%s' % (s3_path, phenotype, ancestry)
 
-        # combine the results with the rare variants for this ancestry
-        variants = analysis.union(rare_variants) \
-            .withColumn('ancestry', lit(ancestry))
+        # are there rare variants to merge with the analysis?
+        if test_path(rare_path):
+            rare_variants = spark.read \
+                .csv(
+                    '%s/variants/%s/*/rare/ancestry=%s' % (s3_path, phenotype, ancestry),
+                    sep='\t',
+                    header=True,
+                    schema=variants_schema,
+                ) \
+                .select(*columns)
 
-        # keep only the variants from the largest sample size
-        variants.rdd \
-            .keyBy(lambda v: v.varId) \
-            .reduceByKey(lambda a, b: b if b.n > a.n else a) \
-            .map(lambda v: v[1]) \
-            .toDF()
+            # update the analysis and keep variants with the largest N
+            analysis = analysis.union(rare_variants) \
+                .rdd \
+                .keyBy(lambda v: v.varId) \
+                .reduceByKey(lambda a, b: b if b.n > a.n else a) \
+                .map(lambda v: v[1]) \
+                .toDF()
+
+        # add the ancestry back in so it may be partitioned on write
+        analysis = analysis.withColumn('ancestry', lit(ancestry))
 
         # union all the variants together into a single data frame
-        df = variants if df is None else df.union(variants)
+        df.append(analysis)
+
+    # union all the ancestries together
+    all_variants = functools.reduce(lambda a, b: a.union(b), df)
 
     # NOTE: The column ordering is still the same as it was when we joined,
     #       but the ancestry column is added on the end. This will be stripped
@@ -233,10 +268,10 @@ def load_ancestry_specific_analysis(spark, phenotype):
     #       untouched.
 
     # write out all the processed variants, rejoined with rare variants
-    df.write \
+    all_variants.write \
         .mode('overwrite') \
         .partitionBy('ancestry') \
-        .csv(outdir, sep='\t')
+        .csv(outdir, sep='\t', header=True)
 
 
 def load_trans_ethnic_analysis(spark, phenotype):
@@ -282,7 +317,7 @@ def load_trans_ethnic_analysis(spark, phenotype):
     variants.withColumn('top', top_col) \
         .write \
         .mode('overwrite') \
-        .csv(outdir, sep='\t')
+        .csv(outdir, sep='\t', header=True)
 
 
 # entry point

@@ -42,8 +42,9 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   /** The processor (or pipeline if --pipeline specified) to run. */
   val processorName: ScallopOption[String] = trailArg(required = false)
 
-  // run shouldn't be there if version is
+  // test for options that don't go together
   mutuallyExclusive(version, processorName)
+  mutuallyExclusive(only, pipeline)
 
   // parse the command line options
   verify

@@ -49,6 +49,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
     "pipeline/metaanalysis/cluster-bootstrap.sh",
     "pipeline/metaanalysis/runAnalysis.py",
     "pipeline/metaanalysis/loadAnalysis.py",
+    "scripts/getmerge-strip-headers.sh",
   )
 
   /**

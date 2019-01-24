@@ -35,10 +35,13 @@ if __name__ == '__main__':
     # slurp all the variant batches
     df = spark.read.json('%s/part-*' % srcdir)
 
-    # remove all null pValue, beta values, select the order of the columns so
-    # when they are written out in part files without a header it will be
-    # known exactly what order they are in
+    # remove all multi-allelic variants, mixed-ancestry variants, and any with
+    # null p or beta values, select the order of the columns so when they are
+    # written out in part files without a header it will be known exactly what
+    # order they are in
     df = df \
+        .filter(df.multiAllelic.isNull() | (df.multiAllelic == False)) \
+        .filter(df.ancestry != 'Mixed') \
         .filter(df.pValue.isNotNull()) \
         .filter(df.beta.isNotNull()) \
         .select(
@@ -65,13 +68,13 @@ if __name__ == '__main__':
     rare.write \
         .mode('overwrite') \
         .partitionBy('ancestry') \
-        .csv('%s/rare' % outdir, sep='\t')
+        .csv('%s/rare' % outdir, sep='\t', header=True)
 
     # output the common variants as CSV part files
     common.write \
         .mode('overwrite') \
         .partitionBy('ancestry') \
-        .csv('%s/common' % outdir, sep='\t')
+        .csv('%s/common' % outdir, sep='\t', header=True)
 
     # done
     spark.stop()

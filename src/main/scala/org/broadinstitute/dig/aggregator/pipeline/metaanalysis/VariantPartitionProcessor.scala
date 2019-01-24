@@ -8,7 +8,7 @@ import com.amazonaws.services.elasticmapreduce.model.RunJobFlowResult
 
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.emr.Cluster
+import org.broadinstitute.dig.aggregator.core.emr.{Cluster, InstanceType}
 import org.broadinstitute.dig.aggregator.core.processors._
 
 /**
@@ -75,9 +75,14 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
    * Spin up a cluster to process a single dataset.
    */
   private def processDataset(dataset: String, phenotype: String): IO[RunJobFlowResult] = {
-    val script  = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
-    val cluster = Cluster(name = name.toString)
-    val step    = JobStep.PySpark(script, dataset, phenotype)
+    val script = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
+    val step   = JobStep.PySpark(script, dataset, phenotype)
+    val cluster = Cluster(
+      name = name.toString,
+      instances = 2,
+      masterInstanceType = InstanceType.m5_2xlarge,
+      slaveInstanceType = InstanceType.m5_2xlarge,
+    )
 
     for {
       _   <- IO(logger.info(s"Partitioning $dataset/$phenotype..."))

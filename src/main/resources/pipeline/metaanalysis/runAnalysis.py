@@ -5,12 +5,14 @@
 
 import argparse
 import glob
+import os
 import os.path
 import platform
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 # where in S3 meta-analysis data is
 s3_path = 's3://dig-analysis-data/out/metaanalysis'
@@ -20,6 +22,9 @@ localdir = '/mnt/efs/metaanalysis'
 
 # where metal is installed locally
 metal_local = '/home/hadoop/bin/metal'
+
+# getmerge-strip-headers script installed locally
+getmerge = '/home/hadoop/bin/getmerge-strip-headers.sh'
 
 
 def run_metal_script(workdir, parts, stderr=False, overlap=False, freq=False):
@@ -91,45 +96,28 @@ def run_metal(path, input_files, overlap=False):
     run_metal_script(path, input_files, stderr=True, overlap=False)
 
 
-def merge_parts(path, outfile):
-    """
-    Run `hadoop fs -getmerge` to join multiple CSV part files together. 
-    
-    The order of the headers MUST match the order of the columns selected by 
-    the partition variants script!
-    """
-    headers = [
-        'varId',
-        'chromosome',
-        'position',
-        'reference',
-        'alt',
-        'phenotype',
-        'pValue',
-        'beta',
-        'eaf',
-        'maf',
-        'stdErr',
-        'n',
-    ]
-
-    # join all the files together into a single dataset file
-    subprocess.check_call(['hadoop', 'fs', '-getmerge', '-nl', '-skip-empty-file', path, outfile])
-
-    # add the header to the top of the file
-    subprocess.check_call(['sed', '-i', '1i%s' % '\t'.join(headers), outfile])
-
-
 def find_parts(path):
     """
     Run `hadoop fs -ls -C` to find all the files that match a particular path.
     """
     print('Collecting files from %s' % path)
 
-    return subprocess \
-        .check_output(['hadoop', 'fs', '-ls', '-C', path]) \
+    return subprocess.check_output(['hadoop', 'fs', '-ls', '-C', path]) \
         .decode('UTF-8') \
+        .strip() \
         .split('\n')
+
+
+def merge_parts(path, outfile):
+    """
+    Run `hadoop fs -getmerge` to join multiple CSV part files together. 
+    
+    This works by using the bin/scripts/getmerge-strip-headers.sh script in
+    S3 which will use AWK to remove all the extraneous headers from the
+    final, merged CSV file.
+    """
+    subprocess.check_call(['mkdir', '-p', os.path.dirname(outfile)])
+    subprocess.check_call([getmerge, path, outfile])
 
 
 def run_ancestry_specific_analysis(phenotype):
@@ -162,7 +150,7 @@ def run_ancestry_specific_analysis(phenotype):
 
     # for each ancestry, run METAL across all the datasets with OVERLAP ON
     for ancestry, datasets in ancestries.items():
-        ancestrydir = '%s/%s' % (outdir, ancestry)
+        ancestrydir = '%s/ancestry=%s' % (outdir, ancestry)
         analysisdir = '%s/_analysis' % ancestrydir
 
         # collect all the dataset files created
@@ -213,7 +201,7 @@ def run_trans_ethnic_analysis(phenotype):
     # for each ancestry, merge all the results into a single file
     for ancestry in ancestries:
         parts = '%s/ancestry=%s' % (srcdir, ancestry)
-        input_file = '%s/%s/variants.csv' % (outdir, ancestry)
+        input_file = '%s/ancestry=%s/variants.csv' % (outdir, ancestry)
 
         merge_parts(parts, input_file)
         input_files.append(input_file)

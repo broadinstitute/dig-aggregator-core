@@ -12,7 +12,7 @@ import org.broadinstitute.dig.aggregator.pipeline.metaanalysis
 /**
  *
  */
-class LDScoreRegressionProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class LDClumpingProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /**
    * All the processors this processor depends on.
