@@ -2,6 +2,9 @@
 .ensime_cache/
 .ensime
 
+# metals language server files
+.metals/
+
 # compiled project
 project/project/
 project/target/

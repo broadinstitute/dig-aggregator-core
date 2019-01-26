@@ -260,18 +260,19 @@ def load_ancestry_specific_analysis(spark, phenotype):
         df.append(analysis)
 
     # union all the ancestries together
-    all_variants = functools.reduce(lambda a, b: a.union(b), df)
+    if len(df) > 0:
+        all_variants = functools.reduce(lambda a, b: a.union(b), df)
 
-    # NOTE: The column ordering is still the same as it was when we joined,
-    #       but the ancestry column is added on the end. This will be stripped
-    #       off with .partitionBy(), leaving all the other column ordering
-    #       untouched.
+        # NOTE: The column ordering is still the same as it was when we joined,
+        #       but the ancestry column is added on the end. This will be stripped
+        #       off with .partitionBy(), leaving all the other column ordering
+        #       untouched.
 
-    # write out all the processed variants, rejoined with rare variants
-    all_variants.write \
-        .mode('overwrite') \
-        .partitionBy('ancestry') \
-        .csv(outdir, sep='\t', header=True)
+        # write out all the processed variants, rejoined with rare variants
+        all_variants.write \
+            .mode('overwrite') \
+            .partitionBy('ancestry') \
+            .csv(outdir, sep='\t', header=True)
 
 
 def load_trans_ethnic_analysis(spark, phenotype):
