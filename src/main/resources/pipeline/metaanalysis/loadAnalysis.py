@@ -284,6 +284,10 @@ def load_trans_ethnic_analysis(spark, phenotype):
     srcdir = '%s/trans-ethnic/%s/_analysis' % (localdir, phenotype)
     outdir = '%s/trans-ethnic/%s' % (s3_path, phenotype)
 
+    # if the source directory doesn't exist there's nothing to load
+    if not os.path.exists(srcdir):
+        return
+
     # NOTE: After loading the analysis, we need to make sure that the columns
     #       are in the correct (expected) order for loading into Neo4j. To
     #       do this, we select based on the same order output by the variant

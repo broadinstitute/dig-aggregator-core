@@ -96,6 +96,19 @@ def run_metal(path, input_files, overlap=False):
     run_metal_script(path, input_files, stderr=True, overlap=False)
 
 
+def test_path(path):
+    """
+    Run `hadoop fs -test -s` to see if any files exist matching the pathspec.
+    """
+    try:
+        subprocess.check_call(['hadoop', 'fs', '-test', '-s', path])
+    except subprocess.CalledProcessError:
+        return False
+
+    # a exit-code of 0 is success
+    return True
+
+
 def find_parts(path):
     """
     Run `hadoop fs -ls -C` to find all the files that match a particular path.
@@ -183,6 +196,10 @@ def run_trans_ethnic_analysis(phenotype):
     # completely nuke any pre-existing data that may be lying around...
     if os.path.isdir(outdir):
         shutil.rmtree(outdir)
+
+    # if no ancestry-specific analysis exists (e.g. all mixed) don't run
+    if not test_path(srcdir):
+        return
 
     # list of all ancestries for this analysis
     ancestries = []
