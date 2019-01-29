@@ -6,7 +6,7 @@ import platform
 
 from pyspark.sql import SparkSession
 from pyspark.sql.types import DoubleType
-from pyspark.sql.functions import col, concat, lit  # pylint: disable=E0611
+from pyspark.sql.functions import col, concat, lit, when  # pylint: disable=E0611
 
 s3dir = 's3://dig-analysis-data'
 
@@ -35,13 +35,15 @@ if __name__ == '__main__':
     # slurp all the variant batches
     df = spark.read.json('%s/part-*' % srcdir)
 
+    # if ancestry isn't set, assume it's "Mixed"
+    ancestry = when(df.ancestry.isNotNull(), df.ancestry).otherwise(lit('Mixed'))
+
     # remove all multi-allelic variants, mixed-ancestry variants, and any with
     # null p or beta values, select the order of the columns so when they are
     # written out in part files without a header it will be known exactly what
     # order they are in
     df = df \
         .filter(df.multiAllelic.isNull() | (df.multiAllelic == False)) \
-        .filter(df.ancestry != 'Mixed') \
         .filter(df.pValue.isNotNull()) \
         .filter(df.beta.isNotNull()) \
         .select(
@@ -51,7 +53,7 @@ if __name__ == '__main__':
             df.reference,
             df.alt,
             df.phenotype,
-            df.ancestry,
+            ancestry.alias('ancestry'),
             df.pValue,
             df.beta,
             df.eaf,

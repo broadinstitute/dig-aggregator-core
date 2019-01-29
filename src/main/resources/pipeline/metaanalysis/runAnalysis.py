@@ -161,6 +161,10 @@ def run_ancestry_specific_analysis(phenotype):
             ancestries.setdefault(ancestry, set()) \
                 .add(dataset)
 
+    # if there is more than 1 ancestry, delete the "Mixed" or no ancestry
+    if len(ancestries) > 1 and 'Mixed' in ancestries:
+        del ancestries['Mixed']
+
     # for each ancestry, run METAL across all the datasets with OVERLAP ON
     for ancestry, datasets in ancestries.items():
         ancestrydir = '%s/ancestry=%s' % (outdir, ancestry)
@@ -177,7 +181,7 @@ def run_ancestry_specific_analysis(phenotype):
             # merge the common variants for the dataset together
             merge_parts(parts, dataset_file)
 
-            # tally all the
+            # tally all the dataset files
             dataset_files.append(dataset_file)
 
         # run METAL across all datasets with OVERLAP ON
