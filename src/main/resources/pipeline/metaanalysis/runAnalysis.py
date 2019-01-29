@@ -201,10 +201,6 @@ def run_trans_ethnic_analysis(phenotype):
     if os.path.isdir(outdir):
         shutil.rmtree(outdir)
 
-    # if no ancestry-specific analysis exists (e.g. all mixed) don't run
-    if not test_path(srcdir):
-        return
-
     # list of all ancestries for this analysis
     ancestries = []
     input_files = []
@@ -218,6 +214,10 @@ def run_trans_ethnic_analysis(phenotype):
 
         if m is not None:
             ancestries.append(m.group(1))
+
+    # if there is no data, then don't try to load+process
+    if len(ancestries) == 0:
+        return
 
     # for each ancestry, merge all the results into a single file
     for ancestry in ancestries:
