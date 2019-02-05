@@ -1,12 +1,10 @@
 #!/usr/bin/python3
 
 import argparse
-import math
 import platform
 
 from pyspark.sql import SparkSession
-from pyspark.sql.types import DoubleType
-from pyspark.sql.functions import col, concat, lit, when  # pylint: disable=E0611
+from pyspark.sql.functions import lit, when  # pylint: disable=E0611
 
 s3dir = 's3://dig-analysis-data'
 
