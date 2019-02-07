@@ -115,10 +115,13 @@ def find_parts(path):
     """
     print('Collecting files from %s' % path)
 
-    return subprocess.check_output(['hadoop', 'fs', '-ls', '-C', path]) \
-        .decode('UTF-8') \
-        .strip() \
-        .split('\n')
+    try:
+        return subprocess.check_output(['hadoop', 'fs', '-ls', '-C', path]) \
+            .decode('UTF-8') \
+            .strip() \
+            .split('\n')
+    except subprocess.CalledProcessError:
+        return []
 
 
 def merge_parts(path, outfile):
