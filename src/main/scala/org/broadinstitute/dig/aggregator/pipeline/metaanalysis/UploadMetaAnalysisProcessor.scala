@@ -30,40 +30,13 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
    * All the processors this processor depends on.
    */
   override val dependencies: Seq[Processor.Name] = Seq(
-    MetaAnalysisPipeline.metaAnalysisProcessor,
+    MetaAnalysisPipeline.metaAnalysisProcessor
   )
 
   /**
    * All the job scripts that need to be uploaded to AWS.
    */
   override val resources: Seq[String] = Nil
-
-  /**
-   * When loading the CSV files from HDFS, they don't have a header attached
-   * to them, so this is the definitive ordering of the columns a
-   */
-  private val fields: Seq[String] = Array[String](
-    "varId",
-    "chromosome",
-    "position",
-    "reference",
-    "alt",
-    "phenotype",
-    "pValue",
-    "beta",
-    "eaf",
-    "maf",
-    "stdErr",
-    "n",
-    "top",
-  )
-
-  /**
-   * Create a column mapper for a given row variable.
-   */
-  private def columnMapper(name: String) = new Object {
-    def apply(col: String) = s"$name[${fields.indexOf(col)}]"
-  }
 
   /**
    * Take all the phenotype results from the dependencies and process them.
@@ -74,19 +47,19 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
     // create runs for every phenotype
     val ios = for (phenotype <- phenotypes) yield {
       val analysis = new Analysis(s"MetaAnalysis/$phenotype", Provenance.thisBuild)
-      val graph   = new GraphDb(config.neo4j)
+      val graph    = new GraphDb(config.neo4j)
 
       // the ancestries for each phenotype
       val ancestries = Seq("AA", "AF", "EU", "HS", "EA", "SA")
 
       // for each ancestry, collect upload the part files for it
       def frequencies(id: Int) = for (ancestry <- ancestries) yield {
-        val parts  = s"out/metaanalysis/ancestry-specific/$phenotype/ancestry=$ancestry"
+        val parts = s"out/metaanalysis/ancestry-specific/$phenotype/ancestry=$ancestry"
 
         for {
           _ <- IO(logger.info(s"...Uploading $phenotype frequencies for $ancestry"))
           _ <- analysis.uploadParts(aws, graph, id, parts)(uploadFrequencyResults(ancestry))
-        } yield()
+        } yield ()
       }
 
       // where the result files are to upload
@@ -120,11 +93,8 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
    * Given a part file, upload it and create all the frequency nodes.
    */
   def uploadFrequencyResults(ancestry: String)(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
-    import scala.language.reflectiveCalls
-
-    val r = columnMapper("r")
     val q = s"""|USING PERIODIC COMMIT
-                |LOAD CSV FROM '$part' AS r
+                |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
                 |// lookup the analysis node
@@ -132,17 +102,17 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |
                 |// die if the ancestry or phenotype doesn't exist
                 |MATCH (a:Ancestry {name: '$ancestry'})
-                |MATCH (p:Phenotype {name: ${r("phenotype")}})
+                |MATCH (p:Phenotype {name: r.phenotype})
                 |
                 |// create the variant node if it doesn't exist
-                |MERGE (v:Variant {name: ${r("varId")}})
+                |MERGE (v:Variant {name: r.varId})
                 |ON CREATE SET
-                |  v.chromosome=${r("chromosome")},
-                |  v.position=toInteger(${r("position")}),
-                |  v.reference=${r("reference")},
-                |  v.alt=${r("alt")}
+                |  v.chromosome=r.chromosome,
+                |  v.position=toInteger(r.position),
+                |  v.reference=r.reference,
+                |  v.alt=r.alt
                 |
-                |WITH q, a, p, v, toFloat(${r("eaf")}) AS eaf
+                |WITH q, a, p, v, toFloat(r.eaf) AS eaf
                 |
                 |// create the Frequency node, calculate MAF
                 |CREATE (n:Frequency {
@@ -151,12 +121,12 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |})
                 |
                 |// create the link from the analysis to this node
-                |CREATE (q)<-[:PRODUCED_BY]-(n)
+                |CREATE (q)-[:PRODUCED]->(n)
                 |
                 |// create the relationships
-                |CREATE (a)<-[:FOR_ANCESTRY]-(n)
-                |CREATE (v)<-[:FOR_VARIANT]-(n)
-                |CREATE (p)<-[:FOR_PHENOTYPE]-(n)
+                |CREATE (v)-[:FREQUENCY]->(n)
+                |CREATE (p)-[:FREQUENCY]->(n)
+                |CREATE (a)-[:FREQUENCY]->(n)
                 |""".stripMargin
 
     graph.run(q)
@@ -166,44 +136,41 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
    * Given a part file, upload it and create all the bottom-line nodes.
    */
   def uploadBottomLineResults(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
-    import scala.language.reflectiveCalls
-
-    val r = columnMapper("r")
     val q = s"""|USING PERIODIC COMMIT
-                |LOAD CSV FROM '$part' AS r
+                |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
                 |// die if the phenotype doesn't exist
-                |MATCH (p:Phenotype {name: ${r("phenotype")}})
+                |MATCH (p:Phenotype {name: r.phenotype})
                 |
                 |// create the variant node if it doesn't exist
-                |MERGE (v:Variant {name: ${r("varId")}})
+                |MERGE (v:Variant {name: r.varId})
                 |ON CREATE SET
-                |  v.chromosome=${r("chromosome")},
-                |  v.position=toInteger(${r("position")}),
-                |  v.reference=${r("reference")},
-                |  v.alt=${r("alt")}
+                |  v.chromosome=r.chromosome,
+                |  v.position=toInteger(r.position),
+                |  v.reference=r.reference,
+                |  v.alt=r.alt
                 |
-                |// create the MetaAnalysis analysis node
+                |// create the MetaAnalysis result node
                 |CREATE (n:MetaAnalysis {
-                |  pValue: toFloat(${r("pValue")}),
-                |  beta: toFloat(${r("beta")}),
-                |  stdErr: toFloat(${r("stdErr")}),
-                |  n: toInteger(${r("n")})
+                |  pValue: toFloat(r.pValue),
+                |  beta: toFloat(r.beta),
+                |  stdErr: toFloat(r.stdErr),
+                |  n: toInteger(r.n)
                 |})
                 |
                 |// create the relationship to the analysis node
-                |CREATE (q)<-[:PRODUCED_BY]-(n)
+                |CREATE (q)-[:PRODUCED]->(n)
                 |
                 |// create the relationship to the trait and variant
-                |CREATE (p)<-[:FOR_PHENOTYPE]-(n)-[:FOR_VARIANT]->(v)
+                |CREATE (p)-[:META_ANALYSIS]->(n)<-[:META_ANALYSIS]->(v)
                 |
                 |// if a top result, mark it as such
-                |FOREACH(i IN (CASE toBoolean(${r("top")}) WHEN true THEN [1] ELSE [] END) |
-                |  CREATE (v)<-[:TOP_VARIANT]-(n)
+                |FOREACH(i IN (CASE toBoolean(r.top) WHEN true THEN [1] ELSE [] END) |
+                |  CREATE (v)-[:TOP_VARIANT]->(n)
                 |)
                 |""".stripMargin
 

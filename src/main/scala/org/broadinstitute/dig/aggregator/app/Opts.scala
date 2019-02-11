@@ -24,6 +24,9 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   /** Show version information. */
   val version: ScallopOption[Boolean] = opt("version")
 
+  /** Show debug logging. */
+  val debug: ScallopOption[Boolean] = opt("debug")
+
   /** The processor name is actually a pipeline name. */
   val pipeline: ScallopOption[Boolean] = opt("pipeline")
 
@@ -87,6 +90,6 @@ object Opts {
       aws: AWSConfig,
       mysql: MySQLConfig,
       neo4j: Neo4jConfig,
-      sendgrid: SendgridConfig,
+      sendgrid: SendgridConfig
   ) extends BaseConfig
 }

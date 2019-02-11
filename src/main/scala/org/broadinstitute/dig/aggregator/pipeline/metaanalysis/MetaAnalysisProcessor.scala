@@ -39,7 +39,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
    * All the processors this processor depends on.
    */
   override val dependencies: Seq[Processor.Name] = Seq(
-    MetaAnalysisPipeline.variantPartitionProcessor,
+    MetaAnalysisPipeline.variantPartitionProcessor
   )
 
   /**
@@ -49,19 +49,19 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
     "pipeline/metaanalysis/cluster-bootstrap.sh",
     "pipeline/metaanalysis/runAnalysis.py",
     "pipeline/metaanalysis/loadAnalysis.py",
-    "scripts/getmerge-strip-headers.sh",
+    "scripts/getmerge-strip-headers.sh"
   )
 
   /**
    * Take all the phenotype results from the dependencies and process them.
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
-    val phenotypes = results.map(_.output).distinct
+    val phenotypes = results.map(_.output).distinct.toList
 
     // create a set of jobs to process the phenotypes
     val jobs = phenotypes.map(processPhenotype)
 
-    // create an IO to insert all the results
+    // create the runs for each phenotype
     val runs = phenotypes.map { phenotype =>
       Run.insert(pool, name, Seq(phenotype), phenotype)
     }
@@ -69,7 +69,8 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
     // wait for all the jobs to complete, then insert all the results
     for {
       _ <- aws.waitForJobs(jobs)
-      _ <- runs.toList.sequence
+      _ <- IO(logger.info("Updating database..."))
+      _ <- runs.sequence
       _ <- IO(logger.info("Done"))
     } yield ()
   }
@@ -83,14 +84,14 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
     val loadUri      = aws.uriOf("resources/pipeline/metaanalysis/loadAnalysis.py")
 
     val sparkConf = ApplicationConfig.sparkEnv.withProperties(
-      "PYSPARK_PYTHON" -> "/usr/bin/python3",
+      "PYSPARK_PYTHON" -> "/usr/bin/python3"
     )
 
     // EMR cluster to run the job steps on
     val cluster = Cluster(
       name = name.toString,
       bootstrapScripts = Seq(new BootstrapScript(bootstrapUri)),
-      configurations = Seq(sparkConf),
+      configurations = Seq(sparkConf)
     )
 
     // first run+load ancestry-specific and then trans-ethnic
@@ -98,7 +99,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
       JobStep.Script(runUri, "--ancestry-specific", phenotype),
       JobStep.PySpark(loadUri, "--ancestry-specific", phenotype),
       JobStep.Script(runUri, "--trans-ethnic", phenotype),
-      JobStep.PySpark(loadUri, "--trans-ethnic", phenotype),
+      JobStep.PySpark(loadUri, "--trans-ethnic", phenotype)
     )
 
     for {

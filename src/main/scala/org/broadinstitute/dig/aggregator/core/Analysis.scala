@@ -30,7 +30,8 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
    *  * ...call the upload function for each part file;
    */
   def uploadParts(aws: AWS, graph: GraphDb, analysisId: Int, s3path: String)(
-      uploadPart: (GraphDb, Int, String) => IO[StatementResult]): IO[Unit] = {
+      uploadPart: (GraphDb, Int, String) => IO[StatementResult]
+  ): IO[Unit] = {
     for {
       listing <- aws.ls(s3path)
 
@@ -92,7 +93,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
 
     // tail-recursive accumulator helper method to count total deletions
     def deleteResults(total: Int): IO[Int] = {
-      val q = s"""|MATCH (n)-[:PRODUCED_BY]->(:Analysis {name: '$name'})
+      val q = s"""|MATCH (n)<-[:PRODUCED]->(:Analysis {name: '$name'})
                   |WITH n
                   |LIMIT 50000
                   |DETACH DELETE n

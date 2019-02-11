@@ -33,6 +33,8 @@ variants_schema = StructType(
         StructField('beta', DoubleType(), nullable=False),
         StructField('eaf', DoubleType(), nullable=False),
         StructField('maf', DoubleType(), nullable=False),
+        StructField('eafCount', DoubleType(), nullable=False),
+        StructField('mafCount', DoubleType(), nullable=False),
         StructField('stdErr', DoubleType(), nullable=False),
         StructField('n', DoubleType(), nullable=False),
     ]
@@ -48,15 +50,6 @@ def metaanalysis_schema(samplesize=True, freq=False, overlap=False):
         StructField('Allele1', StringType(), nullable=False),
         StructField('Allele2', StringType(), nullable=False),
     ]
-
-    # add frequency columns
-    if freq:
-        schema += [
-            StructField('Freq1', DoubleType(), nullable=False),
-            StructField('FreqSE', DoubleType(), nullable=False),
-            StructField('MinFreq', DoubleType(), nullable=False),
-            StructField('MaxFreq', DoubleType(), nullable=False),
-        ]
 
     # add samplesize or stderr
     if samplesize:
@@ -82,6 +75,15 @@ def metaanalysis_schema(samplesize=True, freq=False, overlap=False):
         StructField('Direction', StringType(), nullable=False),
         StructField('TotalSampleSize', DoubleType(), nullable=False),
     ]
+
+    # add frequency columns last
+    if freq:
+        schema += [
+            StructField('eafSum', DoubleType(), nullable=False),
+            StructField('mafSum', DoubleType(), nullable=False),
+            StructField('eafCountSum', DoubleType(), nullable=False),
+            StructField('mafCountSum', DoubleType(), nullable=False),
+        ]
 
     return StructType(schema)
 
@@ -153,14 +155,13 @@ def read_stderr_analysis(spark, path):
             path,
             sep='\t',
             header=True,
-            schema=metaanalysis_schema(samplesize=False, freq=True),
+            schema=metaanalysis_schema(samplesize=False, freq=False, overlap=False),
         ) \
         .filter(col('MarkerName').isNotNull()) \
         .rdd \
         .map(transform) \
         .toDF() \
         .filter(isnan(col('beta')) == False) \
-        .filter(isnan(col('eaf')) == False) \
         .filter(isnan(col('stdErr')) == False)
 
 
@@ -226,9 +227,20 @@ def load_ancestry_specific_analysis(spark, phenotype):
 
         columns = [col(field.name) for field in variants_schema]
 
-        # read and join the analyses
-        analysis = load_analysis(spark, path, overlap=True) \
+        # read the analysis produced by METAL
+        analysis = load_analysis(spark, path, overlap=True)
+
+        # compute the average EAF and average MAF for each variant
+        eafAvg = when(analysis.eafCountSum > 0, analysis.eafSum / analysis.eafCountSum) \
+            .otherwise(lit(None))
+        mafAvg = when(analysis.mafCountSum > 0, analysis.mafSum / analysis.mafCountSum) \
+            .otherwise(lit(None))
+
+        # add ancestry for partitioning and calculated eaf/maf averages
+        analysis = analysis \
             .withColumn('phenotype', lit(phenotype)) \
+            .withColumn('eaf', eafAvg) \
+            .withColumn('maf', mafAvg) \
             .select(*columns)
 
         # location of rare variants for this phenotype+ancestry
@@ -253,8 +265,17 @@ def load_ancestry_specific_analysis(spark, phenotype):
                 .map(lambda v: v[1]) \
                 .toDF()
 
-        # add the ancestry back in so it may be partitioned on write
-        analysis = analysis.withColumn('ancestry', lit(ancestry))
+        # compute the average EAF and average MAF for each variant
+        eafAvg = when(analysis.eafCountSum > 0, analysis.eafSum / analysis.eafCountSum) \
+            .otherwise(lit(None))
+        mafAvg = when(analysis.mafCountSum > 0, analysis.mafSum / analysis.mafCountSum) \
+            .otherwise(lit(None))
+
+        # add ancestry for partitioning and calculated eaf/maf averages
+        analysis = analysis \
+            .withColumn('ancestry', lit(ancestry)) \
+            .withColumn('eaf', eafAvg) \
+            .withColumn('maf', mafAvg)
 
         # union all the variants together into a single data frame
         df.append(analysis)

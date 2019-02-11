@@ -48,14 +48,24 @@ def run_metal_script(workdir, parts, stderr=False, overlap=False, freq=False):
         'PVALUELABEL pValue',
         'EFFECTLABEL beta',
         'WEIGHTLABEL n',
-        'FREQLABEL eaf',
         'STDERRLABEL stdErr',
         'CUSTOMVARIABLE TotalSampleSize',
         'LABEL TotalSampleSize AS n',
-        'AVERAGEFREQ ON',
-        'MINMAXFREQ ON',
         'OVERLAP %s' % ('ON' if overlap else 'OFF'),
     ]
+
+    # if tracking frequency, sum the EAF, MAF, and dataset counts
+    if freq:
+        script += [
+            'CUSTOMVARIABLE eafSum',
+            'CUSTOMVARIABLE mafSum',
+            'CUSTOMVARIABLE eafCountSum',
+            'CUSTOMVARIABLE mafCountSum',
+            'LABEL eafSum AS eaf',
+            'LABEL mafSum AS maf',
+            'LABEL eafCountSum AS eafCount',
+            'LABEL mafCountSum AS mafCount',
+        ]
 
     # add all the parts
     for part in parts:
@@ -89,11 +99,10 @@ def run_metal_script(workdir, parts, stderr=False, overlap=False, freq=False):
 
 def run_metal(path, input_files, overlap=False):
     """
-    Run METAL twice: once for SAMPLESIZE (pValue + zScore) and once for STDERR,
-    then load and join the results together in an DataFrame and return it.
+    Run METAL twice: once for SAMPLESIZE (pValue + zScore) and once for STDERR.
     """
-    run_metal_script(path, input_files, stderr=False, overlap=overlap)
-    run_metal_script(path, input_files, stderr=True, overlap=False)
+    run_metal_script(path, input_files, stderr=False, overlap=overlap, freq=True)
+    run_metal_script(path, input_files, stderr=True, overlap=False, freq=False)
 
 
 def test_path(path):
@@ -152,8 +161,8 @@ def run_ancestry_specific_analysis(phenotype):
     # ancestry -> [dataset] map
     ancestries = dict()
 
-    # the path format is .../<dataset>/(common|rare)/ancestry=?
-    r = re.compile(r'/([^/]+)/(?:common|rare)/ancestry=(.+)$')
+    # the path format is .../<dataset>=?/ancestry=?/rare=?/part-*
+    r = re.compile(r'/dataset=([^/]+)/ancestry=([^/]+)/')
 
     # find all the unique ancestries across this phenotype
     for part in find_parts('%s/*/*' % srcdir):

@@ -42,16 +42,12 @@ object Run {
                 |  )
                 |
                 |VALUES (?, ?, ?, ?)
+                |
+                |ON DUPLICATE KEY UPDATE
+                |  `run` = VALUES(`run`),
+                |  `output` = VALUES(`output`),
+                |  `timestamp` = NOW()
                 |""".stripMargin
-
-    // for each input, delete the previous one that existed
-    val deletes = inputs.map { input =>
-      sql"""|DELETE FROM `runs`
-            |
-            |WHERE       `app` = $app
-            |AND         `input` = $input
-            |""".stripMargin.update.run
-    }
 
     // generate the run ID and an insert-multi update
     val runId   = randomUUID.toString
@@ -60,7 +56,7 @@ object Run {
 
     for {
       // delete the old inputs + insert the new ones in a single transaction
-      _ <- pool.exec(deletes.toList.sequence >> insert)
+      _ <- pool.exec(insert)
 
       // insert the provenance row, but should be part of same transaction
       _ <- Provenance.thisBuild.insert(pool, runId, app)

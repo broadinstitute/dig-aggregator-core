@@ -54,7 +54,8 @@ final class AWS(config: AWSConfig) extends LazyLogging {
    * AWS IAM credentials provider.
    */
   val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-    new BasicAWSCredentials(config.key, config.secret))
+    new BasicAWSCredentials(config.key, config.secret)
+  )
 
   /**
    * S3 client for storage.
@@ -245,7 +246,9 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       }
 
       // show the ID of the cluster being created
-      logger.debug(s"Provisioning ${cluster.name} (${job.getJobFlowId}); logging to ${logUri(cluster)}/${job.getJobFlowId}...")
+      logger.debug(
+        s"Provisioning ${cluster.name} (${job.getJobFlowId}); logging to ${logUri(cluster)}/${job.getJobFlowId}..."
+      )
 
       // return the job
       job
@@ -297,7 +300,9 @@ final class AWS(config: AWSConfig) extends LazyLogging {
 
       // the current step stopped for some reason
       case Some(step) if step.isStopped =>
-        logger.error(s"Job ${job.getJobFlowId} failed: ${step.stopReason}; logs are in S3 and visible from the EMR web console.")
+        logger.error(
+          s"Job ${job.getJobFlowId} failed: ${step.stopReason}; logs are in S3 and visible from the EMR web console."
+        )
 
         // terminate the program
         IO.raiseError(new Exception(step.stopReason))
@@ -314,7 +319,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
         }
 
         if (changed) {
-          val jar = step.getConfig.getJar
+          val jar  = step.getConfig.getJar
           val args = step.getConfig.getArgs.asScala.mkString(" ")
 
           logger.debug(s"...${job.getJobFlowId} ${step.getStatus.getState}: $jar $args (${step.getId})")

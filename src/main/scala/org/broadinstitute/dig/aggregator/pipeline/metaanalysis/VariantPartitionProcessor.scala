@@ -31,7 +31,7 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
    * All the job scripts that need to be uploaded to AWS.
    */
   override val resources: Seq[String] = Seq(
-    "pipeline/metaanalysis/partitionVariants.py",
+    "pipeline/metaanalysis/partitionVariants.py"
   )
 
   /**
@@ -41,51 +41,51 @@ class VariantPartitionProcessor(name: Processor.Name, config: BaseConfig) extend
   override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
     val pattern = raw"([^/]+)/(.*)".r
 
-    // get a list of all the dataset/phenotype pairs
-    val datasetPhenotypes = datasets.map(_.dataset).distinct.collect {
-      case pattern(dataset, phenotype) => (dataset, phenotype)
+    // get a list of all the phenotypes that need processed
+    val datasetPhenotypes = datasets.map(_.dataset).collect {
+      case dataset @ pattern(_, phenotype) => (dataset, phenotype)
     }
 
-    // create all the job to process each one
-    val jobs = datasetPhenotypes.map {
-      case (dataset, phenotype) => processDataset(dataset, phenotype)
+    // map each phenotype to a list of datasets
+    val phenotypeDatasets = datasetPhenotypes
+      .groupBy(_._2)
+      .mapValues(_.map(_._1).distinct)
+      .toList
+
+    // create the jobs to process each phenotype in parallel
+    val jobs = phenotypeDatasets.map {
+      case (phenotype, datasets) => processPhenotype(phenotype, datasets)
     }
 
-    // get a mapping of all the datasets (inputs) for each phenotype (output)
-    val outputs = datasetPhenotypes.groupBy(_._2).mapValues { list =>
-      list.map {
-        case (dataset, phenotype) => s"$dataset/$phenotype"
-      }
+    // create the runs for each phenotype
+    val runs = phenotypeDatasets.map {
+      case (phenotype, datasets) => Run.insert(pool, name, datasets, phenotype)
     }
 
-    // create a list of all the results to write to the database
-    val runs = outputs.toList.map {
-      case (output, inputs) => Run.insert(pool, name, inputs, output)
-    }
-
-    // run all the jobs (note: this could be done in parallel!)
+    // run all the jobs then update the database
     for {
       _ <- aws.waitForJobs(jobs)
+      _ <- IO(logger.info("Updating database..."))
       _ <- runs.sequence
       _ <- IO(logger.info("Done"))
     } yield ()
   }
 
   /**
-   * Spin up a cluster to process a single dataset.
+   * Spin up a cluster to process a single phenotype.
    */
-  private def processDataset(dataset: String, phenotype: String): IO[RunJobFlowResult] = {
+  private def processPhenotype(phenotype: String, datasets: Seq[String]): IO[RunJobFlowResult] = {
     val script = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
-    val step   = JobStep.PySpark(script, dataset, phenotype)
+    val step   = JobStep.PySpark(script, phenotype)
     val cluster = Cluster(
       name = name.toString,
-      instances = 2,
+      instances = 4,
       masterInstanceType = InstanceType.m5_2xlarge,
-      slaveInstanceType = InstanceType.m5_2xlarge,
+      slaveInstanceType = InstanceType.m5_2xlarge
     )
 
     for {
-      _   <- IO(logger.info(s"Partitioning $dataset/$phenotype..."))
+      _   <- IO(logger.info(s"Partitioning $phenotype datasets..."))
       job <- aws.runJob(cluster, step)
     } yield job
   }
