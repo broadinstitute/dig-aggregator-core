@@ -79,7 +79,7 @@ if __name__ == '__main__':
     # output the partitioned variants as CSV files for METAL
     df.write \
         .mode('overwrite') \
-        .partitionBy('ancestry', 'dataset', 'rare') \
+        .partitionBy('dataset', 'ancestry', 'rare') \
         .csv(outdir, sep='\t', header=True)
 
     # done
