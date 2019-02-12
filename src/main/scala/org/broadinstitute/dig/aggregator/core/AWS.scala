@@ -334,7 +334,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
    * Given a sequence of jobs, run them in parallel, but limit the maximum
    * concurrency so too many clusters aren't created at once.
    */
-  def waitForJobs(jobs: Seq[IO[RunJobFlowResult]], maxClusters: Int = 8): IO[Unit] = {
+  def waitForJobs(jobs: Seq[IO[RunJobFlowResult]], maxClusters: Int = 5): IO[Unit] = {
     import Implicits.contextShift
 
     Stream
