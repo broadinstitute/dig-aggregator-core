@@ -27,7 +27,7 @@ metal_local = '/home/hadoop/bin/metal'
 getmerge = '/home/hadoop/bin/getmerge-strip-headers.sh'
 
 
-def run_metal_script(workdir, parts, stderr=False, overlap=False, freq=False):
+def run_metal_script(workdir, parts, stderr=False, overlap=False):
     """
     Run the METAL program at a given location with a set of part files.
     """
@@ -53,19 +53,6 @@ def run_metal_script(workdir, parts, stderr=False, overlap=False, freq=False):
         'LABEL TotalSampleSize AS n',
         'OVERLAP %s' % ('ON' if overlap else 'OFF'),
     ]
-
-    # if tracking frequency, sum the EAF, MAF, and dataset counts
-    if freq:
-        script += [
-            'CUSTOMVARIABLE eafSum',
-            'CUSTOMVARIABLE mafSum',
-            'CUSTOMVARIABLE eafCountSum',
-            'CUSTOMVARIABLE mafCountSum',
-            'LABEL eafSum AS eaf',
-            'LABEL mafSum AS maf',
-            'LABEL eafCountSum AS eafCount',
-            'LABEL mafCountSum AS mafCount',
-        ]
 
     # add all the parts
     for part in parts:
@@ -101,8 +88,8 @@ def run_metal(path, input_files, overlap=False):
     """
     Run METAL twice: once for SAMPLESIZE (pValue + zScore) and once for STDERR.
     """
-    run_metal_script(path, input_files, stderr=False, overlap=overlap, freq=True)
-    run_metal_script(path, input_files, stderr=True, overlap=False, freq=False)
+    run_metal_script(path, input_files, stderr=False, overlap=overlap)
+    run_metal_script(path, input_files, stderr=True, overlap=False)
 
 
 def test_path(path):
@@ -161,11 +148,11 @@ def run_ancestry_specific_analysis(phenotype):
     # ancestry -> [dataset] map
     ancestries = dict()
 
-    # the path format is .../<dataset>=?/ancestry=?/rare=?/part-*
+    # the path format is .../dataset=?/ancestry=?/rare=?/part-*
     r = re.compile(r'/dataset=([^/]+)/ancestry=([^/]+)/')
 
-    # find all the unique ancestries across this phenotype
-    for part in find_parts('%s/*/*' % srcdir):
+    # find all the datasets for each ancestry across all variants
+    for part in find_parts('%s/*/*/*/part-*' % srcdir):
         m = r.search(part)
 
         if m is not None:
@@ -173,31 +160,31 @@ def run_ancestry_specific_analysis(phenotype):
             ancestries.setdefault(ancestry, set()) \
                 .add(dataset)
 
-    # if there is more than 1 ancestry, delete the "Mixed" or no ancestry
+    # if there is more than 1 ancestry, delete the "Mixed" ancestry
     if len(ancestries) > 1 and 'Mixed' in ancestries:
         del ancestries['Mixed']
 
-    # for each ancestry, run METAL across all the datasets with OVERLAP ON
+    # run METAL on common variants for all the datasets with OVERLAP ON
     for ancestry, datasets in ancestries.items():
         ancestrydir = '%s/ancestry=%s' % (outdir, ancestry)
         analysisdir = '%s/_analysis' % ancestrydir
 
-        # collect all the dataset files created
-        dataset_files = []
+        # collect all the merged part files (per dataset)
+        metal_input_files = []
 
         # datasets need to be merged into a single file for METAL to EFS
         for dataset in datasets:
-            parts = '%s/%s/common/ancestry=%s' % (srcdir, dataset, ancestry)
-            dataset_file = '%s/%s/common.csv' % (ancestrydir, dataset)
+            parts = '%s/dataset=%s/ancestry=%s/rare=false/part-*' % (srcdir, dataset, ancestry)
+            variants_file = '%s/%s/common.csv' % (ancestrydir, dataset)
 
             # merge the common variants for the dataset together
-            merge_parts(parts, dataset_file)
+            merge_parts(parts, variants_file)
 
             # tally all the dataset files
-            dataset_files.append(dataset_file)
+            metal_input_files.append(variants_file)
 
         # run METAL across all datasets with OVERLAP ON
-        run_metal(analysisdir, dataset_files, overlap=True)
+        run_metal(analysisdir, metal_input_files, overlap=True)
 
 
 def run_trans_ethnic_analysis(phenotype):

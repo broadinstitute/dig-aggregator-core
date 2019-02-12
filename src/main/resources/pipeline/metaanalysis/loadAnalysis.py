@@ -31,17 +31,13 @@ variants_schema = StructType(
         StructField('phenotype', StringType(), nullable=False),
         StructField('pValue', DoubleType(), nullable=False),
         StructField('beta', DoubleType(), nullable=False),
-        StructField('eaf', DoubleType(), nullable=False),
-        StructField('maf', DoubleType(), nullable=False),
-        StructField('eafCount', DoubleType(), nullable=False),
-        StructField('mafCount', DoubleType(), nullable=False),
         StructField('stdErr', DoubleType(), nullable=False),
         StructField('n', DoubleType(), nullable=False),
     ]
 )
 
 
-def metaanalysis_schema(samplesize=True, freq=False, overlap=False):
+def metaanalysis_schema(samplesize=True, overlap=False):
     """
     Create the CSV schema used for the METAANALYSIS output file.
     """
@@ -76,15 +72,6 @@ def metaanalysis_schema(samplesize=True, freq=False, overlap=False):
         StructField('TotalSampleSize', DoubleType(), nullable=False),
     ]
 
-    # add frequency columns last
-    if freq:
-        schema += [
-            StructField('eafSum', DoubleType(), nullable=False),
-            StructField('mafSum', DoubleType(), nullable=False),
-            StructField('eafCountSum', DoubleType(), nullable=False),
-            StructField('mafCountSum', DoubleType(), nullable=False),
-        ]
-
     return StructType(schema)
 
 
@@ -116,7 +103,7 @@ def read_samplesize_analysis(spark, path, overlap):
             path,
             sep='\t',
             header=True,
-            schema=metaanalysis_schema(samplesize=True, freq=True, overlap=overlap),
+            schema=metaanalysis_schema(samplesize=True, overlap=overlap),
         ) \
         .filter(col('MarkerName').isNotNull()) \
         .rdd \
@@ -137,14 +124,14 @@ def read_stderr_analysis(spark, path):
         # sometimes METAL will flip the alleles
         flip = alt == row.Allele1.upper()
 
-        # get the effect allele frequency and minor allele frequency
-        eaf = row.Freq1 if not flip else 1.0 - row.Freq1
-        maf = eaf if eaf < 0.5 else 1.0 - eaf
+        # # get the effect allele frequency and minor allele frequency
+        # eaf = row.Freq1 if not flip else 1.0 - row.Freq1
+        # maf = eaf if eaf < 0.5 else 1.0 - eaf
 
         return Row(
             varId=row.MarkerName.upper(),
-            eaf=eaf,
-            maf=maf,
+            # eaf=eaf,
+            # maf=maf,
             beta=row.Effect if not flip else -row.Effect,
             stdErr=row.StdErr,
         )
@@ -155,7 +142,7 @@ def read_stderr_analysis(spark, path):
             path,
             sep='\t',
             header=True,
-            schema=metaanalysis_schema(samplesize=False, freq=False, overlap=False),
+            schema=metaanalysis_schema(samplesize=False, overlap=False),
         ) \
         .filter(col('MarkerName').isNotNull()) \
         .rdd \
@@ -230,31 +217,24 @@ def load_ancestry_specific_analysis(spark, phenotype):
         # read the analysis produced by METAL
         analysis = load_analysis(spark, path, overlap=True)
 
-        # compute the average EAF and average MAF for each variant
-        eafAvg = when(analysis.eafCountSum > 0, analysis.eafSum / analysis.eafCountSum) \
-            .otherwise(lit(None))
-        mafAvg = when(analysis.mafCountSum > 0, analysis.mafSum / analysis.mafCountSum) \
-            .otherwise(lit(None))
+        # # compute the average EAF and average MAF for each variant
+        # eafAvg = when(analysis.eafCountSum > 0, analysis.eafSum / analysis.eafCountSum) \
+        #     .otherwise(lit(None))
+        # mafAvg = when(analysis.mafCountSum > 0, analysis.mafSum / analysis.mafCountSum) \
+        #     .otherwise(lit(None))
 
         # add ancestry for partitioning and calculated eaf/maf averages
         analysis = analysis \
             .withColumn('phenotype', lit(phenotype)) \
-            .withColumn('eaf', eafAvg) \
-            .withColumn('maf', mafAvg) \
             .select(*columns)
 
-        # location of rare variants for this phenotype+ancestry
-        rare_path = '%s/variants/%s/*/rare/ancestry=%s' % (s3_path, phenotype, ancestry)
+        # rare variants across all datasets for this phenotype and ancestry
+        rare_path = '%s/variants/%s/*/ancestry=%s/rare=true' % (s3_path, phenotype, ancestry)
 
         # are there rare variants to merge with the analysis?
         if test_path(rare_path):
             rare_variants = spark.read \
-                .csv(
-                    '%s/variants/%s/*/rare/ancestry=%s' % (s3_path, phenotype, ancestry),
-                    sep='\t',
-                    header=True,
-                    schema=variants_schema,
-                ) \
+                .csv(rare_path, sep='\t', header=True, schema=variants_schema) \
                 .select(*columns)
 
             # update the analysis and keep variants with the largest N
@@ -265,17 +245,14 @@ def load_ancestry_specific_analysis(spark, phenotype):
                 .map(lambda v: v[1]) \
                 .toDF()
 
-        # compute the average EAF and average MAF for each variant
-        eafAvg = when(analysis.eafCountSum > 0, analysis.eafSum / analysis.eafCountSum) \
-            .otherwise(lit(None))
-        mafAvg = when(analysis.mafCountSum > 0, analysis.mafSum / analysis.mafCountSum) \
-            .otherwise(lit(None))
+        # # compute the average EAF and average MAF for each variant
+        # eafAvg = when(analysis.eafCountSum > 0, analysis.eafSum / analysis.eafCountSum) \
+        #     .otherwise(lit(None))
+        # mafAvg = when(analysis.mafCountSum > 0, analysis.mafSum / analysis.mafCountSum) \
+        #     .otherwise(lit(None))
 
         # add ancestry for partitioning and calculated eaf/maf averages
-        analysis = analysis \
-            .withColumn('ancestry', lit(ancestry)) \
-            .withColumn('eaf', eafAvg) \
-            .withColumn('maf', mafAvg)
+        analysis = analysis.withColumn('ancestry', lit(ancestry))
 
         # union all the variants together into a single data frame
         df.append(analysis)
@@ -289,7 +266,7 @@ def load_ancestry_specific_analysis(spark, phenotype):
         #       off with .partitionBy(), leaving all the other column ordering
         #       untouched.
 
-        # write out all the processed variants, rejoined with rare variants
+        # write out all the variants back to HDFS
         all_variants.write \
             .mode('overwrite') \
             .partitionBy('ancestry') \
@@ -309,17 +286,22 @@ def load_trans_ethnic_analysis(spark, phenotype):
     if not os.path.exists(srcdir):
         return
 
-    # NOTE: After loading the analysis, we need to make sure that the columns
-    #       are in the correct (expected) order for loading into Neo4j. To
-    #       do this, we select based on the same order output by the variant
-    #       partition script.
-
-    columns = [col(field.name) for field in variants_schema]
-
-    # load the analyses
+    # load the analyses - note that zScore is present for trans-ethnic!
     variants = load_analysis(spark, srcdir, overlap=False) \
         .withColumn('phenotype', lit(phenotype)) \
-        .select(*columns)
+        .select(
+            'varId',
+            'chromosome',
+            'position',
+            'reference',
+            'alt',
+            'phenotype',
+            'pValue',
+            'beta',
+            'zScore',
+            'stdErr',
+            'n',
+        )
 
     # filter the top variants across the genome for this phenotype
     top = variants \
