@@ -35,10 +35,6 @@ if __name__ == '__main__':
     ancestry = when(df.ancestry.isNull(), lit('Mixed')) \
         .otherwise(df.ancestry)
 
-    # if beta is invalid, use NA for METAL
-    effect = when(df.beta.isNull() | isnan(df.beta), lit('NA')) \
-        .otherwise(df.beta)
-
     # # keep a sum total across datasets for variants with EAF and/or MAF
     # eafCount = when(df.eaf.isNull() | isnan(df.eaf), 0).otherwise(1)
     # mafCount = when(df.maf.isNull() | isnan(df.maf), 0).otherwise(1)
@@ -56,6 +52,7 @@ if __name__ == '__main__':
         .filter(df.phenotype == args.phenotype) \
         .filter(~(df.multiAllelic == True)) \
         .filter(~(df.pValue.isNull() | isnan(df.pValue))) \
+        .filter(~(df.beta.isNull() | isnan(df.beta))) \
         .select(
             df.dataset,
             df.varId,
@@ -66,7 +63,7 @@ if __name__ == '__main__':
             df.phenotype,
             ancestry.alias('ancestry'),
             df.pValue,
-            effect.alias('beta'),
+            df.beta,
             df.stdErr,
             df.n,
             rare.alias('rare'),
