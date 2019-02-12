@@ -96,8 +96,8 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
 
     // first run+load ancestry-specific and then trans-ethnic
     val steps = Seq(
-      //JobStep.Script(runUri, "--ancestry-specific", phenotype),
-      //JobStep.PySpark(loadUri, "--ancestry-specific", phenotype),
+      JobStep.Script(runUri, "--ancestry-specific", phenotype),
+      JobStep.PySpark(loadUri, "--ancestry-specific", phenotype),
       JobStep.Script(runUri, "--trans-ethnic", phenotype),
       JobStep.PySpark(loadUri, "--trans-ethnic", phenotype)
     )
