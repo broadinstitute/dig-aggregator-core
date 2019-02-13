@@ -53,7 +53,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
       val bottomLine = s"out/metaanalysis/trans-ethnic/$phenotype/"
 
       for {
-        _ <- IO(logger.info(s"Creating Analysis node..."))
+        _ <- IO(logger.info(s"Creating analysis node for $phenotype..."))
 
         // delete the existing analysis and recreate it
         id <- analysis.create(graph)

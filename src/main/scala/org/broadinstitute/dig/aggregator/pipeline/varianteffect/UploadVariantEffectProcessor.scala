@@ -57,7 +57,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
       val transcripts        = s"$effects/transcript_consequences"
 
       for {
-        _ <- IO(logger.info(s"Preparing upload of variant effects..."))
+        _ <- IO(logger.info(s"Creating analysis node for variant effects..."))
 
         // delete the existing analysis and recreate it
         id <- analysis.create(graph)
