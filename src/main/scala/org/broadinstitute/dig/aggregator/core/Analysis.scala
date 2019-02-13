@@ -93,7 +93,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
 
     // tail-recursive accumulator helper method to count total deletions
     def deleteResults(total: Int): IO[Int] = {
-      val q = s"""|MATCH (n)<-[:PRODUCED]->(:Analysis {name: '$name'})
+      val q = s"""|MATCH (:Analysis {name: '$name'})<-[:PRODUCED]->(n)
                   |WITH n
                   |LIMIT 50000
                   |DETACH DELETE n

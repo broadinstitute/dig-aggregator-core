@@ -50,9 +50,9 @@ if __name__ == '__main__':
     # have a valid p-value
     df = df \
         .filter(df.phenotype == args.phenotype) \
-        .filter(~(df.multiAllelic == True)) \
-        .filter(~(df.pValue.isNull() | isnan(df.pValue))) \
-        .filter(~(df.beta.isNull() | isnan(df.beta))) \
+        .filter(df.multiAllelic == False) \
+        .filter(df.pValue.isNotNull() & ~isnan(df.pValue)) \
+        .filter(df.beta.isNotNull() & ~isnan(df.beta)) \
         .select(
             df.dataset,
             df.varId,

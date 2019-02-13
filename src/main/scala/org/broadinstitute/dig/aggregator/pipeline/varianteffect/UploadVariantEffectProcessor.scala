@@ -33,7 +33,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
    * All the processors this processor depends on.
    */
   override val dependencies: Seq[Processor.Name] = Seq(
-    VariantEffectPipeline.variantEffectProcessor,
+    VariantEffectPipeline.variantEffectProcessor
   )
 
   /**
@@ -118,10 +118,10 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |})
                 |
                 |// create the relationship to the analysis node
-                |MERGE (q)<-[:PRODUCED_BY]-(n)
+                |MERGE (q)-[:PRODUCED]->(n)
                 |
                 |// create the relationship to the variant
-                |MERGE (v)<-[:FOR_VARIANT]-(n)
+                |MERGE (v)-[:HAS_REGULATORY_FEATURE]->(n)
                 |""".stripMargin
 
     graph.run(q)
@@ -268,10 +268,10 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |})
                 |
                 |// create the relationship to the analysis node
-                |MERGE (n)-[:PRODUCED_BY]->(q)
+                |MERGE (q)-[:PRODUCED]->(n)
                 |
                 |// create the relationship to the variant
-                |MERGE (n)-[:FOR_VARIANT]->(v)
+                |MERGE (v)-[:HAS_TRANSCRIPT_CONSEQUENCE]->(n)
                 |""".stripMargin
 
     graph.run(q)

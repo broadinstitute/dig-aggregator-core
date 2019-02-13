@@ -49,37 +49,21 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
       val analysis = new Analysis(s"MetaAnalysis/$phenotype", Provenance.thisBuild)
       val graph    = new GraphDb(config.neo4j)
 
-      // the ancestries for each phenotype
-      val ancestries = Seq("AA", "AF", "EU", "HS", "EA", "SA")
-
-      // for each ancestry, collect upload the part files for it
-      def frequencies(id: Int) = for (ancestry <- ancestries) yield {
-        val parts = s"out/metaanalysis/ancestry-specific/$phenotype/ancestry=$ancestry"
-
-        for {
-          _ <- IO(logger.info(s"...Uploading $phenotype frequencies for $ancestry"))
-          _ <- analysis.uploadParts(aws, graph, id, parts)(uploadFrequencyResults(ancestry))
-        } yield ()
-      }
-
       // where the result files are to upload
-      val bottomLine = s"out/metaanalysis/trans-ethnic/$phenotype"
+      val bottomLine = s"out/metaanalysis/trans-ethnic/$phenotype/"
 
       for {
-        _ <- IO(logger.info(s"Preparing upload of $phenotype meta-analysis..."))
+        _ <- IO(logger.info(s"Creating Analysis node..."))
 
         // delete the existing analysis and recreate it
         id <- analysis.create(graph)
 
-        // find all the part files to upload for the analysis
-        _ <- IO(logger.info(s"Uploading frequencies for $phenotype..."))
-        _ <- frequencies(id).toList.sequence
-
         // find and upload all the bottom-line result part files
-        _ <- IO(logger.info(s"Uploading bottom-line results for $phenotype..."))
-        _ <- analysis.uploadParts(aws, graph, id, bottomLine)(uploadBottomLineResults)
+        _ <- IO(logger.info(s"Uploading results for $phenotype..."))
+        _ <- analysis.uploadParts(aws, graph, id, bottomLine)(uploadResults)
 
         // add the result to the database
+        _ <- IO(logger.info(s"Updating database..."))
         _ <- Run.insert(pool, name, Seq(phenotype), analysis.name)
         _ <- IO(logger.info("Done"))
       } yield ()
@@ -90,52 +74,9 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
   }
 
   /**
-   * Given a part file, upload it and create all the frequency nodes.
-   */
-  def uploadFrequencyResults(ancestry: String)(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
-    val q = s"""|USING PERIODIC COMMIT
-                |LOAD CSV WITH HEADERS FROM '$part' AS r
-                |FIELDTERMINATOR '\t'
-                |
-                |// lookup the analysis node
-                |MATCH (q:Analysis) WHERE ID(q)=$id
-                |
-                |// die if the ancestry or phenotype doesn't exist
-                |MATCH (a:Ancestry {name: '$ancestry'})
-                |MATCH (p:Phenotype {name: r.phenotype})
-                |
-                |// create the variant node if it doesn't exist
-                |MERGE (v:Variant {name: r.varId})
-                |ON CREATE SET
-                |  v.chromosome=r.chromosome,
-                |  v.position=toInteger(r.position),
-                |  v.reference=r.reference,
-                |  v.alt=r.alt
-                |
-                |WITH q, a, p, v, toFloat(r.eaf) AS eaf
-                |
-                |// create the Frequency node, calculate MAF
-                |CREATE (n:Frequency {
-                |  EAF: eaf,
-                |  MAF: CASE WHEN eaf < 0.5 THEN eaf ELSE 1.0 - eaf END
-                |})
-                |
-                |// create the link from the analysis to this node
-                |CREATE (q)-[:PRODUCED]->(n)
-                |
-                |// create the relationships
-                |CREATE (v)-[:FREQUENCY]->(n)
-                |CREATE (p)-[:FREQUENCY]->(n)
-                |CREATE (a)-[:FREQUENCY]->(n)
-                |""".stripMargin
-
-    graph.run(q)
-  }
-
-  /**
    * Given a part file, upload it and create all the bottom-line nodes.
    */
-  def uploadBottomLineResults(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
+  def uploadResults(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
@@ -154,11 +95,12 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |  v.reference=r.reference,
                 |  v.alt=r.alt
                 |
-                |// create the MetaAnalysis result node
+                |// create the result node
                 |CREATE (n:MetaAnalysis {
                 |  pValue: toFloat(r.pValue),
                 |  beta: toFloat(r.beta),
                 |  stdErr: toFloat(r.stdErr),
+                |  zScore: toFloat(r.zScore),
                 |  n: toInteger(r.n)
                 |})
                 |
@@ -166,7 +108,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |CREATE (q)-[:PRODUCED]->(n)
                 |
                 |// create the relationship to the trait and variant
-                |CREATE (p)-[:META_ANALYSIS]->(n)<-[:META_ANALYSIS]->(v)
+                |CREATE (p)-[:HAS_META_ANALYSIS]->(n)<-[:HAS_META_ANALYSIS]-(v)
                 |
                 |// if a top result, mark it as such
                 |FOREACH(i IN (CASE toBoolean(r.top) WHEN true THEN [1] ELSE [] END) |

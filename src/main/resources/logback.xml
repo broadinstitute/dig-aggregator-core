@@ -40,7 +40,7 @@
            etc
     -->
 
-    <logger name="org.broadinstitute.dig.aggregator.core" level="${aggregator-log-level:-INFO}"/>
+    <logger name="org.broadinstitute.dig.aggregator.core" level="${aggregator-log-level:-DEBUG}"/>
 
     <logger name="com.zaxxer.hikari" level="WARN"/>
 
