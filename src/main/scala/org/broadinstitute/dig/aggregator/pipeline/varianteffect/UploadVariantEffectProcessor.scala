@@ -291,7 +291,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |WITH n, g LIMIT {limit}
                 |
                 |// connect the transcript consequence to the gene
-                |MERGE (n)-[:FOR_GENE]->(g)
+                |MERGE (g)-[:HAS_TRANSCRIPT_CONSEQUENCE]->(n)
                 |""".stripMargin
 
     // run the query using the APOC function
