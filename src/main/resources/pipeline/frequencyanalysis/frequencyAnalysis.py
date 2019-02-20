@@ -109,15 +109,16 @@ if __name__ == '__main__':
     # for each ancestry, calculate average EAF and MAF per variant
     ancestry_dfs = [calc_freq(df, row[0]) for row in ancestries]
 
-    # join all the ancestries together into a single dataframe
-    all_freqs = functools.reduce(lambda a, b: a.union(b), ancestry_dfs)
+    # join all the ancestries together into a single dataframe and write them
+    if len(ancestry_dfs) > 0:
+        all_freqs = functools.reduce(lambda a, b: a.union(b), ancestry_dfs)
 
-    # write out all the frequencies
-    all_freqs \
-        .withColumn('phenotype', lit(args.phenotype)) \
-        .write \
-        .mode('overwrite') \
-        .csv(outdir, sep='\t', header=True)
+        # write out all the frequencies
+        all_freqs \
+            .withColumn('phenotype', lit(args.phenotype)) \
+            .write \
+            .mode('overwrite') \
+            .csv(outdir, sep='\t', header=True)
 
     # done
     spark.stop()
