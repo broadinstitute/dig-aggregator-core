@@ -13,23 +13,11 @@ s3dir = 's3://dig-analysis-data'
 def calc_freq(df, ancestry):
     variants = df.filter(df.ancestry == ancestry)
 
-    # calculate MAF from EAF when not present
-    calc_maf = when(variants.maf.isNotNull(), variants.maf) \
-        .otherwise(
-            when(variants.eaf.isNull() | isnan(variants.eaf), lit(None)) \
-                .otherwise(
-                    when(variants.eaf < 0.5, variants.eaf) \
-                        .otherwise(1.0 - variants.eaf)
-                )
-        )
-
     # find all variants with a value EAF
     eaf = variants.select(variants.varId, variants.eaf) \
         .filter(variants.eaf.isNotNull() & (~isnan(variants.eaf)))
-
-    # find all variants with MAF (or calculate from EAF if possible)
-    maf = variants.select(variants.varId, calc_maf.alias('maf')) \
-        .filter(col('maf').isNotNull())
+    maf = variants.select(variants.varId, variants.maf) \
+        .filter(variants.maf.isNotNull() & (~isnan(variants.maf)))
 
     # locus information for each variant (to merge later)
     loci = variants.select(
