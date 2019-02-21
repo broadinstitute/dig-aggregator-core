@@ -5,7 +5,7 @@ import functools
 import platform
 
 from pyspark.sql import SparkSession, Row
-from pyspark.sql.functions import isnan, lit, when  # pylint: disable=E0611
+from pyspark.sql.functions import col, isnan, lit, when  # pylint: disable=E0611
 
 s3dir = 's3://dig-analysis-data'
 
@@ -13,11 +13,23 @@ s3dir = 's3://dig-analysis-data'
 def calc_freq(df, ancestry):
     variants = df.filter(df.ancestry == ancestry)
 
-    # find all variants with a value EAF and/or MAF
+    # calculate MAF from EAF when not present
+    calc_maf = when(variants.maf.isNotNull(), variants.maf) \
+        .otherwise(
+            when(variants.eaf.isNull() | isnan(variants.eaf), lit(None)) \
+                .otherwise(
+                    when(variants.eaf < 0.5, variants.eaf) \
+                        .otherwise(1.0 - variants.eaf)
+                )
+        )
+
+    # find all variants with a value EAF
     eaf = variants.select(variants.varId, variants.eaf) \
         .filter(variants.eaf.isNotNull() & (~isnan(variants.eaf)))
-    maf = variants.select(variants.varId, variants.maf) \
-        .filter(variants.eaf.isNotNull() & (~isnan(variants.maf)))
+
+    # find all variants with MAF (or calculate from EAF if possible)
+    maf = variants.select(variants.varId, calc_maf.alias('maf')) \
+        .filter(col('maf').isNotNull())
 
     # locus information for each variant (to merge later)
     loci = variants.select(
@@ -53,7 +65,8 @@ def calc_freq(df, ancestry):
             .toDF()
 
     # join the EAF and MAF values together (outer) and then join locus (inner)
-    comb_df = maf.join(eaf, 'varId', 'outer') \
+    comb_df = maf \
+        .join(eaf, 'varId', 'outer') \
         .join(loci, 'varId', 'inner')
 
     # final dataframe for this ancestry
