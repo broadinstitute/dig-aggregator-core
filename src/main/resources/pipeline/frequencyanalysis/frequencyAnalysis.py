@@ -13,10 +13,19 @@ s3dir = 's3://dig-analysis-data'
 def calc_freq(df, ancestry):
     variants = df.filter(df.ancestry == ancestry)
 
-    # find all variants with a value EAF or MAF
+    # find all variants with a value EAF
     eaf = variants.select(variants.varId, variants.eaf) \
         .filter(variants.eaf.isNotNull() & (~isnan(variants.eaf)))
-    maf = variants.select(variants.varId, variants.maf) \
+
+    # find all variants with MAF (or use EAF to calculate MAF)
+    maf = variants.select(
+            variants.varId,
+            when(variants.maf.isNotNull(), variants.maf) \
+                .otherwise(
+                    when(variants.eaf < 0.5, variants.eaf).otherwise(1.0 - variants.eaf)
+                ) \
+                .alias('maf')
+        ) \
         .filter(variants.maf.isNotNull() & (~isnan(variants.maf)))
 
     # locus information for each variant (to merge later)
@@ -56,12 +65,6 @@ def calc_freq(df, ancestry):
     comb_df = maf.join(eaf, 'varId', 'outer') \
         .join(loci, 'varId', 'inner')
 
-    # if MAF isn't set, but EAF is, then use EAF to calculate MAF
-    maf = when(comb_df.maf.isNotNull(), comb_df.maf) \
-        .otherwise(
-            when(comb_df.eaf < 0.5, comb_df.eaf).otherwise(1.0 - comb_df.eaf)
-        )
-
     # final dataframe for this ancestry
     return comb_df.select(
         comb_df.varId,
@@ -70,7 +73,7 @@ def calc_freq(df, ancestry):
         comb_df.reference,
         comb_df.alt,
         comb_df.eaf,
-        maf.alias('maf'),
+        comb_df.maf,
         lit(ancestry).alias('ancestry'),
     )
 

@@ -1,4 +1,4 @@
-package org.broadinstitute.dig.aggregator.pipeline.ldscore
+package org.broadinstitute.dig.aggregator.pipeline.ldclumping
 
 import cats._
 import cats.effect._

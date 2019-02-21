@@ -1,4 +1,4 @@
-package org.broadinstitute.dig.aggregator.pipeline.ldscore
+package org.broadinstitute.dig.aggregator.pipeline.ldclumping
 
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.processors.Processor

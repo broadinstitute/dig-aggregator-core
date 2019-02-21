@@ -110,7 +110,7 @@ object Pipeline {
   def pipelines(): Map[String, Pipeline] = Map(
     "MetaAnalysisPipeline"      -> metaanalysis.MetaAnalysisPipeline,
     "FrequencyAnalysisPipeline" -> frequencyanalysis.FrequencyAnalysisPipeline,
-    "LDClumpingPipeline"        -> ldscore.LDClumpingPipeline,
+    "LDClumpingPipeline"        -> ldclumping.LDClumpingPipeline,
     "VariantEffectPipeline"     -> varianteffect.VariantEffectPipeline
   )
 
