@@ -37,15 +37,22 @@ class GraphDb(config: Neo4jConfig) {
 
   /**
    * Run a query, retry if something bad happens with exponential backoff.
+   *
+   * Create a session to run the query, and guarantee that the session closes
+   * even if something bad happens.
    */
   def run(query: String, params: Map[String, AnyRef]): IO[StatementResult] = {
-    retry(IO(driver.session.run(query, params.asJava)), 10.seconds)
+    for {
+      session <- IO(driver.session)
+
+      // try multiple times to complete the operation, but always close the session
+      result <- retry(IO(session.run(query, params.asJava)), 10.seconds)
+        .guarantee { IO(session.close) }
+    } yield result
   }
 
   /**
    * Version of run with no parameters.
    */
-  def run(query: String): IO[StatementResult] = {
-    retry(IO(driver.session.run(query)), 10.seconds)
-  }
+  def run(query: String): IO[StatementResult] = run(query, Map.empty)
 }
