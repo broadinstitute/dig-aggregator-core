@@ -46,10 +46,10 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val datasets = results.map(_.output).distinct
+    val graph    = new GraphDb(config.neo4j)
 
     val ios = for (dataset <- datasets) yield {
       val analysis = new Analysis(s"VEP", Provenance.thisBuild)
-      val graph    = new GraphDb(config.neo4j)
 
       // where the output is located
       val effects            = s"out/varianteffect/effects"
@@ -83,7 +83,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
     }
 
     // process each phenotype serially
-    ios.toList.sequence >> IO.unit
+    (ios.toList.sequence >> IO.unit).guarantee(graph.shutdown)
   }
 
   /**

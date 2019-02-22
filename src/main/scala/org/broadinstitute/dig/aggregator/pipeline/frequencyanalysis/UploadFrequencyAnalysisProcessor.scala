@@ -47,7 +47,7 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
       // where the result files are to upload
       val bottomLine = s"out/frequencyanalysis/$phenotype/"
 
-      for {
+      val io = for {
         _ <- IO(logger.info(s"Creating frequency analysis node for $phenotype..."))
 
         // delete the existing analysis and recreate it
@@ -62,6 +62,9 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
         _ <- Run.insert(pool, name, Seq(phenotype), analysis.name)
         _ <- IO(logger.info("Done"))
       } yield ()
+
+      // ensure the connection to the database is closed
+      io.guarantee(graph.shutdown)
     }
 
     // process each phenotype serially

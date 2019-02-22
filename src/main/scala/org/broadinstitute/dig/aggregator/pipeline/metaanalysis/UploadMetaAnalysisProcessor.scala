@@ -43,13 +43,11 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val phenotypes = results.map(_.output).distinct
+    val graph      = new GraphDb(config.neo4j)
 
     // create runs for every phenotype
     val ios = for (phenotype <- phenotypes) yield {
-      val analysis = new Analysis(s"MetaAnalysis/$phenotype", Provenance.thisBuild)
-      val graph    = new GraphDb(config.neo4j)
-
-      // where the result files are to upload
+      val analysis   = new Analysis(s"MetaAnalysis/$phenotype", Provenance.thisBuild)
       val bottomLine = s"out/metaanalysis/trans-ethnic/$phenotype/"
 
       for {
@@ -70,7 +68,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
     }
 
     // process each phenotype serially
-    ios.toList.sequence >> IO.unit
+    (ios.toList.sequence >> IO.unit).guarantee(graph.shutdown)
   }
 
   /**
