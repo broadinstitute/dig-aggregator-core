@@ -30,7 +30,7 @@ class GraphDb(config: Neo4jConfig) {
     // set custom connection settings
     val settings = Config.build
       .withMaxConnectionLifetime(24, TimeUnit.HOURS)
-      .withConnectionLivenessCheckTimeout(2, TimeUnit.MINUTES)
+      .withConnectionLivenessCheckTimeout(10, TimeUnit.MINUTES)
 
     GraphDatabase.driver(config.url, auth, settings.toConfig)
   }
