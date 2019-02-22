@@ -46,7 +46,7 @@ class GraphDb(config: Neo4jConfig) {
       session <- IO(driver.session)
 
       // try multiple times to complete the operation, but always close the session
-      result <- retry(IO(session.run(query, params.asJava)), 10.seconds)
+      result <- retry(IO(session.run(query, params.asJava)))
         .guarantee { IO(session.close) }
     } yield result
   }

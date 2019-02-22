@@ -39,7 +39,7 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends D
     "pipeline/varianteffect/master-bootstrap.sh",
     "pipeline/varianteffect/prepareDatasets.py",
     "pipeline/varianteffect/runVEP.py",
-    "pipeline/varianteffect/loadVariantEffects.py",
+    "pipeline/varianteffect/loadVariantEffects.py"
   )
 
   /**
@@ -54,22 +54,28 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends D
     val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.py")
     val loadScript       = aws.uriOf("resources/pipeline/varianteffect/loadVariantEffects.py")
 
+    val sparkConf = ApplicationConfig.sparkEnv.withProperties(
+      "PYSPARK_PYTHON" -> "/usr/bin/python3"
+    )
+
     // build the cluster definition
     val cluster = Cluster(
       name = name.toString,
       masterInstanceType = InstanceType.c5_4xlarge,
-      instances = 3,
+      slaveInstanceType = InstanceType.c5_2xlarge,
+      instances = 5,
+      configurations = Seq(sparkConf),
       bootstrapScripts = Seq(
         new BootstrapScript(clusterBootstrap),
         new BootstrapScript(masterBootstrap) // TODO: Use MasterBootstrapScript once AWS fixes their bug!
-      ),
+      )
     )
 
     // first prepare, then run VEP, finally, load VEP to S3
     val steps = Seq(
       JobStep.PySpark(prepareScript),
       JobStep.Script(runScript),
-      JobStep.PySpark(loadScript),
+      JobStep.PySpark(loadScript)
     )
 
     // run all the jobs (note: this could be done in parallel!)
