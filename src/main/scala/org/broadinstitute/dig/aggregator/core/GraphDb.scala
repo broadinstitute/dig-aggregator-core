@@ -30,7 +30,7 @@ class GraphDb(config: Neo4jConfig) {
     // set custom connection settings
     val settings = Config.build
       .withMaxConnectionLifetime(24, TimeUnit.HOURS)
-      .withConnectionLivenessCheckTimeout(10, TimeUnit.MINUTES)
+      .withConnectionLivenessCheckTimeout(30, TimeUnit.MINUTES)
       .withoutEncryption
 
     GraphDatabase.driver(config.url, auth, settings.toConfig)
@@ -48,13 +48,13 @@ class GraphDb(config: Neo4jConfig) {
    * even if something bad happens.
    */
   def run(query: String, params: Map[String, AnyRef]): IO[StatementResult] = {
-    for {
+    val io = for {
       session <- IO(driver.session)
-
-      // try multiple times to complete the operation, but always close the session
-      result <- retry(IO(session.run(query, params.asJava)))
-        .guarantee { IO(session.close) }
+      result  <- IO(session.run(query, params.asJava)).guarantee(IO(session.close))
     } yield result
+
+    // make sure that if an error occurs, a new session is used for the retry
+    retry(io)
   }
 
   /**
