@@ -15,13 +15,15 @@ sudo yum install -y docker
 sudo service docker start
 
 # fetch VEP from docker hub
-sudo docker pull ensemblorg/ensembl-vep
+sudo docker pull ensemblorg/ensembl-vep:release_94.5
 
 # enable users to run docker commands
 sudo usermod -a -G docker hadoop
 
-# which reference genome to install (see: https://www.gencodegenes.org/human/release_29lift37.html)
+# which cache file to install (see: http://grch37.ensembl.org/info/docs/tools/vep/script/vep_cache.html#cache)
 GENOME=homo_sapiens_vep_94_GRCh37.tar.gz
+
+# which reference genome to install (see: https://www.gencodegenes.org/human/release_29lift37.html)
 FASTA=GRCh37.primary_assembly.genome.fa.gz
 
 # where the VEP reference genome cache and plugins will be installed
