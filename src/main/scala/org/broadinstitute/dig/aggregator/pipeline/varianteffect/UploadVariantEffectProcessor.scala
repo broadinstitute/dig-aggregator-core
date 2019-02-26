@@ -9,6 +9,7 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.processors._
 
 import org.neo4j.driver.v1.Driver
+import org.neo4j.driver.v1.Session
 import org.neo4j.driver.v1.StatementResult
 
 /**
@@ -89,7 +90,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
   /**
    * Given a part file, upload it and create all the regulatory feature nodes.
    */
-  def uploadRegulatoryFeatures(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
+  def uploadRegulatoryFeatures(session: Session, id: Int, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
@@ -124,13 +125,13 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |MERGE (v)-[:HAS_REGULATORY_FEATURE]->(n)
                 |""".stripMargin
 
-    graph.run(q)
+    IO(session.run(q))
   }
 
   /**
    * Given a part file, upload it and create all the transcript nodes.
    */
-  def uploadTranscripts(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
+  def uploadTranscripts(session: Session, id: Int, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
@@ -274,7 +275,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |MERGE (v)-[:HAS_TRANSCRIPT_CONSEQUENCE]->(n)
                 |""".stripMargin
 
-    graph.run(q)
+    IO(session.run(q))
   }
 
   /**
@@ -288,7 +289,8 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |WHERE exists(n.geneId) AND NOT ((n)-[:FOR_GENE]->(g))
                 |
                 |// limit the size for each call (using APOC)
-                |WITH n, g LIMIT {limit}
+                |WITH n, g
+                |LIMIT {limit}
                 |
                 |// connect the transcript consequence to the gene
                 |MERGE (g)-[:HAS_TRANSCRIPT_CONSEQUENCE]->(n)
