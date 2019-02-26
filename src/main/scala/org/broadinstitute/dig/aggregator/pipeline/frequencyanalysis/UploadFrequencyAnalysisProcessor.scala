@@ -76,7 +76,7 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
    * Given a part file, upload it and create all the bottom-line nodes.
    */
   def uploadResults(session: Session, id: Int, part: String): IO[StatementResult] = {
-    val q = s"""|USING PERIODIC COMMIT
+    val q = s"""|USING PERIODIC COMMIT 100000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |

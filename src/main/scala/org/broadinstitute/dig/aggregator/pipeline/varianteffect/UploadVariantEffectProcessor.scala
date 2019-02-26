@@ -91,7 +91,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
    * Given a part file, upload it and create all the regulatory feature nodes.
    */
   def uploadRegulatoryFeatures(session: Session, id: Int, part: String): IO[StatementResult] = {
-    val q = s"""|USING PERIODIC COMMIT
+    val q = s"""|USING PERIODIC COMMIT 100000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
@@ -132,7 +132,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
    * Given a part file, upload it and create all the transcript nodes.
    */
   def uploadTranscripts(session: Session, id: Int, part: String): IO[StatementResult] = {
-    val q = s"""|USING PERIODIC COMMIT
+    val q = s"""|USING PERIODIC COMMIT 100000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
