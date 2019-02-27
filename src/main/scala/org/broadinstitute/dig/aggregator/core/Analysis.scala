@@ -7,9 +7,9 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 
 import org.broadinstitute.dig.aggregator.core.processors.Processor
+import org.broadinstitute.dig.aggregator.core.Utils.retry
 
 import org.neo4j.driver.v1.Driver
-import org.neo4j.driver.v1.Session
 import org.neo4j.driver.v1.StatementResult
 
 /**
@@ -27,34 +27,34 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
    * each, allowing the CSV to be written to Neo4j.
    */
   def uploadParts(aws: AWS, graph: GraphDb, analysisId: Int, s3path: String)(
-      uploadPart: (Session, Int, String) => IO[StatementResult]
+      uploadPart: (GraphDb, Int, String) => IO[StatementResult]
   ): IO[Unit] = {
-    graph.runWithSession { session =>
-      for {
-        listing <- aws.ls(s3path)
+    for {
+      listing <- aws.ls(s3path)
 
-        // only keep the part files that are CSV files which can be loaded
-        parts = listing.filter(_.toLowerCase.endsWith(".csv"))
+      // only keep the part files that are CSV files which can be loaded
+      parts = listing.filter(_.toLowerCase.endsWith(".csv"))
 
-        // indicate how many parts are being uploaded
-        _ <- IO(logger.debug(s"Uploading ${parts.size} part files..."))
+      // indicate how many parts are being uploaded
+      _ <- IO(logger.debug(s"Uploading ${parts.size} part files..."))
 
-        // create an IO statement for each part and upload it
-        uploads = for ((part, n) <- parts.zipWithIndex) yield {
-          for (result <- uploadPart(session, analysisId, aws.publicUrlOf(part))) yield {
-            val counters = result.consume.counters
-            val nodes    = counters.nodesCreated
-            val edges    = counters.relationshipsCreated
+      // create an IO statement for each part and upload it
+      uploads = for ((part, n) <- parts.zipWithIndex) yield {
+        val upload = retry(uploadPart(graph, analysisId, aws.publicUrlOf(part)))
 
-            logger.debug(s"...$nodes nodes & $edges relationships created (${n + 1}/${parts.size})")
-          }
+        for (result <- upload) yield {
+          val counters = result.consume.counters
+          val nodes    = counters.nodesCreated
+          val edges    = counters.relationshipsCreated
+
+          logger.debug(s"...$nodes nodes & $edges relationships created (${n + 1}/${parts.size})")
         }
+      }
 
-        // upload each part serially
-        _ <- uploads.toList.sequence
-        _ <- IO(logger.debug("Upload complete"))
-      } yield ()
-    }
+      // upload each part serially
+      _ <- uploads.toList.sequence
+      _ <- IO(logger.debug("Upload complete"))
+    } yield ()
   }
 
   /**
@@ -91,7 +91,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
   def delete(graph: GraphDb): IO[Unit] = {
 
     // tail-recursive accumulator helper method to count total deletions
-    def deleteResults(session: Session, total: Int): IO[Int] = {
+    def deleteResults(total: Int): IO[Int] = {
       val q = s"""|MATCH (:Analysis {name: '$name'})<-[:PRODUCED]->(n)
                   |WITH n
                   |LIMIT 50000
@@ -99,8 +99,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
                   |""".stripMargin
 
       // run the query
-      val io = IO {
-        val result   = session.run(q)
+      val io = for (result <- graph.run(q)) yield {
         val counters = result.consume.counters
         val nodes    = counters.nodesDeleted
         val edges    = counters.relationshipsDeleted
@@ -109,9 +108,9 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
       }
 
       // recurse until nothing is deleted, then delete the analysis
-      io.flatMap {
+      retry(io).flatMap {
         case (0, 0)         => IO(total)
-        case (nodes, edges) => deleteResults(session, total + nodes + edges)
+        case (nodes, edges) => deleteResults(total + nodes + edges)
       }
     }
 
@@ -121,7 +120,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
      */
 
     for {
-      totalDeleted <- graph.runWithSession(deleteResults(_, 0))
+      totalDeleted <- deleteResults(0)
 
       // delete the actual analysis node
       q = s"""|MATCH (n:Analysis {name: '$name'})

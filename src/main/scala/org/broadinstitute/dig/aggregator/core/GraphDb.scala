@@ -42,36 +42,28 @@ class GraphDb(config: Neo4jConfig) {
   def shutdown(): IO[Unit] = IO(driver.close)
 
   /**
-   * Create a session and execute a body of code with it. If something goes
-   * wrong, attempt to retry running the body with a new session.
-   */
-  def runWithSession[A](body: Session => IO[A]): IO[A] = {
-    val io = for {
-      session <- IO(driver.session)
-      result  <- body(session).guarantee(IO(session.close))
-    } yield result
-
-    retry(io)
-  }
-
-  /**
    * Run a query, retry if something bad happens with exponential backoff.
    *
    * Create a session to run the query, and guarantee that the session closes
    * even if something bad happens.
    */
   def run(query: String, params: Map[String, AnyRef]): IO[StatementResult] = {
-    runWithSession { session =>
-      IO(session.run(query, params.asJava))
-    }
+    for {
+      session <- IO(driver.session)
+
+      // run the query, close it
+      run   = IO(session.run(query, params.asJava))
+      close = IO(session.close)
+
+      // retry the query on failure, always close the session when done
+      result <- retry(run).guarantee(close)
+    } yield result
   }
 
   /**
    * Version of run with no parameters.
    */
   def run(query: String): IO[StatementResult] = {
-    runWithSession { session =>
-      IO(session.run(query))
-    }
+    run(query, Map.empty)
   }
 }

@@ -75,8 +75,8 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
   /**
    * Given a part file, upload it and create all the bottom-line nodes.
    */
-  def uploadResults(session: Session, id: Int, part: String): IO[StatementResult] = {
-    val q = s"""|USING PERIODIC COMMIT 100000
+  def uploadResults(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
+    val q = s"""|USING PERIODIC COMMIT 10000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
@@ -110,6 +110,6 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
                 |CREATE (a)-[:HAS_FREQUENCY]->(n)
                 |""".stripMargin
 
-    IO(session.run(q))
+    graph.run(q)
   }
 }
