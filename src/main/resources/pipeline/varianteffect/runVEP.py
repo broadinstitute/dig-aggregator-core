@@ -12,7 +12,6 @@ import re
 import shutil
 import subprocess
 import sys
-import vcf
 
 # where in S3 VEP data (input and output) is
 s3dir = 's3://dig-analysis-data/out/varianteffect'
@@ -303,7 +302,7 @@ def run_vep_in_docker(data_pathname, output_pathname):
     stop_container(container)
 
 
-def run_vep(input_path, output_path):
+def run_vep(input_path, output_path, s3_outdir):
     """
     Run VEP over each of the part files in the directory.
     """
@@ -311,7 +310,7 @@ def run_vep(input_path, output_path):
     parts.sort()
 
     # run VEP over each part file (note: use the mounted directory for docker!)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
         jobs = []
 
         # run VEP in parallel over all the input part files
@@ -333,20 +332,37 @@ def run_vep(input_path, output_path):
             if job.exception() is not None:
                 raise job.exception()
 
+        # just to ensure that the `aws` command does the right thing
+        if not s3_outdir.endswith('/'):
+            s3_outdir += '/'
+
+        # copy output JSON files back to S3, delete whatever is there first
+        subprocess.check_call(['aws', 's3', 'rm', s3_outdir, '--recursive'])
+        subprocess.check_call(['aws', 's3', 'cp', output_path, s3_outdir, '--recursive'])
+
 
 if __name__ == '__main__':
     """
-    No arguments.
+    @param dataset e.g. `GWAS_CAMP`
+    @param phenotype e.g. `T2D`
     """
     print('python version=%s' % platform.python_version())
     print('user=%s' % os.getenv('USER'))
 
-    # source location in S3 where the input and output tables are
-    srcdir = '%s/variants' % s3dir
+    opts = argparse.ArgumentParser()
+    opts.add_argument('dataset')
+    opts.add_argument('phenotype')
+
+    # parse the command line parameters
+    args = opts.parse_args()
+
+    # source location in S3 where the input and output JSON are
+    srcdir = '%s/variants/%s/%s' % (s3dir, args.dataset, args.phenotype)
+    outdir = '%s/effects/%s/%s' % (s3dir, args.dataset, args.phenotype)
 
     # local fs location where VEP will read data from and write to
-    variantdir = '%s/variants' % localdir
-    effectdir = '%s/effects' % localdir
+    variantdir = '%s/variants/%s/%s' % (localdir, args.dataset, args.phenotype)
+    effectdir = '%s/effects/%s/%s' % (localdir, args.dataset, args.phenotype)
 
     # if the data directory already exists, nuke it
     subprocess.check_call(['rm', '-rf', variantdir])
@@ -363,4 +379,4 @@ if __name__ == '__main__':
     subprocess.check_call(['aws', 's3', 'cp', srcdir, variantdir, '--recursive', '--exclude=_SUCCESS'])
 
     # run VEP over each part file, generate a matching part file
-    run_vep(variantdir, effectdir)
+    run_vep(variantdir, effectdir, outdir)

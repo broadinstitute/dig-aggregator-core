@@ -13,14 +13,26 @@ s3dir = 's3://dig-analysis-data'
 # entry point
 if __name__ == '__main__':
     """
-    By default all datasets will be used, but optionally can be limited to 
-    a single study and phenotype.
+    While variants across datasets may be shared (duplicating the work of VEP),
+    it's actually quicker to just process them, upload the results, and -
+    before loading them into the database - grab only a single result across
+    all of them as the output will be identical.
+    
+    @param dataset e.g. `GWAS_CAMP`
+    @param phenotype e.g. `T2D`
     """
     print('Python version: %s' % platform.python_version())
 
+    opts = argparse.ArgumentParser()
+    opts.add_argument('dataset')
+    opts.add_argument('phenotype')
+
+    # parse the command line parameters
+    args = opts.parse_args()
+
     # get the source and output directories
-    srcdir = '%s/variants/*/*' % s3dir
-    outdir = '%s/out/varianteffect/variants' % s3dir
+    srcdir = '%s/variants/%s/%s' % (s3dir, args.dataset, args.phenotype)
+    outdir = '%s/out/varianteffect/variants/%s/%s' % (s3dir, args.dataset, args.phenotype)
 
     # create a spark session
     spark = SparkSession.builder.appName('varianteffect').getOrCreate()
@@ -35,13 +47,6 @@ if __name__ == '__main__':
             'alt',
         )
 
-    # only keep each variant once, doesn't matter what dataset it came from
-    df = df.rdd \
-        .keyBy(lambda v: v.varId) \
-        .reduceByKey(lambda a, b: a) \
-        .map(lambda v: v[1]) \
-        .toDF()
-
     # get the length of the reference and alternate alleles
     ref_len = length(df.reference)
     alt_len = length(df.alt)
@@ -51,11 +56,11 @@ if __name__ == '__main__':
     #
     # See: https://useast.ensembl.org/info/docs/tools/vep/vep_formats.html
     #
-    end = when(alt_len > ref_len, df.position + alt_len - 1) \
+    end = when(ref_len == 0, df.position + alt_len - 1) \
         .otherwise(df.position + ref_len - 1)
 
-    # for inserts, start = end-1
-    start = when(alt_len > ref_len, end - 1) \
+    # check for insertion
+    start = when(ref_len == 0, end + 1) \
         .otherwise(df.position)
 
     # join the reference and alternate alleles together

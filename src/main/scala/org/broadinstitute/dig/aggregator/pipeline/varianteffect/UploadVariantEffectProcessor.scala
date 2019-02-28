@@ -34,7 +34,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
    * All the processors this processor depends on.
    */
   override val dependencies: Seq[Processor.Name] = Seq(
-    VariantEffectPipeline.variantEffectProcessor
+    VariantEffectPipeline.joinVariantEffectProcessor
   )
 
   /**
@@ -53,9 +53,8 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
       val analysis = new Analysis(s"VEP", Provenance.thisBuild)
 
       // where the output is located
-      val effects            = s"out/varianteffect/effects"
-      val regulatoryFeatures = s"$effects/regulatory_feature_consequences"
-      val transcripts        = s"$effects/transcript_consequences"
+      val regulatoryFeatures = s"out/varianteffect/regulatory_feature_consequences"
+      val transcripts        = s"out/varianteffect/transcript_consequences"
 
       for {
         _ <- IO(logger.info(s"Creating analysis node for variant effects..."))

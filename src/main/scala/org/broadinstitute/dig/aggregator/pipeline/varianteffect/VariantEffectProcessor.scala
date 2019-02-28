@@ -37,9 +37,8 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends D
   override val resources: Seq[String] = Seq(
     "pipeline/varianteffect/cluster-bootstrap.sh",
     "pipeline/varianteffect/master-bootstrap.sh",
-    "pipeline/varianteffect/prepareDatasets.py",
-    "pipeline/varianteffect/runVEP.py",
-    "pipeline/varianteffect/loadVariantEffects.py"
+    "pipeline/varianteffect/prepareVariants.py",
+    "pipeline/varianteffect/runVEP.py"
   )
 
   /**
@@ -48,9 +47,34 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends D
    * there is only a single analysis node for all variants.
    */
   override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
+    val pattern = raw"([^/]+)/(.*)".r
+
+    // get a list of all the phenotypes that need processed
+    val datasetPhenotypes = datasets.map(_.dataset).collect {
+      case pattern(dataset, phenotype) => (dataset, phenotype)
+    }
+
+    // create a job for each dataset
+    val jobs = datasetPhenotypes.map {
+      case (dataset, phentoype) => processDataset(dataset, phentoype)
+    }
+
+    // the "output" is the same across all datasets
+    val run = Run.insert(pool, name, datasets.map(_.dataset), "VEP")
+
+    // run all the jobs then update the database
+    for {
+      _ <- aws.waitForJobs(jobs)
+      _ <- IO(logger.info("Updating database..."))
+      _ <- run
+      _ <- IO(logger.info("Done"))
+    } yield ()
+  }
+
+  private def processDataset(dataset: String, phenotype: String): IO[RunJobFlowResult] = {
     val clusterBootstrap = aws.uriOf("resources/pipeline/varianteffect/cluster-bootstrap.sh")
     val masterBootstrap  = aws.uriOf("resources/pipeline/varianteffect/master-bootstrap.sh")
-    val prepareScript    = aws.uriOf("resources/pipeline/varianteffect/prepareDatasets.py")
+    val prepareScript    = aws.uriOf("resources/pipeline/varianteffect/prepareVariants.py")
     val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.py")
     val loadScript       = aws.uriOf("resources/pipeline/varianteffect/loadVariantEffects.py")
 
@@ -63,7 +87,7 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends D
       name = name.toString,
       masterInstanceType = InstanceType.c5_4xlarge,
       slaveInstanceType = InstanceType.c5_2xlarge,
-      instances = 5,
+      instances = 3,
       configurations = Seq(sparkConf),
       bootstrapScripts = Seq(
         new BootstrapScript(clusterBootstrap),
@@ -73,18 +97,17 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends D
 
     // first prepare, then run VEP, finally, load VEP to S3
     val steps = Seq(
-      JobStep.PySpark(prepareScript),
-      JobStep.Script(runScript),
-      JobStep.PySpark(loadScript)
+      JobStep.PySpark(prepareScript, dataset, phenotype),
+      JobStep.Script(runScript, dataset, phenotype)
+      //JobStep.PySpark(loadScript, dataset, phenotype)
     )
+
+    val inOut = s"$dataset/$phenotype"
 
     // run all the jobs (note: this could be done in parallel!)
     for {
-      _   <- IO(logger.info(s"Running VEP..."))
+      _   <- IO(logger.info(s"Running VEP on $dataset/$phenotype..."))
       job <- aws.runJob(cluster, steps)
-      _   <- aws.waitForJob(job)
-      _   <- Run.insert(pool, name, datasets.map(_.dataset), "out/varianteffect/effects")
-      _   <- IO(logger.info("Done"))
-    } yield ()
+    } yield job
   }
 }
