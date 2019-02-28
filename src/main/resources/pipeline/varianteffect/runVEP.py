@@ -310,7 +310,7 @@ def run_vep(input_path, output_path, s3_outdir):
     parts.sort()
 
     # run VEP over each part file (note: use the mounted directory for docker!)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         jobs = []
 
         # run VEP in parallel over all the input part files

@@ -76,7 +76,6 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends D
     val masterBootstrap  = aws.uriOf("resources/pipeline/varianteffect/master-bootstrap.sh")
     val prepareScript    = aws.uriOf("resources/pipeline/varianteffect/prepareVariants.py")
     val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.py")
-    val loadScript       = aws.uriOf("resources/pipeline/varianteffect/loadVariantEffects.py")
 
     val sparkConf = ApplicationConfig.sparkEnv.withProperties(
       "PYSPARK_PYTHON" -> "/usr/bin/python3"
@@ -99,7 +98,6 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends D
     val steps = Seq(
       JobStep.PySpark(prepareScript, dataset, phenotype),
       JobStep.Script(runScript, dataset, phenotype)
-      //JobStep.PySpark(loadScript, dataset, phenotype)
     )
 
     val inOut = s"$dataset/$phenotype"
