@@ -302,81 +302,59 @@ def run_vep_in_docker(data_pathname, output_pathname):
     stop_container(container)
 
 
-def run_vep(input_path, output_path, s3_outdir):
+def run_vep(part):
     """
-    Run VEP over each of the part files in the directory.
+    Run VEP over an input source file.
     """
-    parts = glob.glob('%s/part-*' % input_path)
-    parts.sort()
+    out_dir, out_name = os.path.split(part)
+    out_basename, _ = os.path.splitext(out_name)
 
-    # run VEP over each part file (note: use the mounted directory for docker!)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        jobs = []
+    # VEP outputs a JSON, which is copied back to S3
+    out_json = '%s/%s.json' % (out_dir, out_basename)
 
-        # run VEP in parallel over all the input part files
-        for part in parts:
-            out_basename, _ = os.path.splitext(os.path.basename(part))
+    # execute VEP
+    run_vep_in_docker(part, out_json)
 
-            # VEP outputs a JSON, which is loaded by Spark in a later step to S3
-            out_json = '%s/%s.json' % (output_path, out_basename)
-
-            # run VEP
-            job = executor.submit(run_vep_in_docker, part, out_json)
-            jobs.append(job)
-
-        # wait for all the jobs to finish (or for one to fail)
-        concurrent.futures.wait(jobs, return_when=concurrent.futures.FIRST_EXCEPTION)
-
-        # check for any exceptions
-        for job in jobs:
-            if job.exception() is not None:
-                raise job.exception()
-
-        # just to ensure that the `aws` command does the right thing
-        if not s3_outdir.endswith('/'):
-            s3_outdir += '/'
-
-        # copy output JSON files back to S3, delete whatever is there first
-        subprocess.check_call(['aws', 's3', 'rm', s3_outdir, '--recursive'])
-        subprocess.check_call(['aws', 's3', 'cp', output_path, s3_outdir, '--recursive'])
+    # return the output filename
+    return out_json
 
 
 if __name__ == '__main__':
     """
     @param dataset e.g. `GWAS_CAMP`
-    @param phenotype e.g. `T2D`
+    @param part e.g. `part-00000-bbda408e-aa30-4959-9bbd-7b8350cc3088-c000.csv`
     """
     print('python version=%s' % platform.python_version())
     print('user=%s' % os.getenv('USER'))
 
     opts = argparse.ArgumentParser()
     opts.add_argument('dataset')
-    opts.add_argument('phenotype')
+    opts.add_argument('part')
 
     # parse the command line parameters
     args = opts.parse_args()
 
-    # source location in S3 where the input and output JSON are
-    srcdir = '%s/variants/%s/%s' % (s3dir, args.dataset, args.phenotype)
-    outdir = '%s/effects/%s/%s' % (s3dir, args.dataset, args.phenotype)
+    # source location in S3 where the input file is and the output goes
+    src = '%s/variants/%s/%s' % (s3dir, args.dataset, args.part)
+    out = '%s/effects/%s/%s' % (s3dir, args.dataset, args.part)
 
-    # local fs location where VEP will read data from and write to
-    variantdir = '%s/variants/%s/%s' % (localdir, args.dataset, args.phenotype)
-    effectdir = '%s/effects/%s/%s' % (localdir, args.dataset, args.phenotype)
-
-    # if the data directory already exists, nuke it
-    subprocess.check_call(['rm', '-rf', variantdir])
-    subprocess.check_call(['rm', '-rf', effectdir])
-
-    # ensure the local directories exist
-    subprocess.check_call(['mkdir', '-p', variantdir])
-    subprocess.check_call(['mkdir', '-p', effectdir])
+    # copy the part file to the local, working directory for processing
+    subprocess.check_call(['aws', 's3', 'cp', src, '.'])
 
     # docker needs permissions to write to the output directory
-    subprocess.check_call(['chmod', 'a+w', effectdir])
+    subprocess.check_call(['chmod', 'a+w', '.'])
 
-    # copy all the source part files to the variant input directory
-    subprocess.check_call(['aws', 's3', 'cp', srcdir, variantdir, '--recursive', '--exclude=_SUCCESS'])
+    # run VEP, on the local file
+    outfile = run_vep(src)
+    warnings = outfile + '_warnings.txt'
 
-    # run VEP over each part file, generate a matching part file
-    run_vep(variantdir, effectdir, outdir)
+    # copy the output file back to S3
+    subprocess.check_call(['aws', 's3', 'cp', outfile, out])
+
+    # check if a warnings file exists, and copy that as well
+    if os.path.exists(warnings):
+        subprocess.check_call(['aws', 's3', 'cp', warnings, out + '_warnings.txt'])
+
+    # delete the input files so as to not cause problems
+    os.remove(src)
+    os.remove(outfile + '*')

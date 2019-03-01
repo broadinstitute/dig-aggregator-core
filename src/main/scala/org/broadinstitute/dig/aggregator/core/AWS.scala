@@ -37,6 +37,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.io.Source
+import scala.util.Random
 
 /**
  * AWS controller (S3 + EMR clients).
@@ -335,14 +336,40 @@ final class AWS(config: AWSConfig) extends LazyLogging {
    * concurrency so too many clusters aren't created at once.
    */
   def waitForJobs(jobs: Seq[IO[RunJobFlowResult]], maxClusters: Int = 5): IO[Unit] = {
-    import Implicits.contextShift
+    Utils.waitForTasks(jobs, maxClusters) { job =>
+      job.flatMap(waitForJob(_))
+    }
+  }
 
-    Stream
-      .emits(jobs)
-      .covary[IO]
-      .mapAsyncUnordered(maxClusters)(job => job.flatMap(waitForJob(_)))
-      .compile
-      .toList
-      .as(())
+  /**
+   * Often times there are N jobs that are all identical (aside from command
+   * line parameters) that need to be run, and can be run in parallel.
+   *
+   * This can be done by spinning up a unique cluster for each, but has the
+   * downside that the provisioning step (which can take several minutes) is
+   * run for each job.
+   *
+   * This function allows a list of "jobs" (read: a list of a list of steps)
+   * to be passed, and N clusters will be made that will run through all the
+   * jobs until complete. This way the provisioning costs are only paid for
+   * once.
+   *
+   * This should only be used if all the jobs can be run in parallel.
+   *
+   * NOTE: The jobs are shuffled so that jobs that may be large and clumped
+   *       together won't happen every time the jobs run together.
+   */
+  def clusterJobs(cluster: Cluster, jobs: Seq[Seq[JobStep]], maxClusters: Int = 5): Seq[IO[RunJobFlowResult]] = {
+    val indexedJobs = Random.shuffle(jobs).zipWithIndex.map {
+      case (job, i) => (i % maxClusters, job)
+    }
+
+    // round-robin each job into a cluster
+    val clusteredJobs = indexedJobs.groupBy(_._1).mapValues(_.map(_._2))
+
+    // for each cluster, create a "job" that's all the steps appended
+    clusteredJobs.values
+      .map(jobs => runJob(cluster, jobs.flatten))
+      .toSeq
   }
 }

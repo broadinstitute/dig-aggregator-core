@@ -24,12 +24,14 @@ import org.broadinstitute.dig.aggregator.core.processors._
  *
  *  s3://dig-analysis-data/out/varianteffect/effects
  */
-class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends DatasetProcessor(name, config) {
+class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /**
-   * Topic to consume.
+   * All the processors this processor depends on.
    */
-  override val topic: String = "variants"
+  override val dependencies: Seq[Processor.Name] = Seq(
+    VariantEffectPipeline.variantEffectProcessor
+  )
 
   /**
    * All the job scripts that need to be uploaded to AWS.
@@ -37,75 +39,91 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends D
   override val resources: Seq[String] = Seq(
     "pipeline/varianteffect/cluster-bootstrap.sh",
     "pipeline/varianteffect/master-bootstrap.sh",
-    "pipeline/varianteffect/prepareVariants.py",
     "pipeline/varianteffect/runVEP.py"
   )
 
   /**
-   * All that matters is that there are new datasets. The input datasets are
-   * actually ignored, and _everything_ is reprocessed. This is done because
-   * there is only a single analysis node for all variants.
+   * Any datasets that have a new/updated list of variants needs to have VEP
+   * run across them.
    */
-  override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
-    val pattern = raw"([^/]+)/(.*)".r
-
-    // get a list of all the phenotypes that need processed
-    val datasetPhenotypes = datasets.map(_.dataset).collect {
-      case pattern(dataset, phenotype) => (dataset, phenotype)
-    }
+  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+    val datasets = results.map(_.output).distinct
 
     // create a job for each dataset
-    val jobs = datasetPhenotypes.map {
-      case (dataset, phentoype) => processDataset(dataset, phentoype)
-    }
-
-    // the "output" is the same across all datasets
-    val run = Run.insert(pool, name, datasets.map(_.dataset), "VEP")
+    val tasks = datasets.map(processDataset)
 
     // run all the jobs then update the database
     for {
-      _ <- aws.waitForJobs(jobs)
-      _ <- IO(logger.info("Updating database..."))
-      _ <- run
+      _ <- tasks.toList.sequence
       _ <- IO(logger.info("Done"))
     } yield ()
   }
 
-  private def processDataset(dataset: String, phenotype: String): IO[RunJobFlowResult] = {
+  /**
+   * This function finds all the part files in AWS for a given dataset, then
+   * breaks them up into groups and creates a cluster to process each group.
+   */
+  private def processDataset(dataset: String): IO[Unit] = {
+    val parallelClusters = 5
+
+    for {
+      _     <- aws.rmdir(s"out/varianteffect/effects/$dataset/")
+      parts <- aws.ls(s"out/varianteffect/variants/$dataset/")
+
+      // split the part files up into equal groups for each cluster
+      groupSize = (parts.size / parallelClusters) + 1
+
+      // if there are fewer parts than groups, make a VM per part
+      groups = parts.grouped(groupSize).toSeq
+
+      // create a job for each group
+      jobs = groups.map(runVEP(dataset, _))
+
+      // wait for all the jobs to complete
+      _ <- aws.waitForJobs(jobs)
+
+      // update the database with the completed output
+      _ <- IO(logger.info("Updating database..."))
+      _ <- Run.insert(pool, name, Seq(dataset), "VEP")
+    } yield ()
+  }
+
+  /**
+   * Every dataset is broken up into multiple part files of variants created
+   * by the VariantListProcessor.
+   *
+   * This function takes a sequence of those part files, creates a cluster with
+   * a single machine, and processes them. These parts will be processed in-
+   * order (read: serially). It is intended that this function will be called
+   * multiple times so that series of part files may be processed in parallel.
+   *
+   * For example, if there are 200 part files, they could be processed 10 at
+   * a time using a window function:
+   *
+   *   allParts.grouped(10).toSeq.map(runVep(dataset, _))
+   */
+  private def runVEP(dataset: String, parts: Seq[String]): IO[RunJobFlowResult] = {
     val clusterBootstrap = aws.uriOf("resources/pipeline/varianteffect/cluster-bootstrap.sh")
     val masterBootstrap  = aws.uriOf("resources/pipeline/varianteffect/master-bootstrap.sh")
-    val prepareScript    = aws.uriOf("resources/pipeline/varianteffect/prepareVariants.py")
     val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.py")
-
-    val sparkConf = ApplicationConfig.sparkEnv.withProperties(
-      "PYSPARK_PYTHON" -> "/usr/bin/python3"
-    )
 
     // build the cluster definition
     val cluster = Cluster(
       name = name.toString,
       masterInstanceType = InstanceType.c5_4xlarge,
-      slaveInstanceType = InstanceType.c5_2xlarge,
-      instances = 3,
-      configurations = Seq(sparkConf),
+      instances = 1,
       bootstrapScripts = Seq(
         new BootstrapScript(clusterBootstrap),
-        new BootstrapScript(masterBootstrap) // TODO: Use MasterBootstrapScript once AWS fixes their bug!
+        new BootstrapScript(masterBootstrap)
       )
     )
 
-    // first prepare, then run VEP, finally, load VEP to S3
-    val steps = Seq(
-      JobStep.PySpark(prepareScript, dataset, phenotype),
-      JobStep.Script(runScript, dataset, phenotype)
-    )
-
-    val inOut = s"$dataset/$phenotype"
+    // create a step for every part file - they will be run in sequence
+    val steps = parts.map { part =>
+      JobStep.Script(runScript, dataset, part)
+    }
 
     // run all the jobs (note: this could be done in parallel!)
-    for {
-      _   <- IO(logger.info(s"Running VEP on $dataset/$phenotype..."))
-      job <- aws.runJob(cluster, steps)
-    } yield job
+    aws.runJob(cluster, steps)
   }
 }

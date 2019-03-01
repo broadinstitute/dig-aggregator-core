@@ -28,7 +28,15 @@ object Run {
    * is never actually used outside of insertion. Use `Run.Result` for getting
    * data out of the `runs` table.
    */
-  private case class Entry(run: String, app: Processor.Name, input: String, output: String)
+  private case class Entry(
+      run: String,
+      app: Processor.Name,
+      input: String,
+      output: String,
+      source: String,
+      branch: String,
+      commit: String
+  )
 
   /**
    * Run entries are created and inserted atomically for a single output.
@@ -39,27 +47,30 @@ object Run {
                 |  , `app`
                 |  , `input`
                 |  , `output`
+                |  , `source`
+                |  , `branch`
+                |  , `commit`
                 |  )
                 |
-                |VALUES (?, ?, ?, ?)
+                |VALUES (?, ?, ?, ?, ?, ?, ?)
                 |
                 |ON DUPLICATE KEY UPDATE
                 |  `run` = VALUES(`run`),
                 |  `output` = VALUES(`output`),
+                |  `source` = VALUES(`source`),
+                |  `branch` = VALUES(`branch`),
+                |  `commit` = VALUES(`commit`),
                 |  `timestamp` = NOW()
                 |""".stripMargin
 
     // generate the run ID and an insert-multi update
     val runId   = randomUUID.toString
-    val entries = inputs.map(Entry(runId, app, _, output))
+    val prov    = Provenance.thisBuild
+    val entries = inputs.map(Entry(runId, app, _, output, prov.source, prov.branch, prov.commit))
     val insert  = Update[Entry](q).updateMany(entries.toList)
 
     for {
-      // delete the old inputs + insert the new ones in a single transaction
       _ <- pool.exec(insert)
-
-      // insert the provenance row, but should be part of same transaction
-      _ <- Provenance.thisBuild.insert(pool, runId, app)
     } yield runId
   }
 

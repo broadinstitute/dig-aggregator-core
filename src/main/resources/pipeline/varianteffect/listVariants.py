@@ -19,20 +19,18 @@ if __name__ == '__main__':
     all of them as the output will be identical.
     
     @param dataset e.g. `GWAS_CAMP`
-    @param phenotype e.g. `T2D`
     """
     print('Python version: %s' % platform.python_version())
 
     opts = argparse.ArgumentParser()
     opts.add_argument('dataset')
-    opts.add_argument('phenotype')
 
     # parse the command line parameters
     args = opts.parse_args()
 
     # get the source and output directories
-    srcdir = '%s/variants/%s/%s' % (s3dir, args.dataset, args.phenotype)
-    outdir = '%s/out/varianteffect/variants/%s/%s' % (s3dir, args.dataset, args.phenotype)
+    srcdir = '%s/variants/%s/*' % (s3dir, args.dataset)
+    outdir = '%s/out/varianteffect/variants/%s' % (s3dir, args.dataset)
 
     # create a spark session
     spark = SparkSession.builder.appName('varianteffect').getOrCreate()
@@ -46,6 +44,13 @@ if __name__ == '__main__':
             'reference',
             'alt',
         )
+
+    # find all the unique variants across all phenotypes
+    df = df.rdd \
+        .keyBy(lambda v: v.varId) \
+        .reduceByKey(lambda a, b: a) \
+        .map(lambda v: v[1]) \
+        .toDF()
 
     # get the length of the reference and alternate alleles
     ref_len = length(df.reference)
