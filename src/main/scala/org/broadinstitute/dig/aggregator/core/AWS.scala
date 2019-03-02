@@ -378,6 +378,9 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       case (job, i) => (i % maxClusters, job)
     }
 
+    // AWS limit of 256 steps per job cluster
+    require(jobs.flatten.size <= maxClusters * 256)
+
     // round-robin each job into a cluster
     val clusteredJobs = indexedJobs.groupBy(_._1).mapValues(_.map(_._2))
 

@@ -34,57 +34,33 @@ class VariantListProcessor(name: Processor.Name, config: BaseConfig) extends Dat
   )
 
   /**
-   * Spark configuration for cluster.
-   */
-  private val sparkConf: ApplicationConfig = ApplicationConfig.sparkEnv.withProperties(
-    "PYSPARK_PYTHON" -> "/usr/bin/python3"
-  )
-
-  /**
-   * Definition for Cluster used to run this job.
-   */
-  private val cluster: Cluster = Cluster(
-    name = name.toString,
-    configurations = Seq(sparkConf)
-  )
-
-  /**
    * All that matters is that there are new datasets. The input datasets are
    * actually ignored, and _everything_ is reprocessed. This is done because
    * there is only a single analysis node for all variants.
    */
   override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
     val pyScript = aws.uriOf("resources/pipeline/varianteffect/listVariants.py")
-    val pattern  = raw"([^/]+)/(.*)".r
 
     // get a list of all the new and updated datasets
-    val datasetInputs = datasets.map(_.dataset).collect {
-      case input @ pattern(dataset, _) => (dataset, input)
-    }
+    val datasetInputs = datasets.map(_.dataset)
 
-    // group by dataset and list all the new/updated phenotypes for each
-    val uniqueDatasets = datasetInputs.groupBy(_._1).mapValues(_.map(_._2))
+    // spark configuration settings
+    val sparkConf = ApplicationConfig.sparkEnv.withProperties(ApplicationConfig.sparkPython3)
 
-    // create a job (sequence of steps) for each dataset
-    val jobs = uniqueDatasets.map {
-      case (dataset, _) => Seq(JobStep.PySpark(pyScript, dataset))
-    }
+    // define settings for the cluster to run the job
+    val cluster = Cluster(
+      name = name.toString,
+      instances = 5,
+      configurations = Seq(sparkConf)
+    )
 
-    // start all the jobs running across several clusters
-    val clusteredJobs = aws.clusterJobs(cluster, jobs.toSeq)
-
-    // map all the dataset tables as the inputs to the single output
-    val runs = uniqueDatasets.map {
-      case (dataset, inputs) => Run.insert(pool, name, inputs, dataset)
-    }
-
-    // run all the jobs then update the database
     for {
-      _ <- IO(logger.info("Processing datasets..."))
-      _ <- aws.waitForJobs(clusteredJobs)
-      _ <- IO(logger.info("Updating database..."))
-      _ <- runs.toList.sequence
-      _ <- IO(logger.info("Done"))
+      _   <- IO(logger.info("Processing datasets..."))
+      job <- aws.runJob(cluster, JobStep.PySpark(pyScript))
+      _   <- aws.waitForJob(job)
+      _   <- IO(logger.info("Updating database..."))
+      _   <- Run.insert(pool, name, datasetInputs, "VEP/variants")
+      _   <- IO(logger.info("Done"))
     } yield ()
   }
 }

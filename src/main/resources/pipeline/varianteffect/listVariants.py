@@ -13,24 +13,13 @@ s3dir = 's3://dig-analysis-data'
 # entry point
 if __name__ == '__main__':
     """
-    While variants across datasets may be shared (duplicating the work of VEP),
-    it's actually quicker to just process them, upload the results, and -
-    before loading them into the database - grab only a single result across
-    all of them as the output will be identical.
-    
-    @param dataset e.g. `GWAS_CAMP`
+    No parameters.
     """
     print('Python version: %s' % platform.python_version())
 
-    opts = argparse.ArgumentParser()
-    opts.add_argument('dataset')
-
-    # parse the command line parameters
-    args = opts.parse_args()
-
     # get the source and output directories
-    srcdir = '%s/variants/%s/*' % (s3dir, args.dataset)
-    outdir = '%s/out/varianteffect/variants/%s' % (s3dir, args.dataset)
+    srcdir = '%s/variants/*/*' % s3dir
+    outdir = '%s/out/varianteffect/variants' % s3dir
 
     # create a spark session
     spark = SparkSession.builder.appName('varianteffect').getOrCreate()

@@ -16,9 +16,6 @@ import sys
 # where in S3 VEP data (input and output) is
 s3dir = 's3://dig-analysis-data/out/varianteffect'
 
-# local directory where the analysis will be performed
-localdir = '/mnt/efs/varianteffect'
-
 # local directory where 3rd party binaries and data are located
 bindir = '/mnt/efs/bin'
 
@@ -330,15 +327,14 @@ if __name__ == '__main__':
     print('user=%s' % os.getenv('USER'))
 
     opts = argparse.ArgumentParser()
-    opts.add_argument('dataset')
     opts.add_argument('part')
 
     # parse the command line parameters
     args = opts.parse_args()
 
     # source location in S3 where the input file is and the output goes
-    src = '%s/variants/%s/%s' % (s3dir, args.dataset, args.part)
-    out = '%s/effects/%s/%s' % (s3dir, args.dataset, args.part)
+    src = '%s/variants/%s' % (s3dir, args.part)
+    out = '%s/effects/%s' % (s3dir, args.part)
 
     # copy the part file to the local, working directory for processing
     subprocess.check_call(['aws', 's3', 'cp', src, '.'])
