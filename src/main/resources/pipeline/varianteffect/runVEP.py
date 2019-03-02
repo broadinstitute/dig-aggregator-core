@@ -361,5 +361,5 @@ if __name__ == '__main__':
         subprocess.check_call(['aws', 's3', 'cp', warnings, out + '_warnings.txt'])
 
     # delete the input files so as to not cause problems
-    os.remove(src)
+    os.remove(local_part)
     os.remove(outfile + '*')
