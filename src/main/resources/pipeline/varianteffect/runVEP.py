@@ -320,7 +320,6 @@ def run_vep(part):
 
 if __name__ == '__main__':
     """
-    @param dataset e.g. `GWAS_CAMP`
     @param part e.g. `part-00000-bbda408e-aa30-4959-9bbd-7b8350cc3088-c000.csv`
     """
     print('python version=%s' % platform.python_version())
