@@ -82,7 +82,7 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
       jobs = steps.map(Seq.apply(_))
 
       // calculate the number of clusters needed
-      n = (steps.size + 255) / 256
+      n = (jobs.size + 255) / 256
 
       // distribute the jobs across many clustered machines
       clusteredJobs = aws.clusterJobs(cluster, jobs, maxClusters = n)
