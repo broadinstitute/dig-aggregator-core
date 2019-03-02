@@ -164,8 +164,11 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   /**
    * List all the keys in a given S3 folder.
    */
-  def ls(key: String): IO[Seq[String]] = IO {
-    s3.listKeys(bucket, key).toSeq
+  def ls(key: String, excludeSuccess: Boolean = false): IO[Seq[String]] = IO {
+    val keys = s3.listKeys(bucket, key).toSeq
+
+    // optionally filter out _SUCCESS files
+    if (excludeSuccess) keys.filterNot(_.endsWith("/_SUCCESS")) else keys
   }
 
   /**
@@ -246,10 +249,8 @@ final class AWS(config: AWSConfig) extends LazyLogging {
         case None     => emr.runJobFlow(request)
       }
 
-      // show the ID of the cluster being created
-      logger.debug(
-        s"Provisioning ${cluster.name} (${job.getJobFlowId}); logging to ${logUri(cluster)}/${job.getJobFlowId}..."
-      )
+      // show the cluster, job ID and # of total steps being executed
+      logger.info(s"Starting ${cluster.name} as ${job.getJobFlowId} with ${steps.size} steps")
 
       // return the job
       job
@@ -283,12 +284,23 @@ final class AWS(config: AWSConfig) extends LazyLogging {
     // wait a little bit then request status
     val req = for (_ <- IO.sleep(1.minutes)) yield emr.listSteps(request)
 
+    // get the total number of steps so progress can be shown
+    val numSteps = req.map(_.getSteps.asScala.size)
+
     /*
      * The step summaries are returned in reverse order. The job is complete
      * when all the steps have their status set to COMPLETED, at which point
      * the curStep will be None.
      */
-    val curStep = req.map(_.getSteps.asScala.reverse).map(_.find(!_.isComplete))
+    val curStep: IO[Option[(StepSummary, Int, Int)]] =
+      for {
+        n    <- req.map(_.getSteps.asScala.size)
+        step <- req.map(_.getSteps.asScala.reverse.zipWithIndex).map(_.find(!_._1.isComplete))
+      } yield {
+        step.map {
+          case (summary, index) => (summary, index, n)
+        }
+      }
 
     /*
      * If the current step has failed, interrupted, or cancelled, then the
@@ -300,20 +312,20 @@ final class AWS(config: AWSConfig) extends LazyLogging {
         IO(job)
 
       // the current step stopped for some reason
-      case Some(step) if step.isStopped =>
+      case Some((step, i, n)) if step.isStopped =>
         logger.error(
-          s"Job ${job.getJobFlowId} failed: ${step.stopReason}; logs are in S3 and visible from the EMR web console."
+          s"Job ${job.getJobFlowId} failed: ${step.stopReason}; logs in S3 and visible from the EMR web console."
         )
 
         // terminate the program
         IO.raiseError(new Exception(step.stopReason))
 
       // hasn't started yet; cluster is still provisioning, continue waiting
-      case Some(step) if step.isPending =>
+      case Some((step, _, _)) if step.isPending =>
         waitForJob(job, Some(step))
 
       // still waiting for the current step to complete
-      case Some(step) =>
+      case Some((step, i, n)) =>
         val changed = prevStep match {
           case Some(prev) => !step.matches(prev)
           case None       => true
@@ -323,6 +335,8 @@ final class AWS(config: AWSConfig) extends LazyLogging {
           val jar  = step.getConfig.getJar
           val args = step.getConfig.getArgs.asScala.mkString(" ")
 
+          // show progress and debugging information
+          logger.info(s"...${job.getJobFlowId} ${step.getStatus.getState} step ${i + 1}/$n")
           logger.debug(s"...${job.getJobFlowId} ${step.getStatus.getState}: $jar $args (${step.getId})")
         }
 

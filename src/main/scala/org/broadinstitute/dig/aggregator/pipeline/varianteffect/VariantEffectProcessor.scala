@@ -12,15 +12,16 @@ import org.broadinstitute.dig.aggregator.core.emr._
 import org.broadinstitute.dig.aggregator.core.processors._
 
 /**
- * When a variants dataset has finished uploading, this processor takes the
- * dataset across all phenotypes and first prepares it for VEP and then runs
- * VEP on it, finally writing the output back to HDFS:
+ * When a dataset has finished having all its variants listed in the proper
+ * format for VEP, this processor takes those output part files and runs VEP
+ * over them in parallel, uploading the results (as JSON list files) back
+ * to HDFS.
  *
- * VEP TSV files written to:
+ * VEP TSV input files located at:
  *
  *  s3://dig-analysis-data/out/varianteffect/variants
  *
- * VEP output CSV files written to:
+ * VEP output JSON written to:
  *
  *  s3://dig-analysis-data/out/varianteffect/effects
  */
@@ -30,7 +31,7 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
    * All the processors this processor depends on.
    */
   override val dependencies: Seq[Processor.Name] = Seq(
-    VariantEffectPipeline.variantEffectProcessor
+    VariantEffectPipeline.variantListProcessor
   )
 
   /**
@@ -47,67 +48,14 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
    * run across them.
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
-    val datasets = results.map(_.output).distinct
-
-    // create a job for each dataset
-    val tasks = datasets.map(processDataset)
-
-    // run all the jobs then update the database
-    for {
-      _ <- tasks.toList.sequence
-      _ <- IO(logger.info("Done"))
-    } yield ()
-  }
-
-  /**
-   * This function finds all the part files in AWS for a given dataset, then
-   * breaks them up into groups and creates a cluster to process each group.
-   */
-  private def processDataset(dataset: String): IO[Unit] = {
-    val parallelClusters = 5
-
-    for {
-      _     <- aws.rmdir(s"out/varianteffect/effects/$dataset/")
-      parts <- aws.ls(s"out/varianteffect/variants/$dataset/")
-
-      // split the part files up into equal groups for each cluster
-      groupSize = (parts.size / parallelClusters) + 1
-
-      // if there are fewer parts than groups, make a VM per part
-      groups = parts.grouped(groupSize).toSeq
-
-      // create a job for each group
-      jobs = groups.map(runVEP(dataset, _))
-
-      // wait for all the jobs to complete
-      _ <- aws.waitForJobs(jobs)
-
-      // update the database with the completed output
-      _ <- IO(logger.info("Updating database..."))
-      _ <- Run.insert(pool, name, Seq(dataset), "VEP")
-    } yield ()
-  }
-
-  /**
-   * Every dataset is broken up into multiple part files of variants created
-   * by the VariantListProcessor.
-   *
-   * This function takes a sequence of those part files, creates a cluster with
-   * a single machine, and processes them. These parts will be processed in-
-   * order (read: serially). It is intended that this function will be called
-   * multiple times so that series of part files may be processed in parallel.
-   *
-   * For example, if there are 200 part files, they could be processed 10 at
-   * a time using a window function:
-   *
-   *   allParts.grouped(10).toSeq.map(runVep(dataset, _))
-   */
-  private def runVEP(dataset: String, parts: Seq[String]): IO[RunJobFlowResult] = {
     val clusterBootstrap = aws.uriOf("resources/pipeline/varianteffect/cluster-bootstrap.sh")
     val masterBootstrap  = aws.uriOf("resources/pipeline/varianteffect/master-bootstrap.sh")
-    val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.py")
 
-    // build the cluster definition
+    // get a list of distinct datasets that need VEP run on them
+    val datasets = results.map(_.output).distinct
+    val jobs     = datasets.map(processDataset)
+
+    // each cluster is a single, beefy machine that only runs VEP
     val cluster = Cluster(
       name = name.toString,
       masterInstanceType = InstanceType.c5_4xlarge,
@@ -118,12 +66,48 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
       )
     )
 
-    // create a step for every part file - they will be run in sequence
-    val steps = parts.map { part =>
-      JobStep.Script(runScript, dataset, part)
-    }
+    for {
+      jobs <- datasets.map(processDataset).toList.sequence
 
-    // run all the jobs (note: this could be done in parallel!)
-    aws.runJob(cluster, steps)
+      /*
+       * As there's nothing special about the part files per dataset, it's OK
+       * if the parts are done in random order. All the part files across
+       * the datasets should be flattened so that they are fairly evenly
+       * distributed among the clusters. At this point, every "job" is a single
+       * step.
+       */
+      flattened = jobs.flatten.map(Seq.apply(_))
+
+      // distribute the jobs across many clustered machines
+      clusteredJobs = aws.clusterJobs(cluster, flattened, maxClusters = 20)
+
+      // wait for the work to finish
+      _ <- IO(logger.info("Running VEP..."))
+      _ <- aws.waitForJobs(clusteredJobs)
+      _ <- IO(logger.info("Updating database..."))
+      _ <- Run.insert(pool, name, datasets, "VEP")
+      _ <- IO(logger.info("Done"))
+    } yield ()
+  }
+
+  /**
+   * This function finds all the part files in AWS for a given dataset, then
+   * breaks them up into groups and creates a cluster to process each group.
+   */
+  private def processDataset(dataset: String): IO[Seq[JobStep]] = {
+    val runScript = aws.uriOf("resources/pipeline/varianteffect/runVEP.py")
+
+    for {
+      // delete all the existing effects for the dataset
+      _ <- aws.rmdir(s"out/varianteffect/effects/$dataset/")
+
+      // get all the variant part files to process
+      keys <- aws.ls(s"out/varianteffect/variants/$dataset/", excludeSuccess = true)
+
+      // only use the filename, not the entire key
+      parts = keys.map(_.split('/').last)
+
+      // generate a step to run VEP for each part file
+    } yield parts.map(part => JobStep.Script(runScript, dataset, part))
   }
 }

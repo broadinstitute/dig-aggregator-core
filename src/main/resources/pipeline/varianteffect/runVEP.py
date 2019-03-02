@@ -265,6 +265,8 @@ def run_vep_in_docker(data_pathname, output_pathname):
 
         # run VEP in offline mode (use cache)
         './vep',
+        '--fork',
+        '16',
         '--json',
         '--no_stats',
         '--fasta',
@@ -344,8 +346,11 @@ if __name__ == '__main__':
     # docker needs permissions to write to the output directory
     subprocess.check_call(['chmod', 'a+w', '.'])
 
+    # get the absolute path to the local file
+    local_part = os.path.abspath(args.part)
+
     # run VEP, on the local file
-    outfile = run_vep(src)
+    outfile = run_vep(local_part)
     warnings = outfile + '_warnings.txt'
 
     # copy the output file back to S3

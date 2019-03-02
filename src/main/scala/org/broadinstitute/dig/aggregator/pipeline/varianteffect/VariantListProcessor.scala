@@ -58,12 +58,12 @@ class VariantListProcessor(name: Processor.Name, config: BaseConfig) extends Dat
     val pattern  = raw"([^/]+)/(.*)".r
 
     // get a list of all the new and updated datasets
-    val datasetPhenotypes = datasets.map(_.dataset).collect {
-      case pattern(dataset, phenotype) => (dataset, phenotype)
+    val datasetInputs = datasets.map(_.dataset).collect {
+      case input @ pattern(dataset, _) => (dataset, input)
     }
 
     // group by dataset and list all the new/updated phenotypes for each
-    val uniqueDatasets = datasetPhenotypes.groupBy(_._1).mapValues(_.map(_._2))
+    val uniqueDatasets = datasetInputs.groupBy(_._1).mapValues(_.map(_._2))
 
     // create a job (sequence of steps) for each dataset
     val jobs = uniqueDatasets.map {
@@ -73,9 +73,9 @@ class VariantListProcessor(name: Processor.Name, config: BaseConfig) extends Dat
     // start all the jobs running across several clusters
     val clusteredJobs = aws.clusterJobs(cluster, jobs.toSeq)
 
-    // map all the trait variants as the inputs to the dataset output
+    // map all the dataset tables as the inputs to the single output
     val runs = uniqueDatasets.map {
-      case (dataset, phenotypes) => Run.insert(pool, name, phenotypes, dataset)
+      case (dataset, inputs) => Run.insert(pool, name, inputs, dataset)
     }
 
     // run all the jobs then update the database
