@@ -91,7 +91,7 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
       _ <- IO(logger.info("Running VEP..."))
       _ <- aws.waitForJobs(clusteredJobs)
       _ <- IO(logger.info("Updating database..."))
-      _ <- Run.insert(pool, name, inputs, "VEP")
+      _ <- Run.insert(pool, name, inputs, "VEP/effects")
       _ <- IO(logger.info("Done"))
     } yield ()
   }
