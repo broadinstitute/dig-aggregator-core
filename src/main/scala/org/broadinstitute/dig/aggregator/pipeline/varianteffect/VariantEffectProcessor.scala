@@ -58,7 +58,7 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
       name = name.toString,
       masterInstanceType = InstanceType.c5_4xlarge,
       instances = 1,
-      masterVolumeSizeInGB = 500,
+      masterVolumeSizeInGB = 800,
       applications = Seq.empty,
       bootstrapScripts = Seq(
         new BootstrapScript(clusterBootstrap)
