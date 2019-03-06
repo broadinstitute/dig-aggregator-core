@@ -48,6 +48,7 @@ final case class Cluster(
   require(instances >= 1)
 
   /**
+   * Instance configuration for the master node.
    */
   val masterInstanceGroupConfig: InstanceGroupConfig = {
     val volumeSpec = new VolumeSpecification()
@@ -65,6 +66,7 @@ final case class Cluster(
   }
 
   /**
+   * Instance configuration for the slave nodes.
    */
   val slaveInstanceGroupConfig: InstanceGroupConfig = {
     val volumeSpec = new VolumeSpecification()
@@ -82,6 +84,7 @@ final case class Cluster(
   }
 
   /**
+   * Sequence of all instance groups used to create this cluster.
    */
   val instanceGroups: Seq[InstanceGroupConfig] = {
     Seq(masterInstanceGroupConfig, slaveInstanceGroupConfig)
