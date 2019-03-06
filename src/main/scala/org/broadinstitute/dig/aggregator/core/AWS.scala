@@ -217,8 +217,9 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   def runJob(cluster: Cluster, steps: Seq[JobStep]): IO[RunJobFlowResult] = {
     import Implicits.RichURI
 
-    // create all the bootstrap actions for this cluster
+    // create all the bootstrap actions for this cluster (including steps)
     val bootstrapConfigs = cluster.bootstrapScripts.map(_.config)
+    val allSteps         = cluster.bootstrapSteps ++ steps
 
     // create all the instances
     val instances = new JobFlowInstancesConfig()
@@ -242,7 +243,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       .withLogUri(logUri(cluster).toString)
       .withVisibleToAllUsers(cluster.visibleToAllUsers)
       .withInstances(instances)
-      .withSteps(steps.map(_.config).asJava)
+      .withSteps(allSteps.map(_.config).asJava)
 
     // create the IO action to launch the instance
     IO {
@@ -380,8 +381,11 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       case (job, i) => (i % maxClusters, job)
     }
 
+    // bootstrap steps + job steps
+    val totalSteps = cluster.bootstrapSteps.size * maxClusters + jobs.flatten.size
+
     // AWS limit of 256 steps per job cluster
-    require(jobs.flatten.size <= maxClusters * 256)
+    require(totalSteps <= maxClusters * 256)
 
     // round-robin each job into a cluster
     val clusteredJobs = indexedJobs.groupBy(_._1).mapValues(_.map(_._2))

@@ -21,6 +21,8 @@ import com.amazonaws.services.elasticmapreduce.model.VolumeSpecification
 
 import java.net.URI
 
+import org.broadinstitute.dig.aggregator.core.JobStep
+
 import scala.collection.JavaConverters._
 
 /**
@@ -37,7 +39,8 @@ final case class Cluster(
     slaveVolumeSizeInGB: Int = 32,
     applications: Seq[ApplicationName] = Cluster.defaultApplications,
     configurations: Seq[ApplicationConfig] = Cluster.defaultConfigurations,
-    bootstrapScripts: Seq[BootstrapScript] = Seq(),
+    bootstrapScripts: Seq[BootstrapScript] = Seq.empty,
+    bootstrapSteps: Seq[JobStep] = Seq.empty,
     keepAliveWhenNoSteps: Boolean = false,
     visibleToAllUsers: Boolean = true
 ) {

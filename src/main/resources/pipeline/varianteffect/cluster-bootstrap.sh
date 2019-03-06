@@ -29,16 +29,3 @@ cpanm --sudo JSON
 cpanm --sudo PerlIO::gzip
 cpanm --sudo Try::Tiny
 cpanm --sudo autodie
-
-# create a vep directory in ~ to copy data locally
-mkdir -p /mnt/var/vep
-chmod 775 /mnt/var/vep
-
-# copy everything needed for VEP into it (takes a LONG time)
-cp -R /mnt/vep/* /mnt/var/vep
-
-# build and install ensembl-xs locally
-cd /mnt/var/vep/ensembl-xs
-perl Makefile.PL
-make
-sudo make install

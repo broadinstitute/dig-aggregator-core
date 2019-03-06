@@ -38,8 +38,9 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
    */
   override val resources: Seq[String] = Seq(
     "pipeline/varianteffect/cluster-bootstrap.sh",
-    "pipeline/varianteffect/runVEP.pl",
-    "pipeline/varianteffect/runVEP.sh"
+    "pipeline/varianteffect/installVEP.sh",
+    "pipeline/varianteffect/runVEP.sh",
+    "pipeline/varianteffect/runVEP.pl"
   )
 
   /**
@@ -48,6 +49,7 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val clusterBootstrap = aws.uriOf("resources/pipeline/varianteffect/cluster-bootstrap.sh")
+    val installScript    = aws.uriOf("resources/pipeline/varianteffect/installVEP.sh")
     val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.pl")
 
     // get a list of distinct datasets that need VEP run on them
@@ -60,9 +62,8 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
       instances = 1,
       masterVolumeSizeInGB = 800,
       applications = Seq.empty,
-      bootstrapScripts = Seq(
-        new BootstrapScript(clusterBootstrap)
-      )
+      bootstrapScripts = Seq(new BootstrapScript(clusterBootstrap)),
+      bootstrapSteps = Seq(JobStep.Script(installScript))
     )
 
     for {
