@@ -38,8 +38,8 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
    */
   override val resources: Seq[String] = Seq(
     "pipeline/varianteffect/cluster-bootstrap.sh",
-    "pipeline/varianteffect/master-bootstrap.sh",
-    "pipeline/varianteffect/runVEP.py"
+    "pipeline/varianteffect/runVEP.pl",
+    "pipeline/varianteffect/runVEP.sh"
   )
 
   /**
@@ -48,8 +48,7 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val clusterBootstrap = aws.uriOf("resources/pipeline/varianteffect/cluster-bootstrap.sh")
-    val masterBootstrap  = aws.uriOf("resources/pipeline/varianteffect/master-bootstrap.sh")
-    val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.py")
+    val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.pl")
 
     // get a list of distinct datasets that need VEP run on them
     val inputs = results.map(_.output).distinct
@@ -59,9 +58,10 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
       name = name.toString,
       masterInstanceType = InstanceType.c5_4xlarge,
       instances = 1,
+      masterVolumeSizeInGB = 500,
+      applications = Seq.empty,
       bootstrapScripts = Seq(
-        new BootstrapScript(clusterBootstrap),
-        new BootstrapScript(masterBootstrap)
+        new BootstrapScript(clusterBootstrap)
       )
     )
 
@@ -75,17 +75,17 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
       // only use the filename, not the entire key
       parts = keys.map(_.split('/').last)
 
-      // create a step to process each part file
-      steps = parts.map(JobStep.Script(runScript, _))
+      // split the part files into chunks that are processed in parallel
+      steps = parts
+        .sliding(20, 20)
+        .map(JobStep.Script(runScript, _: _*))
+        .toList
 
       // wrap each step so we have a list of jobs, each being a single step
       jobs = steps.map(Seq.apply(_))
 
-      // calculate the number of clusters needed
-      n = (jobs.size + 255) / 256
-
       // distribute the jobs across many clustered machines
-      clusteredJobs = aws.clusterJobs(cluster, jobs, maxClusters = n)
+      clusteredJobs = aws.clusterJobs(cluster, jobs)
 
       // run and wait for them to finish
       _ <- IO(logger.info("Running VEP..."))

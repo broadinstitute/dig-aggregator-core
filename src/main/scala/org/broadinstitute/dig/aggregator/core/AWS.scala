@@ -14,6 +14,9 @@ import com.amazonaws.services.elasticmapreduce._
 import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsRequest
 import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsResult
 import com.amazonaws.services.elasticmapreduce.model.BootstrapActionConfig
+import com.amazonaws.services.elasticmapreduce.model.EbsBlockDeviceConfig
+import com.amazonaws.services.elasticmapreduce.model.EbsConfiguration
+import com.amazonaws.services.elasticmapreduce.model.InstanceGroupConfig
 import com.amazonaws.services.elasticmapreduce.model.JobFlowDetail
 import com.amazonaws.services.elasticmapreduce.model.JobFlowInstancesConfig
 import com.amazonaws.services.elasticmapreduce.model.ListStepsRequest
@@ -22,6 +25,7 @@ import com.amazonaws.services.elasticmapreduce.model.RunJobFlowResult
 import com.amazonaws.services.elasticmapreduce.model.ScriptBootstrapActionConfig
 import com.amazonaws.services.elasticmapreduce.model.StepState
 import com.amazonaws.services.elasticmapreduce.model.StepSummary
+import com.amazonaws.services.elasticmapreduce.model.VolumeSpecification
 
 import com.typesafe.scalalogging.LazyLogging
 
@@ -222,10 +226,8 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       .withAdditionalSlaveSecurityGroups(config.emr.securityGroupIds.map(_.value): _*)
       .withEc2SubnetId(config.emr.subnetId.value)
       .withEc2KeyName(config.emr.sshKeyName.value)
-      .withInstanceCount(cluster.instances)
       .withKeepJobFlowAliveWhenNoSteps(cluster.keepAliveWhenNoSteps)
-      .withMasterInstanceType(cluster.masterInstanceType.value)
-      .withSlaveInstanceType(cluster.slaveInstanceType.value)
+      .withInstanceGroups(cluster.instanceGroups.asJava)
 
     // create the request for the cluster
     val request = new RunJobFlowRequest()
