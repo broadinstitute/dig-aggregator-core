@@ -9,11 +9,11 @@ VEP_ROOT=/mnt/var/vep
 aws s3 cp s3://dig-analysis-data/resources/pipeline/varianteffect/runVEP.sh .
 
 # create a vep directory in /mnt/var to copy data locally
-mkdir -p "$VEP_ROOT"
-chmod 775 "$VEP_ROOT"
+mkdir -p $VEP_ROOT
+chmod 775 $VEP_ROOT
 
 # 
-cd "$VEP_ROOT"
+cd $VEP_ROOT
 
 # download the VEP program + data and extract it
 aws s3 cp s3://dig-analysis-data/bin/vep/vep-94.tar.gz .
