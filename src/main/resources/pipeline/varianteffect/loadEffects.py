@@ -23,28 +23,14 @@ if __name__ == '__main__':
     print('python version=%s' % platform.python_version())
     print('user=%s' % os.getenv('USER'))
 
-    opts = argparse.ArgumentParser()
-
-    # parse the command line parameters
-    args = opts.parse_args()
-
     # create the spark context
     spark = SparkSession.builder.appName('varianteffect').getOrCreate()
 
     # read all the JSON files output by VEP, keep only the consequence data
-    df = spark.read.json('%s/effects/*/*/*.json' % s3dir) \
-        .withColumn('filename', input_file_name())
-
-    # unique list of variants and a single source input file for each
-    variants = df.select(df.id, df.filename) \
-        .rdd \
-        .keyBy(lambda v: v.id) \
-        .reduceByKey(lambda a, b: a) \
-        .map(lambda v: v[1]) \
-        .toDF()
+    df = spark.read.json('%s/effects/*.json' % s3dir)
 
     # explode transcript consequences
-    transcript_consequences = df.select(df.id, df.filename, df.transcript_consequences) \
+    transcript_consequences = df.select(df.id, df.transcript_consequences) \
         .withColumn('cqs', explode(col('transcript_consequences'))) \
         .select(
             col('id'),
@@ -53,21 +39,13 @@ if __name__ == '__main__':
         )
 
     # explode regulatory features
-    regulatory_feature_consequences = df.select(df.id, df.filename, df.regulatory_feature_consequences) \
+    regulatory_feature_consequences = df.select(df.id, df.regulatory_feature_consequences) \
         .withColumn('cqs', explode(col('regulatory_feature_consequences'))) \
         .select(
             col('id'),
             col('filename'),
             col('cqs.*'),
         )
-
-    # join with variants to keep only consequences from a single dataset
-    transcript_consequences = transcript_consequences \
-        .join(variants, ['id', 'filename']) \
-        .drop(transcript_consequences.filename)
-    regulatory_feature_consequences = regulatory_feature_consequences \
-        .join(variants, ['id', 'filename']) \
-        .drop(regulatory_feature_consequences.filename)
 
     # # drop any that aren't "picked" to be the most severe
     # transcript_consequences = transcript_consequences \
