@@ -3,11 +3,6 @@
 # install utils required for mounting EFS
 sudo yum install -y amazon-efs-utils
 
-# mount VEP EFS
-sudo mkdir -p /mnt/vep
-sudo chown hadoop:hadoop /mnt/vep
-sudo mount -t efs fs-35f069d5:/ /mnt/vep
-
 # VEP requires GCC, make 
 sudo yum group install -y "Development Tools"
 sudo yum install -y perl-CPAN
