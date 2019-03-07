@@ -12,7 +12,7 @@ aws s3 cp s3://dig-analysis-data/resources/pipeline/varianteffect/runVEP.sh .
 mkdir -p $VEP_ROOT
 chmod 775 $VEP_ROOT
 
-# 
+# install to the VEP directory
 cd $VEP_ROOT
 
 # download the VEP program + data and extract it
