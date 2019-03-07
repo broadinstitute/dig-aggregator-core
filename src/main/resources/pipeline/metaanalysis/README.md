@@ -16,7 +16,7 @@ In the filter step, the following variants are removed from the meta-analysis:
 
 ## Running Meta-Analysis
 
-The meta-analysis is broken up into 3 steps.
+The meta-analysis is broken up into 2 steps: ancestry-specific and trans-ethnic.
 
 ### Ancestry-Specific Analysis
 
