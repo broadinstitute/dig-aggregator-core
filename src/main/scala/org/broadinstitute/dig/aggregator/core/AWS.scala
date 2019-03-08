@@ -299,19 +299,13 @@ final class AWS(config: AWSConfig) extends LazyLogging {
         // terminate the program
         IO.raiseError(new Exception(step.stopReason))
 
-      case Right((n, m)) if n == m =>
-        logger.info(s"Job ${job.getJobFlowId} complete.")
-
-        // return the completed job
-        IO(job)
-
       case Right((n, m)) =>
         if (n != stepsComplete) {
           logger.info(s"Job ${job.getJobFlowId} progress: $n/$m steps complete.")
         }
 
-        // continue waiting...
-        waitForJob(job, n)
+        // return the job on completion or continue waiting...
+        if (n == m) IO(job) else waitForJob(job, n)
     }
   }
 
