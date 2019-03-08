@@ -167,19 +167,6 @@ def load_analysis(spark, path, overlap=False):
     return samplesize_analysis.join(stderr_analysis, 'varId')
 
 
-def test_path(path):
-    """
-    Run `hadoop fs -test -s` to see if any files exist matching the pathspec.
-    """
-    try:
-        subprocess.check_call(['hadoop', 'fs', '-test', '-s', path])
-    except subprocess.CalledProcessError:
-        return False
-
-    # a exit-code of 0 is success
-    return True
-
-
 def find_parts(path):
     """
     Run `hadoop fs -ls -C` to find all the files that match a particular path.
@@ -191,6 +178,13 @@ def find_parts(path):
             .split('\n')
     except subprocess.CalledProcessError:
         return []
+
+
+def test_path(path):
+    """
+    Run `hadoop fs -test -s` to see if any files exist matching the pathspec.
+    """
+    return len(find_parts(path)) > 0
 
 
 def load_ancestry_specific_analysis(spark, phenotype):
@@ -217,12 +211,6 @@ def load_ancestry_specific_analysis(spark, phenotype):
         # read the analysis produced by METAL
         analysis = load_analysis(spark, path, overlap=True)
 
-        # # compute the average EAF and average MAF for each variant
-        # eafAvg = when(analysis.eafCountSum > 0, analysis.eafSum / analysis.eafCountSum) \
-        #     .otherwise(lit(None))
-        # mafAvg = when(analysis.mafCountSum > 0, analysis.mafSum / analysis.mafCountSum) \
-        #     .otherwise(lit(None))
-
         # add ancestry for partitioning and calculated eaf/maf averages
         analysis = analysis \
             .withColumn('phenotype', lit(phenotype)) \
@@ -233,6 +221,9 @@ def load_ancestry_specific_analysis(spark, phenotype):
 
         # are there rare variants to merge with the analysis?
         if test_path(rare_path):
+            print('Merging rare variants...')
+
+            # load the rare variants across all datasets
             rare_variants = spark.read \
                 .csv(rare_path, sep='\t', header=True, schema=variants_schema) \
                 .select(*columns)
@@ -244,12 +235,6 @@ def load_ancestry_specific_analysis(spark, phenotype):
                 .reduceByKey(lambda a, b: b if b.n > a.n else a) \
                 .map(lambda v: v[1]) \
                 .toDF()
-
-        # # compute the average EAF and average MAF for each variant
-        # eafAvg = when(analysis.eafCountSum > 0, analysis.eafSum / analysis.eafCountSum) \
-        #     .otherwise(lit(None))
-        # mafAvg = when(analysis.mafCountSum > 0, analysis.mafSum / analysis.mafCountSum) \
-        #     .otherwise(lit(None))
 
         # add ancestry for partitioning and calculated eaf/maf averages
         analysis = analysis.withColumn('ancestry', lit(ancestry))

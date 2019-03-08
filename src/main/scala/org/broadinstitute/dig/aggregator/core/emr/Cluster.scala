@@ -79,7 +79,7 @@ final case class Cluster(
     new InstanceGroupConfig()
       .withEbsConfiguration(ebsConfig)
       .withInstanceType(slaveInstanceType.value)
-      .withInstanceRole(InstanceRoleType.TASK)
+      .withInstanceRole(InstanceRoleType.CORE)
       .withInstanceCount(instances - 1)
   }
 

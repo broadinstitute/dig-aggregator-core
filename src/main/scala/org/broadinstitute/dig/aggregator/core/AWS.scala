@@ -226,7 +226,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       .withAdditionalMasterSecurityGroups(config.emr.securityGroupIds.map(_.value): _*)
       .withAdditionalSlaveSecurityGroups(config.emr.securityGroupIds.map(_.value): _*)
       .withEc2SubnetId(config.emr.subnetId.value)
-      .withEc2KeyName(config.emr.sshKeyName.value)
+      .withEc2KeyName(config.emr.sshKeyName)
       .withKeepJobFlowAliveWhenNoSteps(cluster.keepAliveWhenNoSteps)
       .withInstanceGroups(cluster.instanceGroups.asJava)
 
@@ -268,83 +268,50 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   }
 
   /**
-   * Every few minutes, send a request to the cluster to determine the state
-   * of all the steps in the job. Only return once the state is one of the
-   * following for the last/current step:
-   *
-   *   StepState.COMPLETED
-   *   StepState.FAILED
-   *   StepState.INTERRUPTED
-   *   StepState.CANCELLED
+   * Periodically send a request to the cluster to determine the state of all
+   * steps in the job. Log output showing the % complete the jobs is or throw
+   * an exception if the job failed or was interrupt/cancelled.
    */
-  def waitForJob(job: RunJobFlowResult, prevStep: Option[StepSummary] = None): IO[RunJobFlowResult] = {
+  def waitForJob(job: RunJobFlowResult, stepsComplete: Int = 0): IO[RunJobFlowResult] = {
     import Implicits.timer
 
-    // create the job request
-    val request = new ListStepsRequest()
-      .withClusterId(job.getJobFlowId)
+    // wait a little bit then get the status of all steps in the job
+    val getStatus = for (_ <- IO.sleep(20.seconds)) yield {
+      val req = new ListStepsRequest().withClusterId(job.getJobFlowId)
 
-    // wait a little bit then request status
-    val req = for (_ <- IO.sleep(1.minutes)) yield emr.listSteps(request)
+      // extract the steps from the request response; aws reverses them
+      val steps = emr.listSteps(req).getSteps.asScala.reverse
 
-    // get the total number of steps so progress can be shown
-    val numSteps = req.map(_.getSteps.asScala.size)
-
-    /*
-     * The step summaries are returned in reverse order. The job is complete
-     * when all the steps have their status set to COMPLETED, at which point
-     * the curStep will be None.
-     */
-    val curStep: IO[Option[(StepSummary, Int, Int)]] =
-      for {
-        n    <- req.map(_.getSteps.asScala.size)
-        step <- req.map(_.getSteps.asScala.reverse.zipWithIndex).map(_.find(!_._1.isComplete))
-      } yield {
-        step.map {
-          case (summary, index) => (summary, index, n)
-        }
+      // count all the completes, failures, etc.
+      steps.foldLeft(Right(0, steps.size): Either[StepSummary, (Int, Int)]) {
+        case (Left(step), _)                          => Left(step)
+        case (Right((n, m)), step) if step.isComplete => Right(n + 1, m)
+        case (_, step) if step.isStopped              => Left(step)
+        case (x, _)                                   => x
       }
+    }
 
-    /*
-     * If the current step has failed, interrupted, or cancelled, then the
-     * entire job is also considered failed, and return the failed step.
-     */
-    curStep.flatMap {
-      case None =>
-        logger.debug(s"Job ${job.getJobFlowId} complete")
-        IO(job)
-
-      // the current step stopped for some reason
-      case Some((step, i, n)) if step.isStopped =>
-        logger.error(
-          s"Job ${job.getJobFlowId} failed: ${step.stopReason}; logs in S3 and visible from the EMR web console."
-        )
+    // get the status, log appropriately, and continue or stop
+    getStatus.flatMap {
+      case Left(step) =>
+        logger.error(s"Job ${job.getJobFlowId} failed: ${step.stopReason}.")
 
         // terminate the program
         IO.raiseError(new Exception(step.stopReason))
 
-      // hasn't started yet; cluster is still provisioning, continue waiting
-      case Some((step, _, _)) if step.isPending =>
-        waitForJob(job, Some(step))
+      case Right((n, m)) if n == m =>
+        logger.info(s"Job ${job.getJobFlowId} complete.")
 
-      // still waiting for the current step to complete
-      case Some((step, i, n)) =>
-        val changed = prevStep match {
-          case Some(prev) => !step.matches(prev)
-          case None       => true
+        // return the completed job
+        IO(job)
+
+      case Right((n, m)) =>
+        if (n != stepsComplete) {
+          logger.info(s"Job ${job.getJobFlowId} progress: $n/$m steps complete.")
         }
 
-        if (changed) {
-          val jar  = step.getConfig.getJar
-          val args = step.getConfig.getArgs.asScala.mkString(" ")
-
-          // show progress and debugging information
-          logger.info(s"...${job.getJobFlowId} ${step.getStatus.getState} step ${i + 1}/$n")
-          logger.debug(s"...${job.getJobFlowId} ${step.getStatus.getState}: $jar $args (${step.getId})")
-        }
-
-        // continue waiting
-        waitForJob(job, Some(step))
+        // continue waiting...
+        waitForJob(job, n)
     }
   }
 
