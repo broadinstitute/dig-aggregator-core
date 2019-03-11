@@ -23,7 +23,7 @@ import org.broadinstitute.dig.aggregator.core.processors._
  *
  * Output HDFS results:
  *
- *  s3://dig-analysis-data/out/frequencyanalysis/<phenotype>/ancestry=?/part-*
+ *  s3://dig-analysis-data/out/frequencyanalysis/<phenotype>/part-*
  */
 class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends DatasetProcessor(name, config) {
 
@@ -44,60 +44,54 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig) exten
    * for each, and create a mapping of (phenotype -> datasets).
    */
   override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
+    val script  = aws.uriOf("resources/pipeline/frequencyanalysis/frequencyAnalysis.py")
     val pattern = raw"([^/]+)/(.*)".r
+
+    // cluster configuration used to process each phenotype
+    val cluster = Cluster(
+      name = name.toString,
+      instances = 4,
+      masterInstanceType = InstanceType.m5_2xlarge,
+      slaveInstanceType = InstanceType.m5_2xlarge,
+      configurations = Seq(
+        ApplicationConfig.sparkEnv.withProperties(
+          "PYSPARK_PYTHON" -> "/usr/bin/python3"
+        )
+      )
+    )
 
     // get a list of all the phenotypes that need processed
     val datasetPhenotypes = datasets.map(_.dataset).collect {
-      case dataset @ pattern(_, phenotype) => (dataset, phenotype)
+      case dataset @ pattern(_, phenotype) => (phenotype, dataset)
     }
 
     // map each phenotype to a list of datasets
-    val phenotypeDatasets = datasetPhenotypes
-      .groupBy(_._2)
-      .mapValues(_.map(_._1).distinct)
-      .toList
+    val phenotypes = datasetPhenotypes.map(_._1).toList.distinct
 
     // create the jobs to process each phenotype in parallel
-    val jobs = phenotypeDatasets.map {
-      case (phenotype, datasets) => processPhenotype(phenotype, datasets)
+    val jobs = phenotypes.map { phenotype =>
+      Seq(JobStep.PySpark(script, phenotype))
     }
 
+    // distribute the jobs among multiple clusters
+    val clusteredJobs = aws.clusterJobs(cluster, jobs)
+
     // create the runs for each phenotype
-    val runs = phenotypeDatasets.map {
-      case (phenotype, datasets) => Run.insert(pool, name, datasets, phenotype)
+    val runs = phenotypes.map { phenotype =>
+      val datasets = datasetPhenotypes.collect {
+        case (p, dataset) if p == phenotype => dataset
+      }
+
+      // each phenotype's input is the list of datasets
+      Run.insert(pool, name, datasets, phenotype)
     }
 
     // run all the jobs then update the database
     for {
-      _ <- aws.waitForJobs(jobs)
+      _ <- aws.waitForJobs(clusteredJobs)
       _ <- IO(logger.info("Updating database..."))
       _ <- runs.sequence
       _ <- IO(logger.info("Done"))
     } yield ()
-  }
-
-  /**
-   * Spin up a cluster to process a single phenotype.
-   */
-  private def processPhenotype(phenotype: String, datasets: Seq[String]): IO[RunJobFlowResult] = {
-    val script = aws.uriOf("resources/pipeline/frequencyanalysis/frequencyAnalysis.py")
-    val step   = JobStep.PySpark(script, phenotype)
-
-    val sparkConf = ApplicationConfig.sparkEnv.withProperties(
-      "PYSPARK_PYTHON" -> "/usr/bin/python3"
-    )
-
-    val cluster = Cluster(
-      name = name.toString,
-      instances = 3,
-      masterInstanceType = InstanceType.m5_2xlarge,
-      slaveInstanceType = InstanceType.m5_2xlarge,
-      configurations = Seq(sparkConf)
-    )
-
-    for {
-      _   <- IO(logger.info(s"Calculating $phenotype frequencies..."))
-      job <- aws.runJob(cluster, step)
-    } yield job
   }
 }

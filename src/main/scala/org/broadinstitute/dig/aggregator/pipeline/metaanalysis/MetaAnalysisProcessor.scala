@@ -33,20 +33,19 @@ import org.broadinstitute.dig.aggregator.core.processors._
  *
  * The inputs and outputs for this processor are expected to be phenotypes.
  */
-class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends DatasetProcessor(name, config) {
 
   /**
-   * All the processors this processor depends on.
+   * Topic to consume.
    */
-  override val dependencies: Seq[Processor.Name] = Seq(
-    MetaAnalysisPipeline.variantPartitionProcessor
-  )
+  override val topic: String = "variants"
 
   /**
    * All the job scripts that need to be uploaded to AWS.
    */
   override val resources: Seq[String] = Seq(
     "pipeline/metaanalysis/cluster-bootstrap.sh",
+    "pipeline/metaanalysis/partitionVariants.py",
     "pipeline/metaanalysis/runAnalysis.py",
     "pipeline/metaanalysis/loadAnalysis.py",
     "scripts/getmerge-strip-headers.sh"
@@ -55,7 +54,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
   /**
    * Take all the phenotype results from the dependencies and process them.
    */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+  override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
     val bootstrapUri = aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh")
     val sparkConf = ApplicationConfig.sparkEnv.withProperties(
       "PYSPARK_PYTHON" -> "/usr/bin/python3"
@@ -68,14 +67,27 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
       configurations = Seq(sparkConf)
     )
 
-    // create a job for each phenotype; run them across many clusters
-    val phenotypes    = results.map(_.output).distinct.toList
-    val jobs          = phenotypes.map(processPhenotype)
+    // extract the dataset/phenotype pairs
+    val pattern = raw"([^/]+)/(.*)".r
+    val datasetPhenotypes = datasets.map(_.dataset).map {
+      case dataset @ pattern(_, phenotype) => (phenotype, dataset)
+    }
+
+    // get the unique list of phenotypes
+    val phenotypes = datasetPhenotypes.map(_._1).toList.distinct
+
+    // create a job for each phenotype; cluster them
+    val jobs          = phenotypes.distinct.map(processPhenotype)
     val clusteredJobs = aws.clusterJobs(cluster, jobs)
 
-    // create the runs for each phenotype
+    // create the run to record for each phenotype
     val runs = phenotypes.map { phenotype =>
-      Run.insert(pool, name, Seq(phenotype), phenotype)
+      val datasets = datasetPhenotypes.collect {
+        case (p, dataset) if p == phenotype => dataset
+      }
+
+      // each phenotype's input is the list of datasets
+      Run.insert(pool, name, datasets, phenotype)
     }
 
     // wait for all the jobs to complete, then insert all the results
@@ -91,11 +103,13 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Ru
    * Create a cluster and process a single phenotype.
    */
   private def processPhenotype(phenotype: String): Seq[JobStep] = {
-    val runUri  = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
-    val loadUri = aws.uriOf("resources/pipeline/metaanalysis/loadAnalysis.py")
+    val partitionUri = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
+    val runUri       = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
+    val loadUri      = aws.uriOf("resources/pipeline/metaanalysis/loadAnalysis.py")
 
     // first run+load ancestry-specific and then trans-ethnic
     Seq(
+      JobStep.PySpark(partitionUri, phenotype),
       JobStep.Script(runUri, "--ancestry-specific", phenotype),
       JobStep.PySpark(loadUri, "--ancestry-specific", phenotype),
       JobStep.Script(runUri, "--trans-ethnic", phenotype),
