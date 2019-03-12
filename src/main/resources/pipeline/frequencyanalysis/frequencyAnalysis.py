@@ -56,7 +56,8 @@ def calc_freq(df, ancestry):
 
     comb_df = loci \
         .join(eaf, 'varId', 'left_outer') \
-        .join(maf, 'varId', 'left_outer')
+        .join(maf, 'varId', 'left_outer') \
+        .distinct()
 
     # final dataframe for this ancestry
     return comb_df.select(
