@@ -56,7 +56,7 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Pr
     for {
       results <- Run.resultsOf(pool, dependencies, if (reprocess) None else Some(name))
     } yield {
-      results.filter(r => only.getOrElse(r.output) == r.output)
+      results.filter(r => r.output.matches(only.getOrElse(r.output)))
     }
   }
 

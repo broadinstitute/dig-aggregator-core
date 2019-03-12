@@ -7,6 +7,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 
 import org.broadinstitute.dig.aggregator.core.processors.Processor
+import org.broadinstitute.dig.aggregator.core.Utils.retry
 
 import org.neo4j.driver.v1.Driver
 import org.neo4j.driver.v1.StatementResult
@@ -22,15 +23,12 @@ import org.neo4j.driver.v1.StatementResult
 final class Analysis(val name: String, val provenance: Provenance) extends LazyLogging {
 
   /**
-   * Given a list of part files associated with this analysis and a function
-   * that runs a Neo4j query to upload each part...
-   *
-   *  * ...delete any existing analysis and relationships;
-   *  * ...create a new analysis node;
-   *  * ...call the upload function for each part file;
+   * Given an S3 glob to a list of part files, call the uploadPart function for
+   * each, allowing the CSV to be written to Neo4j.
    */
   def uploadParts(aws: AWS, graph: GraphDb, analysisId: Int, s3path: String)(
-      uploadPart: (GraphDb, Int, String) => IO[StatementResult]): IO[Unit] = {
+      uploadPart: (GraphDb, Int, String) => IO[StatementResult]
+  ): IO[Unit] = {
     for {
       listing <- aws.ls(s3path)
 
@@ -42,7 +40,9 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
 
       // create an IO statement for each part and upload it
       uploads = for ((part, n) <- parts.zipWithIndex) yield {
-        for (result <- uploadPart(graph, analysisId, aws.publicUrlOf(part))) yield {
+        val upload = retry(uploadPart(graph, analysisId, aws.publicUrlOf(part)))
+
+        for (result <- upload) yield {
           val counters = result.consume.counters
           val nodes    = counters.nodesCreated
           val edges    = counters.relationshipsCreated
@@ -92,7 +92,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
 
     // tail-recursive accumulator helper method to count total deletions
     def deleteResults(total: Int): IO[Int] = {
-      val q = s"""|MATCH (n)-[:PRODUCED_BY]->(:Analysis {name: '$name'})
+      val q = s"""|MATCH (:Analysis {name: '$name'})<-[:PRODUCED]->(n)
                   |WITH n
                   |LIMIT 50000
                   |DETACH DELETE n
@@ -104,11 +104,11 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
         val nodes    = counters.nodesDeleted
         val edges    = counters.relationshipsDeleted
 
-        // return the total number of nodes+relationships deleted
         (nodes, edges)
       }
 
-      io.flatMap {
+      // recurse until nothing is deleted, then delete the analysis
+      retry(io).flatMap {
         case (0, 0)         => IO(total)
         case (nodes, edges) => deleteResults(total + nodes + edges)
       }

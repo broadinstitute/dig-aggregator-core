@@ -24,6 +24,9 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   /** Show version information. */
   val version: ScallopOption[Boolean] = opt("version")
 
+  /** Show debug logging. */
+  val debug: ScallopOption[Boolean] = opt("debug")
+
   /** The processor name is actually a pipeline name. */
   val pipeline: ScallopOption[Boolean] = opt("pipeline")
 
@@ -42,8 +45,9 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   /** The processor (or pipeline if --pipeline specified) to run. */
   val processorName: ScallopOption[String] = trailArg(required = false)
 
-  // run shouldn't be there if version is
+  // test for options that don't go together
   mutuallyExclusive(version, processorName)
+  mutuallyExclusive(only, pipeline)
 
   // parse the command line options
   verify
@@ -86,6 +90,6 @@ object Opts {
       aws: AWSConfig,
       mysql: MySQLConfig,
       neo4j: Neo4jConfig,
-      sendgrid: SendgridConfig,
+      sendgrid: SendgridConfig
   ) extends BaseConfig
 }

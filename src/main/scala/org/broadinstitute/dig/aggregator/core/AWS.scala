@@ -14,6 +14,9 @@ import com.amazonaws.services.elasticmapreduce._
 import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsRequest
 import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsResult
 import com.amazonaws.services.elasticmapreduce.model.BootstrapActionConfig
+import com.amazonaws.services.elasticmapreduce.model.EbsBlockDeviceConfig
+import com.amazonaws.services.elasticmapreduce.model.EbsConfiguration
+import com.amazonaws.services.elasticmapreduce.model.InstanceGroupConfig
 import com.amazonaws.services.elasticmapreduce.model.JobFlowDetail
 import com.amazonaws.services.elasticmapreduce.model.JobFlowInstancesConfig
 import com.amazonaws.services.elasticmapreduce.model.ListStepsRequest
@@ -22,6 +25,7 @@ import com.amazonaws.services.elasticmapreduce.model.RunJobFlowResult
 import com.amazonaws.services.elasticmapreduce.model.ScriptBootstrapActionConfig
 import com.amazonaws.services.elasticmapreduce.model.StepState
 import com.amazonaws.services.elasticmapreduce.model.StepSummary
+import com.amazonaws.services.elasticmapreduce.model.VolumeSpecification
 
 import com.typesafe.scalalogging.LazyLogging
 
@@ -37,6 +41,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.io.Source
+import scala.util.Random
 
 /**
  * AWS controller (S3 + EMR clients).
@@ -54,7 +59,8 @@ final class AWS(config: AWSConfig) extends LazyLogging {
    * AWS IAM credentials provider.
    */
   val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-    new BasicAWSCredentials(config.key, config.secret))
+    new BasicAWSCredentials(config.key, config.secret)
+  )
 
   /**
    * S3 client for storage.
@@ -162,8 +168,11 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   /**
    * List all the keys in a given S3 folder.
    */
-  def ls(key: String): IO[Seq[String]] = IO {
-    s3.listKeys(bucket, key).toSeq
+  def ls(key: String, excludeSuccess: Boolean = false): IO[Seq[String]] = IO {
+    val keys = s3.listKeys(bucket, key).toSeq
+
+    // optionally filter out _SUCCESS files
+    if (excludeSuccess) keys.filterNot(_.endsWith("/_SUCCESS")) else keys
   }
 
   /**
@@ -208,19 +217,18 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   def runJob(cluster: Cluster, steps: Seq[JobStep]): IO[RunJobFlowResult] = {
     import Implicits.RichURI
 
-    // create all the bootstrap actions for this cluster
+    // create all the bootstrap actions for this cluster (including steps)
     val bootstrapConfigs = cluster.bootstrapScripts.map(_.config)
+    val allSteps         = cluster.bootstrapSteps ++ steps
 
     // create all the instances
     val instances = new JobFlowInstancesConfig()
       .withAdditionalMasterSecurityGroups(config.emr.securityGroupIds.map(_.value): _*)
       .withAdditionalSlaveSecurityGroups(config.emr.securityGroupIds.map(_.value): _*)
       .withEc2SubnetId(config.emr.subnetId.value)
-      .withEc2KeyName(config.emr.sshKeyName.value)
-      .withInstanceCount(cluster.instances)
+      .withEc2KeyName(config.emr.sshKeyName)
       .withKeepJobFlowAliveWhenNoSteps(cluster.keepAliveWhenNoSteps)
-      .withMasterInstanceType(cluster.masterInstanceType.value)
-      .withSlaveInstanceType(cluster.slaveInstanceType.value)
+      .withInstanceGroups(cluster.instanceGroups.asJava)
 
     // create the request for the cluster
     val request = new RunJobFlowRequest()
@@ -235,7 +243,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       .withLogUri(logUri(cluster).toString)
       .withVisibleToAllUsers(cluster.visibleToAllUsers)
       .withInstances(instances)
-      .withSteps(steps.map(_.config).asJava)
+      .withSteps(allSteps.map(_.config).asJava)
 
     // create the IO action to launch the instance
     IO {
@@ -244,8 +252,8 @@ final class AWS(config: AWSConfig) extends LazyLogging {
         case None     => emr.runJobFlow(request)
       }
 
-      // show the ID of the cluster being created
-      logger.debug(s"Provisioning ${cluster.name} (${job.getJobFlowId}); logging to ${logUri(cluster)}/${job.getJobFlowId}...")
+      // show the cluster, job ID and # of total steps being executed
+      logger.info(s"Starting ${cluster.name} as ${job.getJobFlowId} with ${steps.size} steps")
 
       // return the job
       job
@@ -260,68 +268,44 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   }
 
   /**
-   * Every few minutes, send a request to the cluster to determine the state
-   * of all the steps in the job. Only return once the state is one of the
-   * following for the last/current step:
-   *
-   *   StepState.COMPLETED
-   *   StepState.FAILED
-   *   StepState.INTERRUPTED
-   *   StepState.CANCELLED
+   * Periodically send a request to the cluster to determine the state of all
+   * steps in the job. Log output showing the % complete the jobs is or throw
+   * an exception if the job failed or was interrupt/cancelled.
    */
-  def waitForJob(job: RunJobFlowResult, prevStep: Option[StepSummary] = None): IO[RunJobFlowResult] = {
+  def waitForJob(job: RunJobFlowResult, stepsComplete: Int = 0): IO[RunJobFlowResult] = {
     import Implicits.timer
 
-    // create the job request
-    val request = new ListStepsRequest()
-      .withClusterId(job.getJobFlowId)
+    // wait a little bit then get the status of all steps in the job
+    val getStatus = for (_ <- IO.sleep(20.seconds)) yield {
+      val req = new ListStepsRequest().withClusterId(job.getJobFlowId)
 
-    // wait a little bit then request status
-    val req = for (_ <- IO.sleep(1.minutes)) yield emr.listSteps(request)
+      // extract the steps from the request response; aws reverses them
+      val steps = emr.listSteps(req).getSteps.asScala.reverse
 
-    /*
-     * The step summaries are returned in reverse order. The job is complete
-     * when all the steps have their status set to COMPLETED, at which point
-     * the curStep will be None.
-     */
-    val curStep = req.map(_.getSteps.asScala.reverse).map(_.find(!_.isComplete))
+      // count all the completes, failures, etc.
+      steps.foldLeft(Right(0, steps.size): Either[StepSummary, (Int, Int)]) {
+        case (Left(step), _)                          => Left(step)
+        case (Right((n, m)), step) if step.isComplete => Right(n + 1, m)
+        case (_, step) if step.isStopped              => Left(step)
+        case (x, _)                                   => x
+      }
+    }
 
-    /*
-     * If the current step has failed, interrupted, or cancelled, then the
-     * entire job is also considered failed, and return the failed step.
-     */
-    curStep.flatMap {
-      case None =>
-        logger.debug(s"Job ${job.getJobFlowId} complete")
-        IO(job)
-
-      // the current step stopped for some reason
-      case Some(step) if step.isStopped =>
-        logger.error(s"Job ${job.getJobFlowId} failed: ${step.stopReason}; logs are in S3 and visible from the EMR web console.")
+    // get the status, log appropriately, and continue or stop
+    getStatus.flatMap {
+      case Left(step) =>
+        logger.error(s"Job ${job.getJobFlowId} failed: ${step.stopReason}.")
 
         // terminate the program
         IO.raiseError(new Exception(step.stopReason))
 
-      // hasn't started yet; cluster is still provisioning, continue waiting
-      case Some(step) if step.isPending =>
-        waitForJob(job, Some(step))
-
-      // still waiting for the current step to complete
-      case Some(step) =>
-        val changed = prevStep match {
-          case Some(prev) => !step.matches(prev)
-          case None       => true
+      case Right((n, m)) =>
+        if (n != stepsComplete) {
+          logger.info(s"Job ${job.getJobFlowId} progress: $n/$m steps complete.")
         }
 
-        if (changed) {
-          val jar = step.getConfig.getJar
-          val args = step.getConfig.getArgs.asScala.mkString(" ")
-
-          logger.debug(s"...${job.getJobFlowId} ${step.getStatus.getState}: $jar $args (${step.getId})")
-        }
-
-        // continue waiting
-        waitForJob(job, Some(step))
+        // return the job on completion or continue waiting...
+        if (n == m) IO(job) else waitForJob(job, n)
     }
   }
 
@@ -329,15 +313,47 @@ final class AWS(config: AWSConfig) extends LazyLogging {
    * Given a sequence of jobs, run them in parallel, but limit the maximum
    * concurrency so too many clusters aren't created at once.
    */
-  def waitForJobs(jobs: Seq[IO[RunJobFlowResult]], maxClusters: Int = 4): IO[Unit] = {
-    import Implicits.contextShift
+  def waitForJobs(jobs: Seq[IO[RunJobFlowResult]], maxClusters: Int = 5): IO[Unit] = {
+    Utils.waitForTasks(jobs, maxClusters) { job =>
+      job.flatMap(waitForJob(_))
+    }
+  }
 
-    Stream
-      .emits(jobs)
-      .covary[IO]
-      .mapAsyncUnordered(maxClusters)(job => job.flatMap(waitForJob(_)))
-      .compile
-      .toList
-      .as(())
+  /**
+   * Often times there are N jobs that are all identical (aside from command
+   * line parameters) that need to be run, and can be run in parallel.
+   *
+   * This can be done by spinning up a unique cluster for each, but has the
+   * downside that the provisioning step (which can take several minutes) is
+   * run for each job.
+   *
+   * This function allows a list of "jobs" (read: a list of a list of steps)
+   * to be passed, and N clusters will be made that will run through all the
+   * jobs until complete. This way the provisioning costs are only paid for
+   * once.
+   *
+   * This should only be used if all the jobs can be run in parallel.
+   *
+   * NOTE: The jobs are shuffled so that jobs that may be large and clumped
+   *       together won't happen every time the jobs run together.
+   */
+  def clusterJobs(cluster: Cluster, jobs: Seq[Seq[JobStep]], maxClusters: Int = 5): Seq[IO[RunJobFlowResult]] = {
+    val indexedJobs = Random.shuffle(jobs).zipWithIndex.map {
+      case (job, i) => (i % maxClusters, job)
+    }
+
+    // bootstrap steps + job steps
+    val totalSteps = cluster.bootstrapSteps.size * maxClusters + jobs.flatten.size
+
+    // AWS limit of 256 steps per job cluster
+    require(totalSteps <= maxClusters * 256)
+
+    // round-robin each job into a cluster
+    val clusteredJobs = indexedJobs.groupBy(_._1).mapValues(_.map(_._2))
+
+    // for each cluster, create a "job" that's all the steps appended
+    clusteredJobs.values
+      .map(jobs => runJob(cluster, jobs.flatten))
+      .toSeq
   }
 }

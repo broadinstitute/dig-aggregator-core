@@ -13,8 +13,7 @@ s3dir = 's3://dig-analysis-data'
 # entry point
 if __name__ == '__main__':
     """
-    By default all datasets will be used, but optionally can be limited to 
-    a single study and phenotype.
+    No parameters.
     """
     print('Python version: %s' % platform.python_version())
 
@@ -35,7 +34,7 @@ if __name__ == '__main__':
             'alt',
         )
 
-    # only keep each variant once, doesn't matter what dataset it came from
+    # find all the unique variants across all phenotypes
     df = df.rdd \
         .keyBy(lambda v: v.varId) \
         .reduceByKey(lambda a, b: a) \
@@ -51,11 +50,11 @@ if __name__ == '__main__':
     #
     # See: https://useast.ensembl.org/info/docs/tools/vep/vep_formats.html
     #
-    end = when(alt_len > ref_len, df.position + alt_len - 1) \
+    end = when(ref_len == 0, df.position + alt_len - 1) \
         .otherwise(df.position + ref_len - 1)
 
-    # for inserts, start = end-1
-    start = when(alt_len > ref_len, end - 1) \
+    # check for insertion
+    start = when(ref_len == 0, end + 1) \
         .otherwise(df.position)
 
     # join the reference and alternate alleles together

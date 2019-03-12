@@ -1,4 +1,4 @@
-package org.broadinstitute.dig.aggregator.pipeline.ldscore
+package org.broadinstitute.dig.aggregator.pipeline.ldclumping
 
 import cats._
 import cats.effect._
@@ -12,7 +12,7 @@ import org.broadinstitute.dig.aggregator.pipeline.metaanalysis
 /**
  *
  */
-class LDScoreRegressionProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class LDClumpingProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /**
    * All the processors this processor depends on.

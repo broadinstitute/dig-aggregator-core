@@ -53,7 +53,7 @@ abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extend
     for {
       datasets <- Dataset.datasetsOf(pool, topic, if (reprocess) None else Some(name))
     } yield {
-      datasets.filter(d => only.getOrElse(d.dataset) == d.dataset)
+      datasets.filter(d => d.dataset.matches(only.getOrElse(d.dataset)))
     }
   }
 

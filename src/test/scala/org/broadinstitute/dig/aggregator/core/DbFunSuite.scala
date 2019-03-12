@@ -51,16 +51,6 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     Run.resultsOfRun(pool, run).unsafeRunSync
   }
 
-  def allProvenance: Seq[(Long, Processor.Name)] = {
-    val q = sql"SELECT `run`, `app` FROM `provenance`".query[(Long, Processor.Name)].to[Seq]
-
-    pool.exec(q).unsafeRunSync
-  }
-
-  def runProvenance(run: String, app: Processor.Name): Seq[Provenance] = {
-    Provenance.ofRun(pool, run, app).unsafeRunSync
-  }
-
   private def makeTables(): Unit = {
     import DbFunSuite._
 
@@ -81,7 +71,7 @@ object DbFunSuite {
   }
 
   private object Tables {
-    val all: Seq[Table] = Seq(Commits, Runs, Provenance)
+    val all: Seq[Table] = Seq(Commits, Runs)
 
     object Commits extends Table("commits") {
       override val create: ConnectionIO[Int] =
@@ -107,30 +97,15 @@ object DbFunSuite {
               |  `app` varchar(180) NOT NULL,
               |  `input` varchar(800) NOT NULL,
               |  `output` varchar(800) NOT NULL,
+              |  `source` varchar(800) NOT NULL,
+              |  `branch` varchar(800) NOT NULL,
+              |  `commit` varchar(800) NOT NULL,
               |  `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
               |  PRIMARY KEY (`ID`),
               |  UNIQUE KEY `APP_IDX` (`app`,`input`),
               |  KEY `RUN_IDX` (`run`, `app`)
               |)
               |""".stripMargin.update.run
-    }
-
-    object Provenance extends Table("provenance") {
-      override val create: ConnectionIO[Int] = {
-        sql"""|CREATE TABLE `provenance` (
-              |  `ID` int(11) NOT NULL AUTO_INCREMENT,
-              |  `run` varchar(36) NOT NULL,
-              |  `app` varchar(180) NOT NULL,
-              |  `source` varchar(1024) DEFAULT NULL,
-              |  `branch` varchar(180) DEFAULT NULL,
-              |  `commit` varchar(40) DEFAULT NULL,
-              |  PRIMARY KEY (`ID`),
-              |  UNIQUE KEY `ID_UNIQUE` (`ID`),
-              |  UNIQUE KEY `RUN_KEY_idx` (`run`,`app`),
-              |  FOREIGN KEY (`run`, `app`) REFERENCES `runs` (`run`, `app`) ON DELETE CASCADE ON UPDATE CASCADE
-              |)
-              |""".stripMargin.update.run
-      }
     }
   }
 }

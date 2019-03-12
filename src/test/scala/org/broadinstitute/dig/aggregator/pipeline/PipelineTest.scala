@@ -12,8 +12,10 @@ final class PipelineTest extends FunSuite {
      * there are no duplicate processor names.
      */
 
-    assert(Pipeline("LDScorePipeline").isDefined)
+    assert(Pipeline("VariantEffectPipeline").isDefined)
     assert(Pipeline("MetaAnalysisPipeline").isDefined)
+    assert(Pipeline("FrequencyAnalysisPipeline").isDefined)
+    assert(Pipeline("LDClumpingPipeline").isDefined)
   }
 
   test("pipeline - list processors") {
@@ -24,7 +26,7 @@ final class PipelineTest extends FunSuite {
     val expectedProcessors = Set(
       MetaAnalysisPipeline.variantPartitionProcessor,
       MetaAnalysisPipeline.metaAnalysisProcessor,
-      MetaAnalysisPipeline.uploadMetaAnalysisProcessor,
+      MetaAnalysisPipeline.uploadMetaAnalysisProcessor
     )
 
     assert(metaanalysisProcessors == expectedProcessors)

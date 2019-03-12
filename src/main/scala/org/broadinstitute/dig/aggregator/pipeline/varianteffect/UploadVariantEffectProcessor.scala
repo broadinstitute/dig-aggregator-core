@@ -9,6 +9,7 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.processors._
 
 import org.neo4j.driver.v1.Driver
+import org.neo4j.driver.v1.Session
 import org.neo4j.driver.v1.StatementResult
 
 /**
@@ -33,7 +34,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
    * All the processors this processor depends on.
    */
   override val dependencies: Seq[Processor.Name] = Seq(
-    VariantEffectPipeline.variantEffectProcessor,
+    VariantEffectPipeline.joinVariantEffectProcessor
   )
 
   /**
@@ -46,18 +47,17 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val datasets = results.map(_.output).distinct
+    val graph    = new GraphDb(config.neo4j)
 
     val ios = for (dataset <- datasets) yield {
       val analysis = new Analysis(s"VEP", Provenance.thisBuild)
-      val graph    = new GraphDb(config.neo4j)
 
       // where the output is located
-      val effects            = s"out/varianteffect/effects"
-      val regulatoryFeatures = s"$effects/regulatory_feature_consequences"
-      val transcripts        = s"$effects/transcript_consequences"
+      val regulatoryFeatures = s"out/varianteffect/regulatory_feature_consequences"
+      val transcripts        = s"out/varianteffect/transcript_consequences"
 
       for {
-        _ <- IO(logger.info(s"Preparing upload of variant effects..."))
+        _ <- IO(logger.info(s"Creating analysis node for variant effects..."))
 
         // delete the existing analysis and recreate it
         id <- analysis.create(graph)
@@ -83,14 +83,14 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
     }
 
     // process each phenotype serially
-    ios.toList.sequence >> IO.unit
+    (ios.toList.sequence >> IO.unit).guarantee(graph.shutdown)
   }
 
   /**
    * Given a part file, upload it and create all the regulatory feature nodes.
    */
   def uploadRegulatoryFeatures(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
-    val q = s"""|USING PERIODIC COMMIT
+    val q = s"""|USING PERIODIC COMMIT 10000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
@@ -118,10 +118,10 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |})
                 |
                 |// create the relationship to the analysis node
-                |MERGE (q)<-[:PRODUCED_BY]-(n)
+                |MERGE (q)-[:PRODUCED]->(n)
                 |
                 |// create the relationship to the variant
-                |MERGE (v)<-[:FOR_VARIANT]-(n)
+                |MERGE (v)-[:HAS_REGULATORY_FEATURE]->(n)
                 |""".stripMargin
 
     graph.run(q)
@@ -131,7 +131,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
    * Given a part file, upload it and create all the transcript nodes.
    */
   def uploadTranscripts(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
-    val q = s"""|USING PERIODIC COMMIT
+    val q = s"""|USING PERIODIC COMMIT 10000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
@@ -268,10 +268,10 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |})
                 |
                 |// create the relationship to the analysis node
-                |MERGE (n)-[:PRODUCED_BY]->(q)
+                |MERGE (q)-[:PRODUCED]->(n)
                 |
                 |// create the relationship to the variant
-                |MERGE (n)-[:FOR_VARIANT]->(v)
+                |MERGE (v)-[:HAS_TRANSCRIPT_CONSEQUENCE]->(n)
                 |""".stripMargin
 
     graph.run(q)
@@ -288,10 +288,11 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
                 |WHERE exists(n.geneId) AND NOT ((n)-[:FOR_GENE]->(g))
                 |
                 |// limit the size for each call (using APOC)
-                |WITH n, g LIMIT {limit}
+                |WITH n, g
+                |LIMIT {limit}
                 |
                 |// connect the transcript consequence to the gene
-                |MERGE (n)-[:FOR_GENE]->(g)
+                |MERGE (g)-[:HAS_TRANSCRIPT_CONSEQUENCE]->(n)
                 |""".stripMargin
 
     // run the query using the APOC function

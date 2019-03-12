@@ -31,4 +31,7 @@ object ApplicationConfig {
   /** Some common configurations that can be extended. */
   val sparkDefaults = new ApplicationConfig("spark-defaults")
   val sparkEnv      = new ApplicationConfig("spark-env")
+
+  /** Python3 spark configuration setting. */
+  val sparkPython3 = "PYSPARK_PYTHON" -> "/usr/bin/python3"
 }

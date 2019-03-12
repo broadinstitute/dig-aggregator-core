@@ -5,12 +5,14 @@
 
 import argparse
 import glob
+import os
 import os.path
 import platform
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 # where in S3 meta-analysis data is
 s3_path = 's3://dig-analysis-data/out/metaanalysis'
@@ -21,8 +23,11 @@ localdir = '/mnt/efs/metaanalysis'
 # where metal is installed locally
 metal_local = '/home/hadoop/bin/metal'
 
+# getmerge-strip-headers script installed locally
+getmerge = '/home/hadoop/bin/getmerge-strip-headers.sh'
 
-def run_metal_script(workdir, parts, stderr=False, overlap=False, freq=False):
+
+def run_metal_script(workdir, parts, stderr=False, overlap=False):
     """
     Run the METAL program at a given location with a set of part files.
     """
@@ -43,12 +48,9 @@ def run_metal_script(workdir, parts, stderr=False, overlap=False, freq=False):
         'PVALUELABEL pValue',
         'EFFECTLABEL beta',
         'WEIGHTLABEL n',
-        'FREQLABEL eaf',
         'STDERRLABEL stdErr',
         'CUSTOMVARIABLE TotalSampleSize',
         'LABEL TotalSampleSize AS n',
-        'AVERAGEFREQ ON',
-        'MINMAXFREQ ON',
         'OVERLAP %s' % ('ON' if overlap else 'OFF'),
     ]
 
@@ -84,40 +86,23 @@ def run_metal_script(workdir, parts, stderr=False, overlap=False, freq=False):
 
 def run_metal(path, input_files, overlap=False):
     """
-    Run METAL twice: once for SAMPLESIZE (pValue + zScore) and once for STDERR,
-    then load and join the results together in an DataFrame and return it.
+    Run METAL twice: once for SAMPLESIZE (pValue + zScore) and once for STDERR.
     """
     run_metal_script(path, input_files, stderr=False, overlap=overlap)
     run_metal_script(path, input_files, stderr=True, overlap=False)
 
 
-def merge_parts(path, outfile):
+def test_path(path):
     """
-    Run `hadoop fs -getmerge` to join multiple CSV part files together. 
-    
-    The order of the headers MUST match the order of the columns selected by 
-    the partition variants script!
+    Run `hadoop fs -test -s` to see if any files exist matching the pathspec.
     """
-    headers = [
-        'varId',
-        'chromosome',
-        'position',
-        'reference',
-        'alt',
-        'phenotype',
-        'pValue',
-        'beta',
-        'eaf',
-        'maf',
-        'stdErr',
-        'n',
-    ]
+    try:
+        subprocess.check_call(['hadoop', 'fs', '-test', '-s', path])
+    except subprocess.CalledProcessError:
+        return False
 
-    # join all the files together into a single dataset file
-    subprocess.check_call(['hadoop', 'fs', '-getmerge', '-nl', '-skip-empty-file', path, outfile])
-
-    # add the header to the top of the file
-    subprocess.check_call(['sed', '-i', '1i%s' % '\t'.join(headers), outfile])
+    # a exit-code of 0 is success
+    return True
 
 
 def find_parts(path):
@@ -126,10 +111,25 @@ def find_parts(path):
     """
     print('Collecting files from %s' % path)
 
-    return subprocess \
-        .check_output(['hadoop', 'fs', '-ls', '-C', path]) \
-        .decode('UTF-8') \
-        .split('\n')
+    try:
+        return subprocess.check_output(['hadoop', 'fs', '-ls', '-C', path]) \
+            .decode('UTF-8') \
+            .strip() \
+            .split('\n')
+    except subprocess.CalledProcessError:
+        return []
+
+
+def merge_parts(path, outfile):
+    """
+    Run `hadoop fs -getmerge` to join multiple CSV part files together. 
+    
+    This works by using the bin/scripts/getmerge-strip-headers.sh script in
+    S3 which will use AWK to remove all the extraneous headers from the
+    final, merged CSV file.
+    """
+    subprocess.check_call(['mkdir', '-p', os.path.dirname(outfile)])
+    subprocess.check_call([getmerge, path, outfile])
 
 
 def run_ancestry_specific_analysis(phenotype):
@@ -148,11 +148,11 @@ def run_ancestry_specific_analysis(phenotype):
     # ancestry -> [dataset] map
     ancestries = dict()
 
-    # the path format is .../<dataset>/(common|rare)/ancestry=?
-    r = re.compile(r'/([^/]+)/(?:common|rare)/ancestry=(.+)$')
+    # the path format is .../dataset=?/ancestry=?/rare=?/part-*
+    r = re.compile(r'/dataset=([^/]+)/ancestry=([^/]+)/')
 
-    # find all the unique ancestries across this phenotype
-    for part in find_parts('%s/*/*' % srcdir):
+    # find all the datasets for each ancestry across all variants
+    for part in find_parts('%s/*/*/*/part-*' % srcdir):
         m = r.search(part)
 
         if m is not None:
@@ -160,27 +160,31 @@ def run_ancestry_specific_analysis(phenotype):
             ancestries.setdefault(ancestry, set()) \
                 .add(dataset)
 
-    # for each ancestry, run METAL across all the datasets with OVERLAP ON
+    # if there is more than 1 ancestry, delete the "Mixed" ancestry
+    if len(ancestries) > 1 and 'Mixed' in ancestries:
+        del ancestries['Mixed']
+
+    # run METAL on common variants for all the datasets with OVERLAP ON
     for ancestry, datasets in ancestries.items():
-        ancestrydir = '%s/%s' % (outdir, ancestry)
+        ancestrydir = '%s/ancestry=%s' % (outdir, ancestry)
         analysisdir = '%s/_analysis' % ancestrydir
 
-        # collect all the dataset files created
-        dataset_files = []
+        # collect all the merged part files (per dataset)
+        metal_input_files = []
 
         # datasets need to be merged into a single file for METAL to EFS
         for dataset in datasets:
-            parts = '%s/%s/common/ancestry=%s' % (srcdir, dataset, ancestry)
-            dataset_file = '%s/%s/common.csv' % (ancestrydir, dataset)
+            parts = '%s/dataset=%s/ancestry=%s/rare=false/part-*' % (srcdir, dataset, ancestry)
+            variants_file = '%s/%s/common.csv' % (ancestrydir, dataset)
 
             # merge the common variants for the dataset together
-            merge_parts(parts, dataset_file)
+            merge_parts(parts, variants_file)
 
-            # tally all the
-            dataset_files.append(dataset_file)
+            # tally all the dataset files
+            metal_input_files.append(variants_file)
 
         # run METAL across all datasets with OVERLAP ON
-        run_metal(analysisdir, dataset_files, overlap=True)
+        run_metal(analysisdir, metal_input_files, overlap=True)
 
 
 def run_trans_ethnic_analysis(phenotype):
@@ -210,10 +214,14 @@ def run_trans_ethnic_analysis(phenotype):
         if m is not None:
             ancestries.append(m.group(1))
 
+    # if there is no data, then don't try to load+process
+    if len(ancestries) == 0:
+        return
+
     # for each ancestry, merge all the results into a single file
     for ancestry in ancestries:
         parts = '%s/ancestry=%s' % (srcdir, ancestry)
-        input_file = '%s/%s/variants.csv' % (outdir, ancestry)
+        input_file = '%s/ancestry=%s/variants.csv' % (outdir, ancestry)
 
         merge_parts(parts, input_file)
         input_files.append(input_file)

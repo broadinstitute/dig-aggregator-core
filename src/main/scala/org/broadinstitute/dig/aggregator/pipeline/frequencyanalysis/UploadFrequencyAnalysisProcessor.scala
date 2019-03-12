@@ -1,4 +1,4 @@
-package org.broadinstitute.dig.aggregator.pipeline.metaanalysis
+package org.broadinstitute.dig.aggregator.pipeline.frequencyanalysis
 
 import cats._
 import cats.effect._
@@ -13,25 +13,20 @@ import org.neo4j.driver.v1.Session
 import org.neo4j.driver.v1.StatementResult
 
 /**
- * When meta-analysis has been complete, in S3 output are the bottom line
- * results calculated for each of the variants for a given phenotype.
- *
- * This processor will take the output from the ancestry-specific analysis and
- * creates :Frequency nodes in the graph database, and then take the results
- * of the trans-ethnic analysis and create :MetaAnalysis nodes.
+ * This processor will take the output from the frequency analysis and
+ * creates :Frequency nodes in the graph database.
  *
  * The source tables are read from:
  *
- *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/ancestry-specific
- *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/trans-ethnic
+ *  s3://dig-analysis-data/out/frequencyanalysis/<phenotype>/part-*
  */
-class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /**
    * All the processors this processor depends on.
    */
   override val dependencies: Seq[Processor.Name] = Seq(
-    MetaAnalysisPipeline.metaAnalysisProcessor
+    FrequencyAnalysisPipeline.frequencyProcessor
   )
 
   /**
@@ -44,15 +39,17 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val phenotypes = results.map(_.output).distinct
-    val graph      = new GraphDb(config.neo4j)
 
     // create runs for every phenotype
     val ios = for (phenotype <- phenotypes) yield {
-      val analysis   = new Analysis(s"MetaAnalysis/$phenotype", Provenance.thisBuild)
-      val bottomLine = s"out/metaanalysis/trans-ethnic/$phenotype/"
+      val analysis = new Analysis(s"FrequencyAnalysis/$phenotype", Provenance.thisBuild)
+      val graph    = new GraphDb(config.neo4j)
 
-      for {
-        _ <- IO(logger.info(s"Creating analysis node for $phenotype..."))
+      // where the result files are to upload
+      val bottomLine = s"out/frequencyanalysis/$phenotype/"
+
+      val io = for {
+        _ <- IO(logger.info(s"Creating frequency analysis node for $phenotype..."))
 
         // delete the existing analysis and recreate it
         id <- analysis.create(graph)
@@ -66,10 +63,13 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
         _ <- Run.insert(pool, name, Seq(phenotype), analysis.name)
         _ <- IO(logger.info("Done"))
       } yield ()
+
+      // ensure the connection to the database is closed
+      io.guarantee(graph.shutdown)
     }
 
     // process each phenotype serially
-    (ios.toList.sequence >> IO.unit).guarantee(graph.shutdown)
+    ios.toList.sequence >> IO.unit
   }
 
   /**
@@ -83,8 +83,9 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
-                |// die if the phenotype doesn't exist
+                |// die if the phenotype or ancestry doesn't exist
                 |MATCH (p:Phenotype {name: r.phenotype})
+                |MATCH (a:Ancestry {name: r.ancestry})
                 |
                 |// create the variant node if it doesn't exist
                 |MERGE (v:Variant {name: r.varId})
@@ -94,25 +95,19 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |  v.reference=r.reference,
                 |  v.alt=r.alt
                 |
-                |// create the result node
-                |CREATE (n:MetaAnalysis {
-                |  pValue: toFloat(r.pValue),
-                |  beta: toFloat(r.beta),
-                |  stdErr: toFloat(r.stdErr),
-                |  zScore: toFloat(r.zScore),
-                |  n: toInteger(r.n)
+                |// create the frequency result node
+                |CREATE (n:Frequency {
+                |  eaf: toFloat(r.eaf),
+                |  maf: toFloat(r.maf)
                 |})
                 |
                 |// create the relationship to the analysis node
                 |CREATE (q)-[:PRODUCED]->(n)
                 |
-                |// create the relationship to the trait and variant
-                |CREATE (p)-[:HAS_META_ANALYSIS]->(n)<-[:HAS_META_ANALYSIS]-(v)
-                |
-                |// if a top result, mark it as such
-                |FOREACH(i IN (CASE toBoolean(r.top) WHEN true THEN [1] ELSE [] END) |
-                |  CREATE (v)-[:TOP_VARIANT]->(n)
-                |)
+                |// create the relationship to the trait, ancestry, and variant
+                |CREATE (p)-[:HAS_FREQUENCY]->(n)
+                |CREATE (v)-[:HAS_FREQUENCY]->(n)
+                |CREATE (a)-[:HAS_FREQUENCY]->(n)
                 |""".stripMargin
 
     graph.run(q)

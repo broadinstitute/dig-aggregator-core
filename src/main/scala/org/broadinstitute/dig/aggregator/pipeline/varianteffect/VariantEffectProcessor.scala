@@ -12,73 +12,88 @@ import org.broadinstitute.dig.aggregator.core.emr._
 import org.broadinstitute.dig.aggregator.core.processors._
 
 /**
- * When a variants dataset has finished uploading, this processor takes the
- * dataset across all phenotypes and first prepares it for VEP and then runs
- * VEP on it, finally writing the output back to HDFS:
+ * Once all the distinct bi-allelic variants across all datasets have been
+ * identified (VariantListProcessor) then they can be run through VEP in
+ * parallel across multiple VMs.
  *
- * VEP TSV files written to:
+ * VEP TSV input files located at:
  *
  *  s3://dig-analysis-data/out/varianteffect/variants
  *
- * VEP output CSV files written to:
+ * VEP output JSON written to:
  *
  *  s3://dig-analysis-data/out/varianteffect/effects
  */
-class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends DatasetProcessor(name, config) {
+class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /**
-   * Topic to consume.
+   * All the processors this processor depends on.
    */
-  override val topic: String = "variants"
+  override val dependencies: Seq[Processor.Name] = Seq(
+    VariantEffectPipeline.variantListProcessor
+  )
 
   /**
    * All the job scripts that need to be uploaded to AWS.
    */
   override val resources: Seq[String] = Seq(
     "pipeline/varianteffect/cluster-bootstrap.sh",
-    "pipeline/varianteffect/master-bootstrap.sh",
-    "pipeline/varianteffect/prepareDatasets.py",
-    "pipeline/varianteffect/runVEP.py",
-    "pipeline/varianteffect/loadVariantEffects.py",
+    "pipeline/varianteffect/installVEP.sh",
+    "pipeline/varianteffect/runVEP.sh",
+    "pipeline/varianteffect/runVEP.pl"
   )
 
   /**
-   * All that matters is that there are new datasets. The input datasets are
-   * actually ignored, and _everything_ is reprocessed. This is done because
-   * there is only a single analysis node for all variants.
+   * The results are ignored, as all the variants are refreshed and everything
+   * needs to be run through VEP again.
    */
-  override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
+  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val clusterBootstrap = aws.uriOf("resources/pipeline/varianteffect/cluster-bootstrap.sh")
-    val masterBootstrap  = aws.uriOf("resources/pipeline/varianteffect/master-bootstrap.sh")
-    val prepareScript    = aws.uriOf("resources/pipeline/varianteffect/prepareDatasets.py")
-    val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.py")
-    val loadScript       = aws.uriOf("resources/pipeline/varianteffect/loadVariantEffects.py")
+    val installScript    = aws.uriOf("resources/pipeline/varianteffect/installVEP.sh")
+    val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.pl")
 
-    // build the cluster definition
+    // get a list of distinct datasets that need VEP run on them
+    val inputs = results.map(_.output).distinct
+
+    // definition of each VM "cluster" (of 1 machine) that will run VEP
     val cluster = Cluster(
       name = name.toString,
       masterInstanceType = InstanceType.c5_4xlarge,
-      instances = 3,
-      bootstrapScripts = Seq(
-        new BootstrapScript(clusterBootstrap),
-        new BootstrapScript(masterBootstrap) // TODO: Use MasterBootstrapScript once AWS fixes their bug!
-      ),
+      instances = 1,
+      masterVolumeSizeInGB = 800,
+      applications = Seq.empty,
+      bootstrapScripts = Seq(new BootstrapScript(clusterBootstrap)),
+      bootstrapSteps = Seq(JobStep.Script(installScript))
     )
 
-    // first prepare, then run VEP, finally, load VEP to S3
-    val steps = Seq(
-      JobStep.PySpark(prepareScript),
-      JobStep.Script(runScript),
-      JobStep.PySpark(loadScript),
-    )
-
-    // run all the jobs (note: this could be done in parallel!)
     for {
-      _   <- IO(logger.info(s"Running VEP..."))
-      job <- aws.runJob(cluster, steps)
-      _   <- aws.waitForJob(job)
-      _   <- Run.insert(pool, name, datasets.map(_.dataset), "out/varianteffect/effects")
-      _   <- IO(logger.info("Done"))
+      // delete all the existing effects for the dataset
+      _ <- aws.rmdir(s"out/varianteffect/effects/")
+
+      // get all the variant part files to process
+      keys <- aws.ls(s"out/varianteffect/variants/", excludeSuccess = true)
+
+      // only use the filename, not the entire key
+      parts = keys.map(_.split('/').last)
+
+      // split the part files into chunks that are processed in parallel
+      steps = parts
+        .sliding(20, 20)
+        .map(JobStep.Script(runScript, _: _*))
+        .toList
+
+      // wrap each step so we have a list of jobs, each being a single step
+      jobs = steps.map(Seq.apply(_))
+
+      // distribute the jobs across many clustered machines
+      clusteredJobs = aws.clusterJobs(cluster, jobs)
+
+      // run and wait for them to finish
+      _ <- IO(logger.info("Running VEP..."))
+      _ <- aws.waitForJobs(clusteredJobs)
+      _ <- IO(logger.info("Updating database..."))
+      _ <- Run.insert(pool, name, inputs, "VEP/effects")
+      _ <- IO(logger.info("Done"))
     } yield ()
   }
 }

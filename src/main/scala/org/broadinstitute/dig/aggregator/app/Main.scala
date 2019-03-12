@@ -56,7 +56,7 @@ object Main extends IOApp with LazyLogging {
    */
   private def confirmReprocess(opts: Opts): IO[Boolean] = {
     val warning = IO {
-      logger.warn("The consumer state is being reset because the --reprocess")
+      logger.warn("The database state is being reset because the --reprocess")
       logger.warn("flag was passed on the command line.")
       logger.warn("")
       logger.warn("If this is the desired course of action, answer 'Y' at")

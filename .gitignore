@@ -1,8 +1,9 @@
-# ensime plugin
-.ensime_cache/
-.ensime
+# metals language server files
+.metals/
+.bloop/
 
 # compiled project
+project/.bloop/
 project/project/
 project/target/
 

@@ -14,7 +14,6 @@ object MetaAnalysisPipeline extends Pipeline {
   /**
    * Register all intake processors.
    */
-  val variantPartitionProcessor: Name   = register("VariantPartitionProcessor", new VariantPartitionProcessor(_, _))
   val metaAnalysisProcessor: Name       = register("MetaAnalysisProcessor", new MetaAnalysisProcessor(_, _))
   val uploadMetaAnalysisProcessor: Name = register("UploadMetaAnalysisProcessor", new UploadMetaAnalysisProcessor(_, _))
 }

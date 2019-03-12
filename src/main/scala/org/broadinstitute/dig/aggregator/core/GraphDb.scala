@@ -30,22 +30,40 @@ class GraphDb(config: Neo4jConfig) {
     // set custom connection settings
     val settings = Config.build
       .withMaxConnectionLifetime(24, TimeUnit.HOURS)
-      .withConnectionLivenessCheckTimeout(2, TimeUnit.MINUTES)
+      .withConnectionLivenessCheckTimeout(30, TimeUnit.MINUTES)
+      .withoutEncryption
 
     GraphDatabase.driver(config.url, auth, settings.toConfig)
   }
 
   /**
+   * Shutdown the driver.
+   */
+  def shutdown(): IO[Unit] = IO(driver.close)
+
+  /**
    * Run a query, retry if something bad happens with exponential backoff.
+   *
+   * Create a session to run the query, and guarantee that the session closes
+   * even if something bad happens.
    */
   def run(query: String, params: Map[String, AnyRef]): IO[StatementResult] = {
-    retry(IO(driver.session.run(query, params.asJava)), 10.seconds)
+    for {
+      session <- IO(driver.session)
+
+      // run the query, close it
+      run   = IO(session.run(query, params.asJava))
+      close = IO(session.close)
+
+      // retry the query on failure, always close the session when done
+      result <- retry(run).guarantee(close)
+    } yield result
   }
 
   /**
    * Version of run with no parameters.
    */
   def run(query: String): IO[StatementResult] = {
-    retry(IO(driver.session.run(query)), 10.seconds)
+    run(query, Map.empty)
   }
 }

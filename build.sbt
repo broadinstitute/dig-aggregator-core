@@ -1,9 +1,9 @@
 lazy val Versions = new {
   val Aws              = "1.11.349"
-  val Cats             = "1.4.0"
-  val CatsEffect       = "1.0.0"
+  val Cats             = "1.5.0"
+  val CatsEffect       = "1.1.0"
   val Doobie           = "0.6.0"
-  val Fs2              = "1.0.0"
+  val Fs2              = "1.0.1"
   val H2               = "1.4.197"
   val Hadoop           = "1.2.1"
   val Janino           = "3.0.8"
@@ -103,15 +103,15 @@ buildInfoTask := {
   log.info(s"Writing version info to '$file'")
 
   val contents =
-    s"""name=${n}
-       |version=${v}
-       |branch=${branch}
-       |lastCommit=${lastCommit.getOrElse("")}
-       |uncommittedChanges=${anyUncommittedChanges}
-       |describedVersion=${describedVersion.getOrElse("")}
-       |buildDate=${buildDate}
-       |remoteUrl=${remoteUrl.getOrElse("")}
-       |""".stripMargin
+    s"""|name=${n}
+        |version=${v}
+        |branch=${branch}
+        |lastCommit=${lastCommit.getOrElse("")}
+        |uncommittedChanges=${anyUncommittedChanges}
+        |describedVersion=${describedVersion.getOrElse("")}
+        |buildDate=${buildDate}
+        |remoteUrl=${remoteUrl.getOrElse("")}
+        |""".stripMargin
 
   IO.write(file, contents)
 
@@ -124,19 +124,19 @@ import ReleaseTransformations._
 
 releaseProcess := Seq[ReleaseStep](
   checkSnapshotDependencies, // : ReleaseStep
-  inquireVersions, // : ReleaseStep
-  runClean, // : ReleaseStep
-  runTest, // : ReleaseStep
-  setReleaseVersion, // : ReleaseStep
-  commitReleaseVersion, // : ReleaseStep, performs the initial git checks
-  tagRelease,           // : ReleaseStep
+  inquireVersions,           // : ReleaseStep
+  runClean,                  // : ReleaseStep
+  runTest,                   // : ReleaseStep
+  setReleaseVersion,         // : ReleaseStep
+  commitReleaseVersion,      // : ReleaseStep, performs the initial git checks
+  tagRelease,                // : ReleaseStep
   // run 'publishLocal' instead of 'publish', since publishing to a repo on the Broad FS never resulted in
   // artifacts that could be resolved by other builds. :(
   // See: https://github.com/sbt/sbt-release#can-we-finally-customize-that-release-process-please
   //      https://stackoverflow.com/questions/44058275/add-docker-publish-step-to-sbt-release-process-with-new-tag
   //      https://github.com/sbt/sbt/issues/1917
   releaseStepCommand("publishLocal"),
-  setNextVersion, // : ReleaseStep
+  setNextVersion,    // : ReleaseStep
   commitNextVersion, // : ReleaseStep
-  pushChanges // : ReleaseStep, also checks that an upstream branch is properly configured
+  pushChanges        // : ReleaseStep, also checks that an upstream branch is properly configured
 )
