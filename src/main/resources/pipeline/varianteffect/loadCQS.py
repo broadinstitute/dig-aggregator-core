@@ -34,7 +34,6 @@ if __name__ == '__main__':
         .withColumn('cqs', explode(col('transcript_consequences'))) \
         .select(
             col('id'),
-            col('filename'),
             col('cqs.*'),
         )
 
@@ -43,7 +42,6 @@ if __name__ == '__main__':
         .withColumn('cqs', explode(col('regulatory_feature_consequences'))) \
         .select(
             col('id'),
-            col('filename'),
             col('cqs.*'),
         )
 

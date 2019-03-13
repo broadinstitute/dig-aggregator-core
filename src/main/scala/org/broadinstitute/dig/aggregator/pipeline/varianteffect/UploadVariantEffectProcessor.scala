@@ -34,7 +34,7 @@ class UploadVariantEffectProcessor(name: Processor.Name, config: BaseConfig) ext
    * All the processors this processor depends on.
    */
   override val dependencies: Seq[Processor.Name] = Seq(
-    VariantEffectPipeline.joinVariantEffectProcessor
+    VariantEffectPipeline.loadVariantCQSProcessor
   )
 
   /**

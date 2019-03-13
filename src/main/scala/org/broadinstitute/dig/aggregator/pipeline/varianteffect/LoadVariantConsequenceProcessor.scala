@@ -29,7 +29,7 @@ import org.broadinstitute.dig.aggregator.core.processors._
  *
  * The inputs and outputs for this processor are expected to be phenotypes.
  */
-class JoinVariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /**
    * All the processors this processor depends on.
@@ -42,14 +42,14 @@ class JoinVariantEffectProcessor(name: Processor.Name, config: BaseConfig) exten
    * All the job scripts that need to be uploaded to AWS.
    */
   override val resources: Seq[String] = Seq(
-    "pipeline/varianteffect/joinVariantEffects.py"
+    "pipeline/varianteffect/loadCQS.py"
   )
 
   /**
    * All effect results are combined together, so the results list is ignored.
    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
-    val scriptUri = aws.uriOf("resources/pipeline/varianteffect/joinVariantEffects.py")
+    val scriptUri = aws.uriOf("resources/pipeline/varianteffect/loadCQS.py")
 
     val sparkConf = ApplicationConfig.sparkEnv.withProperties(
       "PYSPARK_PYTHON" -> "/usr/bin/python3"
@@ -69,10 +69,10 @@ class JoinVariantEffectProcessor(name: Processor.Name, config: BaseConfig) exten
     val inputs = results.map(_.output).distinct
 
     // generate the run output
-    val run = Run.insert(pool, name, inputs, "VEP")
+    val run = Run.insert(pool, name, inputs, "VEP/CQS")
 
     for {
-      _   <- IO(logger.info(s"Joining variant effects..."))
+      _   <- IO(logger.info(s"Loading variant consequences..."))
       job <- aws.runJob(cluster, steps)
       _   <- aws.waitForJob(job)
       _   <- IO(logger.info("Updating database..."))
