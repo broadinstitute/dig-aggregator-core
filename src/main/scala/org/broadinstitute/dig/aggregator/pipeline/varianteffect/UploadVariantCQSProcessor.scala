@@ -285,7 +285,7 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
                 |      (g:Gene {ensemblId: n.geneId})
                 |
                 |// consequences referencing a gene, but has no connection
-                |WHERE exists(n.geneId) AND NOT ((n)-[:FOR_GENE]->(g))
+                |WHERE exists(n.geneId) AND NOT ((g)-[:HAS_TRANSCRIPT_CONSEQUENCE]->(n))
                 |
                 |// limit the size for each call (using APOC)
                 |WITH n, g
@@ -296,6 +296,6 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
                 |""".stripMargin
 
     // run the query using the APOC function
-    graph.run(s"call apoc.periodic.commit('$q', {limit: 10000}))")
+    graph.run(s"call apoc.periodic.commit('$q', {limit: 10000})")
   }
 }
