@@ -52,11 +52,13 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Pr
   /**
    * Calculates the set of things this processor needs to process.
    */
-  override def getWork(reprocess: Boolean, only: Option[String]): IO[Seq[Run.Result]] = {
+  override def getWork(opts: Processor.Opts): IO[Seq[Run.Result]] = {
     for {
-      results <- Run.resultsOf(pool, dependencies, if (reprocess) None else Some(name))
+      results <- Run.resultsOf(pool, dependencies, if (opts.reprocess) None else Some(name))
     } yield {
-      results.filter(r => r.output.matches(only.getOrElse(r.output)))
+      results
+        .filter(r => r.output.matches(opts.only.getOrElse(r.output)))
+        .filterNot(r => r.output.matches(opts.exclude.getOrElse("")))
     }
   }
 
@@ -70,10 +72,10 @@ abstract class RunProcessor(name: Processor.Name, config: BaseConfig) extends Pr
    *
    * Otherwise, this is just called once and then exits.
    */
-  override def run(reprocess: Boolean, only: Option[String]): IO[Unit] = {
+  override def run(opts: Processor.Opts): IO[Unit] = {
     for {
       _ <- resources.map(aws.upload(_)).toList.sequence
-      _ <- getWork(reprocess, only).flatMap(processResults)
+      _ <- getWork(opts).flatMap(processResults)
     } yield ()
   }
 }

@@ -7,10 +7,12 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 
 import org.broadinstitute.dig.aggregator.core.processors.Processor
-import org.broadinstitute.dig.aggregator.core.Utils.retry
+import org.broadinstitute.dig.aggregator.core.Utils._
 
 import org.neo4j.driver.v1.Driver
 import org.neo4j.driver.v1.StatementResult
+
+import scala.util.Random
 
 /**
  * The representation of a processor's analysis that has been uploaded to the
@@ -21,6 +23,7 @@ import org.neo4j.driver.v1.StatementResult
  * produced by it.
  */
 final class Analysis(val name: String, val provenance: Provenance) extends LazyLogging {
+  import Implicits.contextShift
 
   /**
    * Given an S3 glob to a list of part files, call the uploadPart function for
@@ -36,7 +39,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
       parts = listing.filter(_.toLowerCase.endsWith(".csv"))
 
       // indicate how many parts are being uploaded
-      _ <- IO(logger.debug(s"Uploading ${parts.size} part files..."))
+      _ <- IO(logger.info(s"Uploading ${parts.size} part files for analysis '$name..."))
 
       // create an IO statement for each part and upload it
       uploads = for ((part, n) <- parts.zipWithIndex) yield {
@@ -51,9 +54,9 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
         }
       }
 
-      // upload each part serially
+      // upload the part files
       _ <- uploads.toList.sequence
-      _ <- IO(logger.debug("Upload complete"))
+      _ <- IO(logger.debug(s"Upload complete of analysis '$name'"))
     } yield ()
   }
 
@@ -77,9 +80,10 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
 
     // run the query, return the node ID
     for {
-      _ <- IO(logger.debug(s"Deleting existing analysis for '$name'"))
       _ <- delete(graph)
-      _ <- IO(logger.debug(s"Creating new analysis for '$name'"))
+
+      // create the new analysis node after having deleted the previous one
+      _ <- IO(logger.info(s"Creating new analysis for '$name'"))
       r <- graph.run(q)
     } yield r.single.get(0).asInt
   }
@@ -94,7 +98,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
     def deleteResults(total: Int): IO[Int] = {
       val q = s"""|MATCH (:Analysis {name: '$name'})<-[:PRODUCED]->(n)
                   |WITH n
-                  |LIMIT 50000
+                  |LIMIT 100000
                   |DETACH DELETE n
                   |""".stripMargin
 
@@ -120,6 +124,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
      */
 
     for {
+      _            <- IO(logger.info(s"Deleting existing results for analysis '$name'"))
       totalDeleted <- deleteResults(0)
 
       // delete the actual analysis node
@@ -131,7 +136,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
       _ <- graph.run(q)
 
       // how how many result nodes and relationships were delete
-      _ <- IO(logger.debug(s"Deleted $totalDeleted nodes and relationships"))
+      _ <- IO(logger.debug(s"...$totalDeleted nodes and relationships deleted"))
     } yield ()
   }
 }

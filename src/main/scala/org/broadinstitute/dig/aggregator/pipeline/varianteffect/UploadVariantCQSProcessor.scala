@@ -57,17 +57,10 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
       val transcripts        = s"out/varianteffect/transcript_consequences"
 
       for {
-        _ <- IO(logger.info(s"Creating analysis node for variant effects..."))
-
-        // delete the existing analysis and recreate it
         id <- analysis.create(graph)
 
         // find all the part files to upload for the analysis
-        _ <- IO(logger.info(s"Uploading regulatory feature consequences..."))
         _ <- analysis.uploadParts(aws, graph, id, regulatoryFeatures)(uploadRegulatoryFeatures)
-
-        // find all the part files to upload for the analysis
-        _ <- IO(logger.info(s"Uploading transcript consequences..."))
         _ <- analysis.uploadParts(aws, graph, id, transcripts)(uploadTranscripts)
 
         // connect transcript consequences to genes

@@ -19,20 +19,20 @@ abstract class Processor(val name: Processor.Name) extends LazyLogging {
   /**
    * Determines the set of things that need to be processed.
    */
-  def getWork(reprocess: Boolean, only: Option[String]): IO[Seq[_]]
+  def getWork(opts: Processor.Opts): IO[Seq[_]]
 
   /**
    * True if this processor has something to process.
    */
-  def hasWork(reprocess: Boolean): IO[Boolean] = {
-    getWork(reprocess, None).map(_.nonEmpty)
+  def hasWork(opts: Processor.Opts): IO[Boolean] = {
+    getWork(opts).map(_.nonEmpty)
   }
 
   /**
    * Logs the set of things this processor will process if run.
    */
-  def showWork(reprocess: Boolean, only: Option[String]): IO[Unit] = {
-    for (work <- getWork(reprocess, only)) yield {
+  def showWork(opts: Processor.Opts): IO[Unit] = {
+    for (work <- getWork(opts)) yield {
       if (work.isEmpty) {
         logger.info(s"Everything up to date.")
       } else {
@@ -44,7 +44,7 @@ abstract class Processor(val name: Processor.Name) extends LazyLogging {
   /**
    * Run this processor.
    */
-  def run(reprocess: Boolean, only: Option[String]): IO[Unit]
+  def run(opts: Processor.Opts): IO[Unit]
 }
 
 /**
@@ -52,6 +52,11 @@ abstract class Processor(val name: Processor.Name) extends LazyLogging {
  */
 object Processor extends LazyLogging {
   import scala.language.implicitConversions
+
+  /**
+   * Command line flags processors know about.
+   */
+  final case class Opts(reprocess: Boolean, only: Option[String], exclude: Option[String])
 
   /**
    * Processors are required to have a unique name that is unique across all

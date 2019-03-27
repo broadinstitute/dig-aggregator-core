@@ -76,7 +76,7 @@ object Main extends IOApp with LazyLogging {
     val reprocess = opts.reprocess()
 
     Pipeline(name) match {
-      case Some(p) => if (opts.yes()) p.run(opts.config, reprocess) else p.showWork(opts.config, reprocess)
+      case Some(p) => (if (opts.yes()) p.run(_, _) else p.showWork(_, _))(opts.config, opts.processorOpts)
       case _       => IO.raiseError(new Exception(s"Unknown pipeline '$name'"))
     }
   }
@@ -85,11 +85,8 @@ object Main extends IOApp with LazyLogging {
    * Runs a single processor by name.
    */
   private def runProcessor(name: String, opts: Opts): IO[Unit] = {
-    val reprocess = opts.reprocess()
-    val only      = opts.only.toOption
-
     Processor(name)(opts.config) match {
-      case Some(p) => if (opts.yes()) p.run(reprocess, only) else p.showWork(reprocess, only)
+      case Some(p) => (if (opts.yes()) p.run(_) else p.showWork(_))(opts.processorOpts)
       case _       => IO.raiseError(new Exception(s"Unknown processor '$name'"))
     }
   }

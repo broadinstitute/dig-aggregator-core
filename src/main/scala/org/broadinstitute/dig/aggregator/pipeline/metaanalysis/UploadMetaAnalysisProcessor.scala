@@ -52,17 +52,12 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
       val bottomLine = s"out/metaanalysis/trans-ethnic/$phenotype/"
 
       for {
-        _ <- IO(logger.info(s"Creating analysis node for $phenotype..."))
-
-        // delete the existing analysis and recreate it
         id <- analysis.create(graph)
 
         // find and upload all the bottom-line result part files
-        _ <- IO(logger.info(s"Uploading results for $phenotype..."))
         _ <- analysis.uploadParts(aws, graph, id, bottomLine)(uploadResults)
 
         // add the result to the database
-        _ <- IO(logger.info(s"Updating database..."))
         _ <- Run.insert(pool, name, Seq(phenotype), analysis.name)
         _ <- IO(logger.info("Done"))
       } yield ()

@@ -34,6 +34,14 @@ When testing changes to processors, it can be quite a pain to run over _everythi
 sbt "run --yes --only T2D MetaAnalysisProcessor"
 ```
 
+Similarly, you can use the `--exclude` flag to remove something that would otherwise be processed from the list:
+
+```bash
+sbt "run --yes --exclude T2D MetaAnalysisProcessor"
+```
+
+_You can use `--only` and `--exclude` together as well._
+
 ## Running Pipelines
 
 If `--pipeline` is present on the command line, then instead of a `<processor>` name, the program will expect the name of a pipeline and will run the entire pipeline. Each processor in the pipeline will perform any work that needs to be done (in order) until there is no more work left.
