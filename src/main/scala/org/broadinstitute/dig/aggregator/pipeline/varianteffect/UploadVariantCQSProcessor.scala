@@ -265,7 +265,7 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
                 |FIELDTERMINATOR '\t'
                 |
                 |// split the ID into chrom, pos, reference, allele (CPRA)
-                |WITH split(r.id, ':') AS cpra
+                |WITH r, split(r.id, ':') AS cpra
                 |
                 |// create the variant node if it doesn't exist
                 |MERGE (v:Variant {name: r.id})
