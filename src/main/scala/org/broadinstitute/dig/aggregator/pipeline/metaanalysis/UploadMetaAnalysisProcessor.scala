@@ -71,15 +71,19 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
    * Given a part file, upload it and create all the bottom-line nodes.
    */
   def uploadResults(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
-    val q = s"""|USING PERIODIC COMMIT 10000
+    for {
+      _       <- mergeVariants(graph, part)
+      results <- createResults(graph, id, part)
+    } yield results
+  }
+
+  /**
+   * Ensure the variants for each result exist.
+   */
+  def mergeVariants(graph: GraphDb, part: String): IO[StatementResult] = {
+    val q = s"""|USING PERIODIC COMMIT 50000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
-                |
-                |// lookup the analysis node
-                |MATCH (q:Analysis) WHERE ID(q)=$id
-                |
-                |// die if the phenotype doesn't exist
-                |MATCH (p:Phenotype {name: r.phenotype})
                 |
                 |// create the variant node if it doesn't exist
                 |MERGE (v:Variant {name: r.varId})
@@ -88,6 +92,23 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |  v.position=toInteger(r.position),
                 |  v.reference=r.reference,
                 |  v.alt=r.alt
+                |""".stripMargin
+
+    graph.run(q)
+  }
+
+  /**
+   * Create all the result nodes and relationships.
+   */
+  def createResults(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
+    val q = s"""|USING PERIODIC COMMIT 50000
+                |LOAD CSV WITH HEADERS FROM '$part' AS r
+                |FIELDTERMINATOR '\t'
+                |
+                |// lookup the analysis node
+                |MATCH (q:Analysis) WHERE ID(q)=$id
+                |MATCH (p:Phenotype {name: r.phenotype})
+                |MATCH (v:Variant {name: r.varId})
                 |
                 |// create the result node
                 |CREATE (n:MetaAnalysis {
