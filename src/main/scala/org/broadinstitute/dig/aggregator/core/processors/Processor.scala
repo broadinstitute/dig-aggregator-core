@@ -61,10 +61,10 @@ object Processor extends LazyLogging {
     import Glob.String2Glob
 
     /** Returns a glob for the only option. */
-    def onlyGlob: Glob = only.map(_.toGlob).getOrElse(Glob.True)
+    lazy val onlyGlob: Glob = only.map(_.toGlob).getOrElse(Glob.True)
 
     /** Returns a glob for the exclude option. */
-    def excludeGlob: Glob = only.map(_.toGlob).getOrElse(Glob.False)
+    lazy val excludeGlob: Glob = exclude.map(_.toGlob).getOrElse(Glob.False)
   }
 
   /**
