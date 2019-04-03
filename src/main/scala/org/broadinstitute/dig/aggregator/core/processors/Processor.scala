@@ -8,6 +8,7 @@ import doobie._
 import com.typesafe.scalalogging.LazyLogging
 
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
+import org.broadinstitute.dig.aggregator.core.Glob
 
 import org.rogach.scallop._
 
@@ -56,7 +57,15 @@ object Processor extends LazyLogging {
   /**
    * Command line flags processors know about.
    */
-  final case class Opts(reprocess: Boolean, only: Option[String], exclude: Option[String])
+  final case class Opts(reprocess: Boolean, only: Option[String], exclude: Option[String]) {
+    import Glob.String2Glob
+
+    /** Returns a glob for the only option. */
+    def onlyGlob: Glob = only.map(_.toGlob).getOrElse(Glob.True)
+
+    /** Returns a glob for the exclude option. */
+    def excludeGlob: Glob = only.map(_.toGlob).getOrElse(Glob.False)
+  }
 
   /**
    * Processors are required to have a unique name that is unique across all
