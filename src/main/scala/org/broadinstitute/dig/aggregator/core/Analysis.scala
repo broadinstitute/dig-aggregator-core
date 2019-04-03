@@ -93,50 +93,27 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
    * delete the analysis node as it assumes it is being updated.
    */
   def delete(graph: GraphDb): IO[Unit] = {
+    val batchSize = 10000
 
-    // tail-recursive accumulator helper method to count total deletions
-    def deleteResults(total: Int): IO[Int] = {
-      val q = s"""|MATCH (:Analysis {name: '$name'})<-[:PRODUCED]->(n)
-                  |WITH n
-                  |LIMIT 100000
-                  |DETACH DELETE n
-                  |""".stripMargin
+    // first delete all the results
+    val deleteResults =
+      s"""|CALL apoc.periodic.iterate(
+          |  "MATCH (:Analysis {name: '$name'})<-[:PRODUCED]->(n) RETURN n",
+          |  "DETACH DELETE n",
+          |  {batchSize: $batchSize, parallel: true}
+          |)
+          |""".stripMargin
 
-      // run the query
-      val io = for (result <- graph.run(q)) yield {
-        val counters = result.consume.counters
-        val nodes    = counters.nodesDeleted
-        val edges    = counters.relationshipsDeleted
-
-        (nodes, edges)
-      }
-
-      // recurse until nothing is deleted, then delete the analysis
-      retry(io).flatMap {
-        case (0, 0)         => IO(total)
-        case (nodes, edges) => deleteResults(total + nodes + edges)
-      }
-    }
-
-    /*
-     * First delete all the result nodes produced by this analysis and all
-     * the relationships coming from them. Then, delete the analysis node.
-     */
+    // then delete the analysis
+    val deleteAnalysis =
+      s"""|MATCH (n:Analysis {name: '$name'})
+          |DETACH DELETE n
+          |""".stripMargin
 
     for {
-      _            <- IO(logger.info(s"Deleting existing results for analysis '$name'"))
-      totalDeleted <- deleteResults(0)
-
-      // delete the actual analysis node
-      q = s"""|MATCH (n:Analysis {name: '$name'})
-              |DETACH DELETE n
-              |""".stripMargin
-
-      // delete the actual node
-      _ <- graph.run(q)
-
-      // how how many result nodes and relationships were delete
-      _ <- IO(logger.debug(s"...$totalDeleted nodes and relationships deleted"))
+      _ <- IO(logger.info(s"Deleting existing results for analysis '$name'"))
+      _ <- graph.run(deleteResults)
+      _ <- graph.run(deleteAnalysis)
     } yield ()
   }
 }
