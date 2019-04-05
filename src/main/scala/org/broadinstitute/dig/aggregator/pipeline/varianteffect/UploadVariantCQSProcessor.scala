@@ -82,7 +82,7 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
   /**
    * Given a part file, upload it and create all the regulatory feature nodes.
    */
-  def uploadRegulatoryFeatures(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
+  def uploadRegulatoryFeatures(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 10000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
@@ -116,7 +116,7 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
   /**
    * Given a part file, upload it and create all the transcript nodes.
    */
-  def uploadTranscripts(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
+  def uploadTranscripts(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 10000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'

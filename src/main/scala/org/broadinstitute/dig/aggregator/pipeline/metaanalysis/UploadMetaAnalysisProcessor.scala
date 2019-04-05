@@ -70,7 +70,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
   /**
    * Given a part file, upload it and create all the bottom-line nodes.
    */
-  def uploadResults(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
+  def uploadResults(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     for {
       _       <- mergeVariants(graph, part)
       results <- createResults(graph, id, part)
@@ -100,7 +100,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
   /**
    * Create all the result nodes and relationships.
    */
-  def createResults(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
+  def createResults(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 50000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'

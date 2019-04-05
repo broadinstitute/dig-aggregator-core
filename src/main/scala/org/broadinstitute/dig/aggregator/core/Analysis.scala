@@ -29,8 +29,8 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
    * Given an S3 glob to a list of part files, call the uploadPart function for
    * each, allowing the CSV to be written to Neo4j.
    */
-  def uploadParts(aws: AWS, graph: GraphDb, analysisId: Int, s3path: String)(
-      uploadPart: (GraphDb, Int, String) => IO[StatementResult]
+  def uploadParts(aws: AWS, graph: GraphDb, analysisId: Long, s3path: String)(
+      uploadPart: (GraphDb, Long, String) => IO[StatementResult]
   ): IO[Unit] = {
     for {
       listing <- aws.ls(s3path)
@@ -65,7 +65,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
    * ID of the node created (or updated) so that any result nodes can link to
    * it explicitly.
    */
-  def create(graph: GraphDb): IO[Int] = {
+  def create(graph: GraphDb): IO[Long] = {
     val q = s"""|CREATE (n:Analysis {
                 |  name: '$name',
                 |  source: '${provenance.source}',
@@ -85,7 +85,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
       // create the new analysis node after having deleted the previous one
       _ <- IO(logger.info(s"Creating new analysis for '$name'"))
       r <- graph.run(q)
-    } yield r.single.get(0).asInt
+    } yield r.single.get(0).asLong
   }
 
   /**
