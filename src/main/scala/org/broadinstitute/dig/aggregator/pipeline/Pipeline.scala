@@ -39,18 +39,18 @@ trait Pipeline extends LazyLogging {
    * will only show a single level of work, and not later work that may need
    * to happen downstream.
    */
-  def showWork(config: BaseConfig, reprocess: Boolean): IO[Unit] = {
+  def showWork(config: BaseConfig, opts: Processor.Opts): IO[Unit] = {
     val allProcessors = processors.map(Processor(_)(config).get).toSet
 
     // get the set of processors that have known work
-    val knownWork = Pipeline.getKnownWork(allProcessors, reprocess)
+    val knownWork = Pipeline.getKnownWork(allProcessors, opts)
 
     // from that, determine the processors that can actually run
     val showWork = knownWork.flatMap { toRun =>
       val processorsToRun = Pipeline.getShouldRun(allProcessors, toRun)
 
       // output the work for those processors
-      processorsToRun.map(_.showWork(reprocess, None)).toList.sequence
+      processorsToRun.map(_.showWork(opts)).toList.sequence
     }
 
     showWork >> IO.unit
@@ -64,15 +64,15 @@ trait Pipeline extends LazyLogging {
    * complete, this is done again. This continues until all processors are
    * done doing their work and have nothing left to do.
    */
-  def run(config: BaseConfig, reprocess: Boolean): IO[Unit] = {
+  def run(config: BaseConfig, opts: Processor.Opts): IO[Unit] = {
     val allProcessors = processors.map(Processor(_)(config).get).toSet
 
     // recursive helper function
-    def runProcessors(reprocess: Boolean): IO[Unit] = {
+    def runProcessors(opts: Processor.Opts): IO[Unit] = {
       import Implicits._
 
       // get a list of all processors that have known work
-      val knownWork: IO[Set[Processor]] = Pipeline.getKnownWork(allProcessors, reprocess)
+      val knownWork: IO[Set[Processor]] = Pipeline.getKnownWork(allProcessors, opts)
 
       // determine the list of all processors that have work
       knownWork.flatMap { toRun =>
@@ -84,17 +84,17 @@ trait Pipeline extends LazyLogging {
           // all the processors that can run can do so in parallel
           val io = shouldRun.isEmpty match {
             case true => IO.raiseError(new Exception("There's work to do, but nothing ran!"))
-            case _    => shouldRun.map(_.run(reprocess, None)).toList.parSequence
+            case _    => shouldRun.map(_.run(opts)).toList.parSequence
           }
 
           // after they finish, recursively try again (don't reprocess!)
-          io >> runProcessors(false)
+          io >> runProcessors(opts.copy(reprocess = false))
         }
       }
     }
 
     // run until no work is left
-    runProcessors(reprocess)
+    runProcessors(opts)
   }
 }
 
@@ -124,9 +124,9 @@ object Pipeline {
   /**
    * Given a set of processors, filter those that have work.
    */
-  private def getKnownWork(processors: Set[Processor], reprocess: Boolean): IO[Set[Processor]] = {
+  private def getKnownWork(processors: Set[Processor], opts: Processor.Opts): IO[Set[Processor]] = {
     val work = processors.map { p =>
-      p.hasWork(reprocess).map {
+      p.hasWork(opts).map {
         case true  => Some(p)
         case false => None
       }

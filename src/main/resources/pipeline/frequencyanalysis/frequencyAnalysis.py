@@ -54,9 +54,10 @@ def calc_freq(df, ancestry):
             .map(lambda v: Row(varId=v[0], maf=v[1][0] / v[1][1])) \
             .toDF()
 
-    comb_df = loci \
+    # MAF should always be present, EAF is optional
+    comb_df = maf \
         .join(eaf, 'varId', 'left_outer') \
-        .join(maf, 'varId', 'left_outer') \
+        .join(loci, 'varId') \
         .distinct()
 
     # final dataframe for this ancestry

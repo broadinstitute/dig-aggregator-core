@@ -39,6 +39,9 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   /** Only process a single input with a given name (good for debugging). */
   val only: ScallopOption[String] = opt("only")
 
+  /** Exclude processing that matches a given name. */
+  val exclude: ScallopOption[String] = opt("exclude")
+
   /** Email errors. */
   val emailOnFailure: ScallopOption[Boolean] = opt("email-on-failure")
 
@@ -69,6 +72,11 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
 
   /** The processor (or pipeline) to run. */
   def processor(): String = processorName.getOrElse("")
+
+  /** The options used by processors. */
+  def processorOpts: Processor.Opts = {
+    Processor.Opts(reprocess(), only.toOption, exclude.toOption)
+  }
 
   /**
    * Outputs standard help from Scallop along with an additional message.

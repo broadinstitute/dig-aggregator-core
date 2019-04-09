@@ -4,6 +4,8 @@ import cats._
 import cats.effect._
 import cats.implicits._
 
+import com.typesafe.scalalogging.LazyLogging
+
 import doobie._
 import doobie.implicits._
 
@@ -15,7 +17,7 @@ import org.broadinstitute.dig.aggregator.core.processors.Processor
  * Companion object for determining what inputs have been processed and
  * have yet to be processed.
  */
-object Run {
+object Run extends LazyLogging {
 
   /**
    * An Entry represents a single row in the `runs` table.

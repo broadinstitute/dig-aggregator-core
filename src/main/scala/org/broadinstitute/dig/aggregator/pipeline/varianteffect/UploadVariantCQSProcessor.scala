@@ -57,17 +57,10 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
       val transcripts        = s"out/varianteffect/transcript_consequences"
 
       for {
-        _ <- IO(logger.info(s"Creating analysis node for variant effects..."))
-
-        // delete the existing analysis and recreate it
         id <- analysis.create(graph)
 
         // find all the part files to upload for the analysis
-        _ <- IO(logger.info(s"Uploading regulatory feature consequences..."))
         _ <- analysis.uploadParts(aws, graph, id, regulatoryFeatures)(uploadRegulatoryFeatures)
-
-        // find all the part files to upload for the analysis
-        _ <- IO(logger.info(s"Uploading transcript consequences..."))
         _ <- analysis.uploadParts(aws, graph, id, transcripts)(uploadTranscripts)
 
         // connect transcript consequences to genes
@@ -89,24 +82,14 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
   /**
    * Given a part file, upload it and create all the regulatory feature nodes.
    */
-  def uploadRegulatoryFeatures(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
+  def uploadRegulatoryFeatures(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 10000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
-                |
-                |// split the ID into chrom, pos, reference, allele (CPRA)
-                |WITH q, r, split(r.id, ':') AS cpra
-                |
-                |// create the variant node if it doesn't exist
-                |MERGE (v:Variant {name: r.id})
-                |ON CREATE SET
-                |  v.chromosome=cpra[0],
-                |  v.position=toInteger(cpra[1]),
-                |  v.reference=cpra[2],
-                |  v.alt=cpra[3]
+                |MATCH (v:Variant {name: r.id})
                 |
                 |// create the feature result node
                 |CREATE (n:RegulatoryFeature {
@@ -124,30 +107,23 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
                 |MERGE (v)-[:HAS_REGULATORY_FEATURE]->(n)
                 |""".stripMargin
 
-    graph.run(q)
+    for {
+      _      <- mergeVariants(graph, part)
+      result <- graph.run(q)
+    } yield result
   }
 
   /**
    * Given a part file, upload it and create all the transcript nodes.
    */
-  def uploadTranscripts(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
+  def uploadTranscripts(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 10000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
-                |
-                |// split the ID into chrom, pos, reference, allele (CPRA)
-                |WITH q, r, split(r.id, ':') AS cpra
-                |
-                |// create the variant node if it doesn't exist
-                |MERGE (v:Variant {name: r.id})
-                |ON CREATE SET
-                |  v.chromosome=cpra[0],
-                |  v.position=toInteger(cpra[1]),
-                |  v.reference=cpra[2],
-                |  v.alt=cpra[3]
+                |MATCH (v:Variant {name: r.id})
                 |
                 |// create the consequence result node
                 |CREATE (n:TranscriptConsequence {
@@ -272,6 +248,32 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
                 |
                 |// create the relationship to the variant
                 |MERGE (v)-[:HAS_TRANSCRIPT_CONSEQUENCE]->(n)
+                |""".stripMargin
+
+    for {
+      _      <- mergeVariants(graph, part)
+      result <- graph.run(q)
+    } yield result
+  }
+
+  /**
+   * Read the part file and create any variants not present.
+   */
+  def mergeVariants(graph: GraphDb, part: String): IO[StatementResult] = {
+    val q = s"""|USING PERIODIC COMMIT 50000
+                |LOAD CSV WITH HEADERS FROM '$part' AS r
+                |FIELDTERMINATOR '\t'
+                |
+                |// split the ID into chrom, pos, reference, allele (CPRA)
+                |WITH r, split(r.id, ':') AS cpra
+                |
+                |// create the variant node if it doesn't exist
+                |MERGE (v:Variant {name: r.id})
+                |ON CREATE SET
+                |  v.chromosome=cpra[0],
+                |  v.position=toInteger(cpra[1]),
+                |  v.reference=cpra[2],
+                |  v.alt=cpra[3]
                 |""".stripMargin
 
     graph.run(q)

@@ -49,17 +49,12 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
       val bottomLine = s"out/frequencyanalysis/$phenotype/"
 
       val io = for {
-        _ <- IO(logger.info(s"Creating frequency analysis node for $phenotype..."))
-
-        // delete the existing analysis and recreate it
         id <- analysis.create(graph)
 
         // find and upload all the bottom-line result part files
-        _ <- IO(logger.info(s"Uploading results for $phenotype..."))
         _ <- analysis.uploadParts(aws, graph, id, bottomLine)(uploadResults)
 
         // add the result to the database
-        _ <- IO(logger.info(s"Updating database..."))
         _ <- Run.insert(pool, name, Seq(phenotype), analysis.name)
         _ <- IO(logger.info("Done"))
       } yield ()
@@ -75,17 +70,20 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
   /**
    * Given a part file, upload it and create all the bottom-line nodes.
    */
-  def uploadResults(graph: GraphDb, id: Int, part: String): IO[StatementResult] = {
-    val q = s"""|USING PERIODIC COMMIT 10000
+  def uploadResults(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
+    for {
+      _       <- mergeVariants(graph, part)
+      results <- createResults(graph, id, part)
+    } yield results
+  }
+
+  /**
+   * Ensure the variants for each result exist.
+   */
+  def mergeVariants(graph: GraphDb, part: String): IO[StatementResult] = {
+    val q = s"""|USING PERIODIC COMMIT 50000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
-                |
-                |// lookup the analysis node
-                |MATCH (q:Analysis) WHERE ID(q)=$id
-                |
-                |// die if the phenotype or ancestry doesn't exist
-                |MATCH (p:Phenotype {name: r.phenotype})
-                |MATCH (a:Ancestry {name: r.ancestry})
                 |
                 |// create the variant node if it doesn't exist
                 |MERGE (v:Variant {name: r.varId})
@@ -94,6 +92,26 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
                 |  v.position=toInteger(r.position),
                 |  v.reference=r.reference,
                 |  v.alt=r.alt
+                |""".stripMargin
+
+    graph.run(q)
+  }
+
+  /**
+   * Create all the result nodes and relationships.
+   */
+  def createResults(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
+    val q = s"""|USING PERIODIC COMMIT 50000
+                |LOAD CSV WITH HEADERS FROM '$part' AS r
+                |FIELDTERMINATOR '\t'
+                |
+                |// lookup the analysis node
+                |MATCH (q:Analysis) WHERE ID(q)=$id
+                |
+                |// skip if the phenotype, ancestry, or variant don't exist
+                |MATCH (p:Phenotype {name: r.phenotype})
+                |MATCH (a:Ancestry {name: r.ancestry})
+                |MATCH (v:Variant {name: r.varId})
                 |
                 |// create the frequency result node
                 |CREATE (n:Frequency {

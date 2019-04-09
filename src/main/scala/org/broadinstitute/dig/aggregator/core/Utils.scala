@@ -16,6 +16,11 @@ object Utils {
   import Implicits.timer
 
   /**
+   * Helper to allow performing an IO operation, but ignore the results.
+   */
+  val ignoreIO: IO[_] => IO[Unit] = _.map(scala.Function.const(()))
+
+  /**
    * Attempt to run an IO operation. If it fails, wait a little bit and then
    * try again up to `retries` times.
    */
@@ -35,7 +40,7 @@ object Utils {
    *
    * Optionally, apply a mapping function for each.
    */
-  def waitForTasks[A, R](tasks: Seq[IO[A]], limit: Int = 5)(mapEach: IO[A] => IO[R]): IO[Unit] = {
+  def waitForTasks[A, R](tasks: Seq[IO[A]], limit: Int = 5)(mapEach: IO[A] => IO[R] = ignoreIO): IO[Unit] = {
     import Implicits.contextShift
 
     Stream

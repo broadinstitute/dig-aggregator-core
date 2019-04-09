@@ -7,10 +7,12 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 
 import org.broadinstitute.dig.aggregator.core.processors.Processor
-import org.broadinstitute.dig.aggregator.core.Utils.retry
+import org.broadinstitute.dig.aggregator.core.Utils._
 
 import org.neo4j.driver.v1.Driver
 import org.neo4j.driver.v1.StatementResult
+
+import scala.util.Random
 
 /**
  * The representation of a processor's analysis that has been uploaded to the
@@ -21,13 +23,14 @@ import org.neo4j.driver.v1.StatementResult
  * produced by it.
  */
 final class Analysis(val name: String, val provenance: Provenance) extends LazyLogging {
+  import Implicits.contextShift
 
   /**
    * Given an S3 glob to a list of part files, call the uploadPart function for
    * each, allowing the CSV to be written to Neo4j.
    */
-  def uploadParts(aws: AWS, graph: GraphDb, analysisId: Int, s3path: String)(
-      uploadPart: (GraphDb, Int, String) => IO[StatementResult]
+  def uploadParts(aws: AWS, graph: GraphDb, analysisId: Long, s3path: String)(
+      uploadPart: (GraphDb, Long, String) => IO[StatementResult]
   ): IO[Unit] = {
     for {
       listing <- aws.ls(s3path)
@@ -36,7 +39,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
       parts = listing.filter(_.toLowerCase.endsWith(".csv"))
 
       // indicate how many parts are being uploaded
-      _ <- IO(logger.debug(s"Uploading ${parts.size} part files..."))
+      _ <- IO(logger.info(s"Uploading ${parts.size} part files for analysis '$name..."))
 
       // create an IO statement for each part and upload it
       uploads = for ((part, n) <- parts.zipWithIndex) yield {
@@ -51,9 +54,9 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
         }
       }
 
-      // upload each part serially
+      // upload the part files
       _ <- uploads.toList.sequence
-      _ <- IO(logger.debug("Upload complete"))
+      _ <- IO(logger.debug(s"Upload complete of analysis '$name'"))
     } yield ()
   }
 
@@ -62,7 +65,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
    * ID of the node created (or updated) so that any result nodes can link to
    * it explicitly.
    */
-  def create(graph: GraphDb): IO[Int] = {
+  def create(graph: GraphDb): IO[Long] = {
     val q = s"""|CREATE (n:Analysis {
                 |  name: '$name',
                 |  source: '${provenance.source}',
@@ -77,11 +80,12 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
 
     // run the query, return the node ID
     for {
-      _ <- IO(logger.debug(s"Deleting existing analysis for '$name'"))
       _ <- delete(graph)
-      _ <- IO(logger.debug(s"Creating new analysis for '$name'"))
+
+      // create the new analysis node after having deleted the previous one
+      _ <- IO(logger.info(s"Creating new analysis for '$name'"))
       r <- graph.run(q)
-    } yield r.single.get(0).asInt
+    } yield r.single.get(0).asLong
   }
 
   /**
@@ -89,49 +93,27 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
    * delete the analysis node as it assumes it is being updated.
    */
   def delete(graph: GraphDb): IO[Unit] = {
+    val batchSize = 10000
 
-    // tail-recursive accumulator helper method to count total deletions
-    def deleteResults(total: Int): IO[Int] = {
-      val q = s"""|MATCH (:Analysis {name: '$name'})<-[:PRODUCED]->(n)
-                  |WITH n
-                  |LIMIT 50000
-                  |DETACH DELETE n
-                  |""".stripMargin
+    // first delete all the results
+    val deleteResults =
+      s"""|CALL apoc.periodic.iterate(
+          |  "MATCH (:Analysis {name: '$name'})<-[:PRODUCED]->(n) RETURN n",
+          |  "DETACH DELETE n",
+          |  {batchSize: $batchSize, parallel: true}
+          |)
+          |""".stripMargin
 
-      // run the query
-      val io = for (result <- graph.run(q)) yield {
-        val counters = result.consume.counters
-        val nodes    = counters.nodesDeleted
-        val edges    = counters.relationshipsDeleted
-
-        (nodes, edges)
-      }
-
-      // recurse until nothing is deleted, then delete the analysis
-      retry(io).flatMap {
-        case (0, 0)         => IO(total)
-        case (nodes, edges) => deleteResults(total + nodes + edges)
-      }
-    }
-
-    /*
-     * First delete all the result nodes produced by this analysis and all
-     * the relationships coming from them. Then, delete the analysis node.
-     */
+    // then delete the analysis
+    val deleteAnalysis =
+      s"""|MATCH (n:Analysis {name: '$name'})
+          |DETACH DELETE n
+          |""".stripMargin
 
     for {
-      totalDeleted <- deleteResults(0)
-
-      // delete the actual analysis node
-      q = s"""|MATCH (n:Analysis {name: '$name'})
-              |DETACH DELETE n
-              |""".stripMargin
-
-      // delete the actual node
-      _ <- graph.run(q)
-
-      // how how many result nodes and relationships were delete
-      _ <- IO(logger.debug(s"Deleted $totalDeleted nodes and relationships"))
+      _ <- IO(logger.info(s"Deleting existing results for analysis '$name'"))
+      _ <- graph.run(deleteResults)
+      _ <- graph.run(deleteAnalysis)
     } yield ()
   }
 }
