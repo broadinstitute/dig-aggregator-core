@@ -45,7 +45,7 @@ DATASETS=($(hadoop fs -ls -C "${S3_DIR}/regions/*/part-*" | xargs dirname | xarg
 
 # for each dataset, merge all the part files into a single BED
 for DATASET in "${DATASETS[@]}"; do
-    ./getmerge-strip-headers.sh "${S3_DIR}/regions/${DATASET}/*.csv" "${REGIONS_DIR}/${DATASET}.bed"
+    ./getmerge-strip-headers.sh "${S3_DIR}/regions/${DATASET}/part-*" "${REGIONS_DIR}/${DATASET}.bed"
 
     # append the BED file to the index file
     echo "${REGIONS_DIR}/${DATASET}.bed" >> "${BED_INDEX_FILE}"
