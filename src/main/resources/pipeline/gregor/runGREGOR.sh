@@ -45,10 +45,10 @@ DATASETS=($(hadoop fs -ls -C "${S3_DIR}/regions/*/part-*" | xargs dirname | xarg
 
 # for each dataset, merge all the part files into a single BED
 for DATASET in "${DATASETS[@]}"; do
-    source "${GREGOR_ROOT}/getmerge-strip-headers.sh" "${S3_DIR}/regions/${DATASET}/part-*" "${REGIONS_DIR}/${DATASET}.bed"
+    BED_FILE="${REGIONS_DIR}/${DATASET}.bed"
 
-    # append the BED file to the index file
-    echo "${REGIONS_DIR}/${DATASET}.bed" >> "${BED_INDEX_FILE}"
+    hadoop fs -getmerge "${S3_DIR}/regions/${DATASET}/part-*" "${BED_FILE}"
+    echo "${BED_FILE}" >> "${BED_INDEX_FILE}"
 done
 
 # write the configuration file for GREGOR

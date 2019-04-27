@@ -50,7 +50,7 @@ if __name__ == '__main__':
         )
 
     # output the variants in BED format (TSV)
-    df.write.mode('overwrite').csv(outdir, sep='\t', header=True)
+    df.write.mode('overwrite').csv(outdir, sep='\t')
 
     # done
     spark.stop()
