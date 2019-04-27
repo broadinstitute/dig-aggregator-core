@@ -40,11 +40,11 @@ fi
 mkdir -p "${REGIONS_DIR}"
 touch "${BED_INDEX_FILE}"
 
-# get a unique list of all the datasets
+# get all unique datasets to process
 DATASETS=($(hadoop fs -ls -C "${S3_DIR}/regions/*/part-*" | xargs dirname | xargs -I @ basename "@" | uniq))
 
 # for each dataset, merge all the part files into a single BED
-for DATASET in DATASETS; do
+for DATASET in "${!DATASETS[@]}"; do
     ./getmerge-strip-headers.sh "${S3_DIR}/regions/${DATASET}/*.csv" "${REGIONS_DIR}/${DATASET}.bed"
 
     # append the BED file to the index file
