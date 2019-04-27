@@ -67,8 +67,12 @@ JOBNUMBER           = 10
 BATCHTYPE           = local
 EOF
 
+# for debugging, dump the config file to STDOUT...
+cat "${CONFIG_FILE}"
+
 # run GREGOR
-perl "${GREGOR_ROOT}/GREGOR/script/GREGOR.pl" --conf "${CONFIG_FILE}"
+cd "${GREGOR_ROOT}/GREGOR/script"
+perl GREGOR.pl --conf "${CONFIG_FILE}"
 
 # upload output back to S3
 aws s3 cp "${OUT_DIR}/StatisticSummaryFile.txt" "${S3_DIR}/summary/${ANCESTRY}/statistics.txt"
