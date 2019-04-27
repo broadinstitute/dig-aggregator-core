@@ -68,7 +68,7 @@ BATCHTYPE           = local
 EOF
 
 # run GREGOR
-perl "${GREGOR_ROOT}/GREGOR/GREGOR.pl" --conf "${CONFIG_FILE}"
+perl "${GREGOR_ROOT}/GREGOR/script/GREGOR.pl" --conf "${CONFIG_FILE}"
 
 # upload output back to S3
 aws s3 cp "${OUT_DIR}/StatisticSummaryFile.txt" "${S3_DIR}/summary/${ANCESTRY}/statistics.txt"
