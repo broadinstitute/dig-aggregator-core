@@ -47,7 +47,7 @@ DATASETS=($(hadoop fs -ls -C "${S3_DIR}/regions/*/part-*" | xargs dirname | xarg
 for DATASET in "${DATASETS[@]}"; do
     BED_FILE="${REGIONS_DIR}/${DATASET}.bed"
 
-    hadoop fs -getmerge "${S3_DIR}/regions/${DATASET}/part-*" "${BED_FILE}"
+    hadoop fs -getmerge -skip-empty-file "${S3_DIR}/regions/${DATASET}/part-*" "${BED_FILE}"
     echo "${BED_FILE}" >> "${BED_INDEX_FILE}"
 done
 

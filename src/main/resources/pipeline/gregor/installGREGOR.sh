@@ -45,4 +45,4 @@ chmod +x getmerge-strip-headers.sh
 #       against. So, instead of downloading it for every single region, it is
 #       downloaded once and re-used over and over.
 
-hadoop fs -getmerge  -nl -skip-empty-file "${S3_BUCKET}/out/gregor/snp/part-*" snplist.txt
+hadoop fs -getmerge -skip-empty-file "${S3_BUCKET}/out/gregor/snp/part-*" snplist.txt
