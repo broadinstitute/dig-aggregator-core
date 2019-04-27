@@ -1,5 +1,5 @@
 #!/bin/bash
-if [ ! $# -eq 2 ]; then
+if [[ ! $# -eq 2 ]]; then
   echo "Usage: merge.sh <hdfs-glob> <local-file>"
   exit -1
 fi

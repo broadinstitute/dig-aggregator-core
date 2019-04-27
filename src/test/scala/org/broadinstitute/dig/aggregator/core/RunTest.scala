@@ -5,9 +5,9 @@ import org.broadinstitute.dig.aggregator.pipeline._
 import scala.util._
 
 /**
- * @author clint
- * Aug 28, 2018
- */
+  * @author clint
+  * Aug 28, 2018
+  */
 final class RunTest extends DbFunSuite {
   dbTest("insert") {
     assert(allResults.isEmpty)
@@ -74,7 +74,7 @@ final class RunTest extends DbFunSuite {
 
     // should need to process o4 and o2
     assert(results.size == 2)
-    assert(results.find(_.output == "o2").isDefined)
-    assert(results.find(_.output == "o1").isDefined)
+    assert(results.exists(_.output == "o2"))
+    assert(results.exists(_.output == "o1"))
   }
 }

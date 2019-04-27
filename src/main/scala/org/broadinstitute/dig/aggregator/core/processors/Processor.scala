@@ -1,6 +1,5 @@
 package org.broadinstitute.dig.aggregator.core.processors
 
-import cats._
 import cats.effect._
 
 import doobie._
@@ -10,28 +9,22 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.Glob
 
-import org.rogach.scallop._
-
-/**
- * Each processor has a globally unique name and a run function.
- */
+/** Each processor has a globally unique name and a run function.
+  */
 abstract class Processor(val name: Processor.Name) extends LazyLogging {
 
-  /**
-   * Determines the set of things that need to be processed.
-   */
+  /** Determines the set of things that need to be processed.
+    */
   def getWork(opts: Processor.Opts): IO[Seq[_]]
 
-  /**
-   * True if this processor has something to process.
-   */
+  /** True if this processor has something to process.
+    */
   def hasWork(opts: Processor.Opts): IO[Boolean] = {
     getWork(opts).map(_.nonEmpty)
   }
 
-  /**
-   * Logs the set of things this processor will process if run.
-   */
+  /** Logs the set of things this processor will process if run.
+    */
   def showWork(opts: Processor.Opts): IO[Unit] = {
     for (work <- getWork(opts)) yield {
       if (work.isEmpty) {
@@ -42,21 +35,18 @@ abstract class Processor(val name: Processor.Name) extends LazyLogging {
     }
   }
 
-  /**
-   * Run this processor.
-   */
+  /** Run this processor.
+    */
   def run(opts: Processor.Opts): IO[Unit]
 }
 
-/**
- * Companion object for registering the names of processors.
- */
+/** Companion object for registering the names of processors.
+  */
 object Processor extends LazyLogging {
   import scala.language.implicitConversions
 
-  /**
-   * Command line flags processors know about.
-   */
+  /** Command line flags processors know about.
+    */
   final case class Opts(reprocess: Boolean, only: Option[String], exclude: Option[String]) {
     import Glob.String2Glob
 
@@ -67,13 +57,12 @@ object Processor extends LazyLogging {
     lazy val excludeGlob: Glob = exclude.map(_.toGlob).getOrElse(Glob.False)
   }
 
-  /**
-   * Processors are required to have a unique name that is unique across all
-   * processors for use as keys in the MySQL database queries.
-   *
-   * Names cannot be created at any time. They must be created using with
-   * the `register` function.
-   */
+  /** Processors are required to have a unique name that is unique across all
+    * processors for use as keys in the MySQL database queries.
+    *
+    * Names cannot be created at any time. They must be created using with
+    * the `register` function.
+    */
   final class Name private[Processor] (private val name: String) {
     override def toString: String = name
     override def hashCode: Int    = name.hashCode
@@ -83,31 +72,26 @@ object Processor extends LazyLogging {
     }
   }
 
-  /**
-   * Companion object.
-   */
+  /** Companion object.
+    */
   object Name {
 
-    /**
-     * Implicit conversion from/from DB string to Processor.Name for doobie.
-     */
+    /** Implicit conversion from/from DB string to Processor.Name for doobie.
+      */
     implicit val nameGet: Get[Name] = Get[String].tmap(new Name(_))
     implicit val namePut: Put[Name] = Put[String].tcontramap(_.toString)
   }
 
-  /**
-   * Every processor is constructed with a type-safe name and configuration.
-   */
+  /** Every processor is constructed with a type-safe name and configuration.
+    */
   type Constructor = (Processor.Name, BaseConfig) => Processor
 
-  /**
-   * A mapping of all the registered processor names.
-   */
+  /** A mapping of all the registered processor names.
+    */
   private var names: Map[Processor.Name, Constructor] = Map()
 
-  /**
-   * Register a processor name with a constructor.
-   */
+  /** Register a processor name with a constructor.
+    */
   def register(name: String, ctor: Constructor): Processor.Name = {
     val n = new Name(name)
 
@@ -118,9 +102,8 @@ object Processor extends LazyLogging {
     }
   }
 
-  /**
-   * Version of apply() that takes the actual process name.
-   */
+  /** Version of apply() that takes the actual process name.
+    */
   def apply(name: Name): BaseConfig => Option[Processor] = {
     val ctor = names.get(name)
 
@@ -130,9 +113,8 @@ object Processor extends LazyLogging {
     }
   }
 
-  /**
-   * Create a processor given its name and a configuration.
-   */
+  /** Create a processor given its name and a configuration.
+    */
   def apply(name: String): BaseConfig => Option[Processor] = {
     apply(new Name(name))
   }

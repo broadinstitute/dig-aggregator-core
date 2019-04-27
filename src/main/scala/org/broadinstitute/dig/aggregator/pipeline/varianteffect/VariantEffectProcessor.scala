@@ -1,10 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
-import cats._
 import cats.effect._
-import cats.implicits._
-
-import com.amazonaws.services.elasticmapreduce.model.RunJobFlowResult
 
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig

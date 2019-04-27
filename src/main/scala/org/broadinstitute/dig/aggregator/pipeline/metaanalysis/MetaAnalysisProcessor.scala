@@ -1,48 +1,42 @@
 package org.broadinstitute.dig.aggregator.pipeline.metaanalysis
 
-import cats._
 import cats.effect._
 import cats.implicits._
-
-import com.amazonaws.services.elasticmapreduce.model.RunJobFlowResult
 
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.emr._
 import org.broadinstitute.dig.aggregator.core.processors._
 
-/**
- * After all the variants for a particular phenotype have been processed and
- * partitioned, meta-analysis is run on them.
- *
- * This process runs METAL on the common variants for each ancestry (grouped
- * by dataset), then merges the rare variants across all ancestries, keeping
- * only the variants with the largest N (sample size) among them and writing
- * those back out.
- *
- * Next, trans-ethnic analysis (METAL) is run across all the ancestries, and
- * the output of that is written back to HDFS.
- *
- * The output of the ancestry-specific analysis is written to:
- *
- *  s3://dig-analysis-data/out/metaanalysis/ancestry-specific/<phenotype>/ancestry=?
- *
- * The output of the trans-ethnic analysis is written to:
- *
- *  s3://dig-analysis-data/out/metaanalysis/trans-ethnic/<phenotype>
- *
- * The inputs and outputs for this processor are expected to be phenotypes.
- */
+/** After all the variants for a particular phenotype have been processed and
+  * partitioned, meta-analysis is run on them.
+  *
+  * This process runs METAL on the common variants for each ancestry (grouped
+  * by dataset), then merges the rare variants across all ancestries, keeping
+  * only the variants with the largest N (sample size) among them and writing
+  * those back out.
+  *
+  * Next, trans-ethnic analysis (METAL) is run across all the ancestries, and
+  * the output of that is written back to HDFS.
+  *
+  * The output of the ancestry-specific analysis is written to:
+  *
+  *  s3://dig-analysis-data/out/metaanalysis/ancestry-specific/<phenotype>/ancestry=?
+  *
+  * The output of the trans-ethnic analysis is written to:
+  *
+  *  s3://dig-analysis-data/out/metaanalysis/trans-ethnic/<phenotype>
+  *
+  * The inputs and outputs for this processor are expected to be phenotypes.
+  */
 class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends DatasetProcessor(name, config) {
 
-  /**
-   * Topic to consume.
-   */
+  /** Topic to consume.
+    */
   override val topic: String = "variants"
 
-  /**
-   * All the job scripts that need to be uploaded to AWS.
-   */
+  /** All the job scripts that need to be uploaded to AWS.
+    */
   override val resources: Seq[String] = Seq(
     "pipeline/metaanalysis/cluster-bootstrap.sh",
     "pipeline/metaanalysis/partitionVariants.py",
@@ -51,9 +45,8 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Da
     "scripts/getmerge-strip-headers.sh"
   )
 
-  /**
-   * Take all the phenotype results from the dependencies and process them.
-   */
+  /** Take all the phenotype results from the dependencies and process them.
+    */
   override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
     val bootstrapUri = aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh")
     val sparkConf = ApplicationConfig.sparkEnv.withProperties(
@@ -99,9 +92,8 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Da
     } yield ()
   }
 
-  /**
-   * Create a cluster and process a single phenotype.
-   */
+  /** Create a cluster and process a single phenotype.
+    */
   private def processPhenotype(phenotype: String): Seq[JobStep] = {
     val partitionUri = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
     val runUri       = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")

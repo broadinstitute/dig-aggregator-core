@@ -1,4 +1,5 @@
 # metals language server files
+.idea/
 .metals/
 .bloop/
 
