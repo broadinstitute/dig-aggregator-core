@@ -15,7 +15,7 @@ perlbrew install-cpanm
 
 # install required perl modules
 cpanm --sudo Archive::Zip
-cpanm --sudo DBD::mysql
+cpanm --sudo DBD::SQLite
 cpanm --sudo DBI
 cpanm --sudo JSON
 cpanm --sudo PerlIO::gzip
