@@ -21,3 +21,4 @@ cpanm --sudo JSON
 cpanm --sudo PerlIO::gzip
 cpanm --sudo Try::Tiny
 cpanm --sudo autodie
+cpanm --sudo Switch
