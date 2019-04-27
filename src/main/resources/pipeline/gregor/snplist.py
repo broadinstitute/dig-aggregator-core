@@ -7,6 +7,9 @@ from pyspark.sql.functions import col, concat_ws  # pylint: disable=E0611
 
 s3dir = 's3://dig-analysis-data'
 
+# GREGOR doesn't work on XY, M, or MT chromosomes.
+valid_chromosomes = list(map(lambda c: str(c+1), range(22))) + ['X', 'Y']
+
 # entry point
 if __name__ == '__main__':
     """
@@ -23,7 +26,7 @@ if __name__ == '__main__':
 
     # slurp all the variants across ALL phenotypes
     df = spark.read.csv(srcdir, sep='\t', header=True) \
-        .filter(col('chromosome') != 'MT') \
+        .filter(col('chromosome').isin(valid_chromosomes)) \
         .select(concat_ws(':', col('chromosome'), col('position')).alias('SNP')) \
         .distinct()
 
