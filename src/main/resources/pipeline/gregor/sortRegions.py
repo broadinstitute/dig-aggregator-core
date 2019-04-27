@@ -10,7 +10,7 @@ from pyspark.sql.types import IntegerType
 s3dir = 's3://dig-analysis-data'
 
 # the BED files need to be sorted by chrom/start, this orders the chromosomes
-chrom_sort_index = list(map(lambda c: str(c+1), range(22))) + ['X', 'Y', 'XY', 'M']
+chrom_sort_index = list(map(lambda c: str(c+1), range(22))) + ['X', 'Y', 'XY', 'M', 'MT']
 
 def chrom_index(c):
     return chrom_sort_index.index(c)
@@ -40,6 +40,7 @@ if __name__ == '__main__':
 
     # read all the fields needed across the regions for the dataset
     df = spark.read.json('%s/part-*' % srcdir) \
+        .filter(col('chromosome') != 'MT') \
         .withColumn('chromIndex', chrom_index_udf('chromosome')) \
         .sort('chromIndex', 'start', ascending=True) \
         .select(

@@ -23,6 +23,7 @@ if __name__ == '__main__':
 
     # slurp all the variants across ALL phenotypes
     df = spark.read.csv(srcdir, sep='\t', header=True) \
+        .filter(col('chromosome') != 'MT') \
         .select(concat_ws(':', col('chromosome'), col('position')).alias('SNP')) \
         .distinct()
 
