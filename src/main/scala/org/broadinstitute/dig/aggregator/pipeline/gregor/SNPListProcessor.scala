@@ -1,6 +1,7 @@
 package org.broadinstitute.dig.aggregator.pipeline.gregor
 
 import cats.effect._
+import cats.implicits._
 
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
@@ -13,11 +14,11 @@ import org.broadinstitute.dig.aggregator.pipeline.metaanalysis._
   *
   * Inputs:
   *
-  *   s3://dig-analysis-data/out/metaanalysis/trans-ethnic
+  *   s3://dig-analysis-data/out/metaanalysis/ancestry-specific
   *
   * Outputs:
   *
-  *   s3://dig-analysis-data/out/gregor/snp
+  *   s3://dig-analysis-data/out/gregor/snp/<phenotype>/<ancestry>
   */
 class SNPListProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
@@ -44,22 +45,31 @@ class SNPListProcessor(name: Processor.Name, config: BaseConfig) extends RunProc
       masterInstanceType = InstanceType.m5_2xlarge,
       slaveInstanceType = InstanceType.m5_2xlarge,
       configurations = Seq(
-        ApplicationConfig.sparkEnv.withProperties(
-          "PYSPARK_PYTHON" -> "/usr/bin/python3"
-        )
+        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
       )
     )
 
-    // create the jobs to process each phenotype in parallel
-    val step = JobStep.PySpark(script)
-    val run  = Run.insert(pool, name, results.map(_.output), "SNPList")
+    // each phenotype gets its own snp list output
+    val phenotypes = results.map(_.output).distinct
+
+    // create a job per phenotype
+    val jobs = phenotypes.map { phenotype =>
+      Seq(JobStep.PySpark(script, phenotype))
+    }
+
+    // cluster the jobs
+    val clusteredJobs = aws.clusterJobs(cluster, jobs)
+
+    // create a run per phenotype
+    val runs = phenotypes.map { phenotype =>
+      Run.insert(pool, name, Seq(phenotype), phenotype)
+    }
 
     for {
-      job <- aws.runJob(cluster, step)
-      _   <- aws.waitForJob(job)
-      _   <- IO(logger.info("Updating database..."))
-      _   <- run
-      _   <- IO(logger.info("Done"))
+      _ <- aws.waitForJobs(clusteredJobs)
+      _ <- IO(logger.info("Updating database..."))
+      _ <- runs.toList.sequence
+      _ <- IO(logger.info("Done"))
     } yield ()
   }
 }

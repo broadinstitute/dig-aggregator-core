@@ -49,9 +49,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Da
     */
   override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
     val bootstrapUri = aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh")
-    val sparkConf = ApplicationConfig.sparkEnv.withProperties(
-      "PYSPARK_PYTHON" -> "/usr/bin/python3"
-    )
+    val sparkConf    = ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
 
     // cluster definition to run jobs
     val cluster = Cluster(

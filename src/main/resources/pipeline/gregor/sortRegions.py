@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import argparse
+# import argparse
 import platform
 
 from pyspark.sql import SparkSession
@@ -18,19 +18,19 @@ def chrom_index(c):
 # entry point
 if __name__ == '__main__':
     """
-    Arguments: <dataset>
+    Arguments: none
     """
     print('Python version: %s' % platform.python_version())
 
-    opts = argparse.ArgumentParser()
-    opts.add_argument('dataset', help='Dataset name to create a BED file for')
-
-    # parse command line arguments
-    args = opts.parse_args()
+    # opts = argparse.ArgumentParser()
+    # opts.add_argument('dataset', help='Dataset name to create a BED file for')
+    #
+    # # parse command line arguments
+    # args = opts.parse_args()
 
     # get the source and output directories
-    srcdir = '%s/chromatin_state/%s' % (s3dir, args.dataset)
-    outdir = '%s/out/gregor/regions/%s' % (s3dir, args.dataset)
+    srcdir = '%s/chromatin_state/*' % s3dir
+    outdir = '%s/out/gregor/regions' % s3dir
 
     # create a spark session
     spark = SparkSession.builder.appName('gregor').getOrCreate()
@@ -51,7 +51,10 @@ if __name__ == '__main__':
         )
 
     # output the variants in BED format (TSV)
-    df.write.mode('overwrite').csv(outdir, sep='\t')
+    df.write\
+        .mode('overwrite') \
+        .partitionBy('name') \
+        .csv(outdir, sep='\t')
 
     # done
     spark.stop()

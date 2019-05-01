@@ -74,5 +74,10 @@ cat "${CONFIG_FILE}"
 cd "${GREGOR_ROOT}/GREGOR/script"
 perl GREGOR.pl --conf "${CONFIG_FILE}"
 
+# dump the GREGOR.log file to STDOUT so it's in the log
+if [[ -e "${OUT_DIR}/GREGOR.log" ]]; then
+    cat "${OUT_DIR}/GREGOR.log"
+fi
+
 # upload output back to S3
 aws s3 cp "${OUT_DIR}/StatisticSummaryFile.txt" "${S3_DIR}/summary/${ANCESTRY}/statistics.txt"

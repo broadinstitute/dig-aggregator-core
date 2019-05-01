@@ -12,37 +12,37 @@ import org.broadinstitute.dig.aggregator.core.emr._
 import org.broadinstitute.dig.aggregator.core.processors._
 
 /**
- * After all the variants for a particular phenotype have been uploaded, the
- * frequency processor runs a Spark job that will calculate the average EAF
- * and MAF for each variant across all datasets - partitioned by ancestry -
- * for which frequency data exists.
- *
- * Input HDFS data:
- *
- *  s3://dig-analysis-data/variants/<dataset>/<phenotype>/part-*
- *
- * Output HDFS results:
- *
- *  s3://dig-analysis-data/out/frequencyanalysis/<phenotype>/part-*
- */
+  * After all the variants for a particular phenotype have been uploaded, the
+  * frequency processor runs a Spark job that will calculate the average EAF
+  * and MAF for each variant across all datasets - partitioned by ancestry -
+  * for which frequency data exists.
+  *
+  * Input HDFS data:
+  *
+  *  s3://dig-analysis-data/variants/<dataset>/<phenotype>/part-*
+  *
+  * Output HDFS results:
+  *
+  *  s3://dig-analysis-data/out/frequencyanalysis/<phenotype>/part-*
+  */
 class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends DatasetProcessor(name, config) {
 
   /**
-   * Topic to consume.
-   */
+    * Topic to consume.
+    */
   override val topic: String = "variants"
 
   /**
-   * All the job scripts that need to be uploaded to AWS.
-   */
+    * All the job scripts that need to be uploaded to AWS.
+    */
   override val resources: Seq[String] = Seq(
     "pipeline/frequencyanalysis/frequencyAnalysis.py"
   )
 
   /**
-   * Take all the datasets that need to be processed, determine the phenotype
-   * for each, and create a mapping of (phenotype -> datasets).
-   */
+    * Take all the datasets that need to be processed, determine the phenotype
+    * for each, and create a mapping of (phenotype -> datasets).
+    */
   override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
     val script  = aws.uriOf("resources/pipeline/frequencyanalysis/frequencyAnalysis.py")
     val pattern = raw"([^/]+)/(.*)".r
@@ -54,9 +54,7 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig) exten
       masterInstanceType = InstanceType.m5_2xlarge,
       slaveInstanceType = InstanceType.m5_2xlarge,
       configurations = Seq(
-        ApplicationConfig.sparkEnv.withProperties(
-          "PYSPARK_PYTHON" -> "/usr/bin/python3"
-        )
+        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
       )
     )
 
