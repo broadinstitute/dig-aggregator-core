@@ -29,7 +29,7 @@ if __name__ == '__main__':
     # args = opts.parse_args()
 
     # get the source and output directories
-    srcdir = '%s/chromatin_state/*' % s3dir
+    srcdir = '%s/chromatin_state/*/part-*' % s3dir
     outdir = '%s/out/gregor/regions' % s3dir
 
     # create a spark session
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     chrom_index_udf = udf(chrom_index, IntegerType())
 
     # read all the fields needed across the regions for the dataset
-    df = spark.read.json('%s/part-*' % srcdir) \
+    df = spark.read.json(srcdir) \
         .filter(col('chromosome').isin(chrom_sort_index)) \
         .withColumn('chromIndex', chrom_index_udf('chromosome')) \
         .sort('chromIndex', 'start', ascending=True) \
