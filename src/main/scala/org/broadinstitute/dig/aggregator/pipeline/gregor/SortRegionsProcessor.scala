@@ -29,25 +29,16 @@ class SortRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Dat
     // cluster configuration used to process each phenotype
     val cluster = Cluster(name = name.toString)
 
-    // create the jobs to process each phenotype in parallel
-    val jobs = datasets.map { d =>
-      Seq(JobStep.PySpark(script, d.dataset))
-    }
-
-    // distribute the jobs among multiple clusters
-    val clusteredJobs = aws.clusterJobs(cluster, jobs)
-
-    // create the runs for each dataset
-    val runs = datasets.map { d =>
-      Run.insert(pool, name, Seq(d.dataset), s"chromatin_state/${d.dataset}")
-    }
+    // all the datasets are inputs to the single output
+    val inputs = datasets.map(_.dataset)
 
     // run all the jobs then update the database
     for {
-      _ <- aws.waitForJobs(clusteredJobs)
-      _ <- IO(logger.info("Updating database..."))
-      _ <- runs.toList.sequence
-      _ <- IO(logger.info("Done"))
+      job <- aws.runJob(cluster, JobStep.PySpark(script))
+      _   <- aws.waitForJob(job)
+      _   <- IO(logger.info("Updating database..."))
+      _   <- Run.insert(pool, name, inputs, s"chromatin_state")
+      _   <- IO(logger.info("Done"))
     } yield ()
   }
 }
