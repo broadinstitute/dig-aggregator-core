@@ -27,7 +27,15 @@ class SortRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Dat
     val script = aws.uriOf("resources/pipeline/gregor/sortRegions.py")
 
     // cluster configuration used to process each phenotype
-    val cluster = Cluster(name = name.toString)
+    val cluster = Cluster(
+      name = name.toString,
+      masterInstanceType = InstanceType.c5_4xlarge,
+      slaveInstanceType = InstanceType.c5_2xlarge,
+      instances = 5,
+      configurations = Seq(
+        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
+      )
+    )
 
     // all the datasets are inputs to the single output
     val inputs = datasets.map(_.dataset)
