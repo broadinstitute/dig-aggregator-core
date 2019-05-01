@@ -30,7 +30,7 @@ if __name__ == '__main__':
 
     # get the source and output directories
     srcdir = '%s/chromatin_state/*/part-*' % s3dir
-    outdir = '%s/out/gregor/regions' % s3dir
+    outdir = '%s/out/gregor/regions/chromatin_state' % s3dir
 
     # create a spark session
     spark = SparkSession.builder.appName('gregor').getOrCreate()

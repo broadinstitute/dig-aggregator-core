@@ -37,7 +37,7 @@ class SortRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Dat
       job <- aws.runJob(cluster, JobStep.PySpark(script))
       _   <- aws.waitForJob(job)
       _   <- IO(logger.info("Updating database..."))
-      _   <- Run.insert(pool, name, inputs, s"chromatin_state")
+      _   <- Run.insert(pool, name, inputs, s"regions/chromatin_state")
       _   <- IO(logger.info("Done"))
     } yield ()
   }
