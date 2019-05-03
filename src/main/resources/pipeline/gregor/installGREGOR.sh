@@ -41,8 +41,3 @@ tar zxf GREGOR.v1.4.0.tar.gz
 aws s3 cp "${S3_BUCKET}/resources/scripts/getmerge-strip-headers.sh" .
 chmod +x getmerge-strip-headers.sh
 
-# NOTE: The SNP list is going to be the same across all regions that it is run
-#       against. So, instead of downloading it for every single region, it is
-#       downloaded once and re-used over and over.
-
-hadoop fs -getmerge -skip-empty-file "${S3_BUCKET}/out/gregor/snp/part-*" snplist.txt

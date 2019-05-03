@@ -43,18 +43,13 @@ class GregorProcessor(name: Processor.Name, config: BaseConfig) extends RunProce
       bootstrapScripts = Seq(new BootstrapScript(bootstrap))
     )
 
-    /*
-    // determine if the SNP list changed
-    val snpListUpdated = results.exists(_.app == GregorPipeline.snpListProcessor)
+    // get all the phenotypes that need processed
+    val phenotypes = results
+      .filter(_.app == GregorPipeline.snpListProcessor)
+      .map(_.output)
+      .distinct
 
-    // if the SNP list changed, then ALL regions need updating
-    val getRegions: IO[Seq[Run.Result]] = if (snpListUpdated) {
-      Run.resultsOf(pool, Seq(GregorPipeline.aggregateRegionsProcessor), None)
-    } else {
-      IO.pure(results)
-    }
-     */
-
+    // map out ancestries to that of GREGOR/1000g
     val ancestries = List(
       "AA" -> "AFR",
       "HS" -> "AMR",
@@ -73,26 +68,26 @@ class GregorProcessor(name: Processor.Name, config: BaseConfig) extends RunProce
 
     // create a single job for each ancestry supported by GREGOR
     val jobs = ancestries.map {
-      case (_, ancestry) =>
-        val steps = Seq(
-          JobStep.Script(install, ancestry, r2),
-          JobStep.Script(run, ancestry, r2)
-        )
+      case (t2dkp_ancestry, gregor_ancestry) =>
+        val installStep = JobStep.Script(install, gregor_ancestry, r2)
+        val runSteps = phenotypes.map { phenotype =>
+          JobStep.Script(run, gregor_ancestry, r2, phenotype, t2dkp_ancestry)
+        }
 
-        aws.runJob(cluster, steps)
+        // start the job for this ancestry
+        aws.runJob(cluster, Seq(installStep) ++ runSteps)
     }
 
-    // create the run for all the inputs
-    val runs = ancestries.map {
-      case (ancestry, _) =>
-        Run.insert(pool, name, results.map(_.output), s"GREGOR/$ancestry")
+    // each phenotype is a separate output
+    val runs = phenotypes.map { phenotype =>
+      Run.insert(pool, name, ancestries.map(_._1), s"GREGOR/$phenotype")
     }
 
     // run all the jobs then update the database
     for {
       _ <- aws.waitForJobs(jobs)
       _ <- IO(logger.info("Updating database..."))
-      _ <- runs.sequence
+      _ <- runs.toList.sequence
       _ <- IO(logger.info("Done"))
     } yield ()
   }

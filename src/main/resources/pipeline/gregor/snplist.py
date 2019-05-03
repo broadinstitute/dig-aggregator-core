@@ -60,7 +60,7 @@ if __name__ == '__main__':
             .withColumn('filename', input_file_name()) \
             .withColumn('ancestry', regexp_extract('filename', r'/ancestry=([^/]+)/', 1)) \
             .filter(col('chromosome').isin(valid_chromosomes)) \
-            .filter(col('pValue') < 1.0e-8) \
+            .filter(col('pValue') < 5.0e-8) \
             .select(
                 concat_ws(':', col('chromosome'), col('position')).alias('SNP'),
                 col('ancestry'),

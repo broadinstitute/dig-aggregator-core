@@ -2,12 +2,16 @@
 #
 # usage: runGREGOR.sh <ancestry> [r2]
 #           where
-#               ancestry = "AFR" | "AMR" | "ASN" | "EUR" | "SAN"
-#               r2       = "0.2" | "0.7" (default = "0.7")
+#               ancestry       = "AFR" | "AMR" | "ASN" | "EUR" | "SAN"
+#               r2             = "0.2" | "0.7"
+#               phenotype      = "T2D" | "FI" | ...
+#               t2dkp_ancestry = "AA" | "HS" | "EA" | "EU" | "SA"
 #
 
 ANCESTRY=$1
-R2=${2:-"0.7"}
+R2=$2
+PHENOTYPE=$3
+T2DKP_ANCESTRY=$4
 
 # where GREGOR is installed locally
 GREGOR_ROOT=/mnt/var/gregor
@@ -26,6 +30,11 @@ if [[ -d "${OUT_DIR}" ]]; then
     rm -rf "${OUT_DIR}"
 fi
 
+# clear the snp list file if it exists from a previous run
+if [[ -e "${SNP_FILE}" ]]; then
+    rm -rf "${SNP_FILE}"
+fi
+
 # clear whatever BED files exist from a previous run
 if [[ -d "${REGIONS_DIR}" ]]; then
     rm -rf "${REGIONS_DIR}"
@@ -36,18 +45,37 @@ if [[ -e "${BED_INDEX_FILE}" ]]; then
     rm "${BED_INDEX_FILE}"
 fi
 
+# source location of SNP part files
+SNPS="${S3_DIR}/snp/${PHENOTYPE}/ancestry=${T2DKP_ANCESTRY}/part-*"
+
+# if there are no SNPs for this ancestry and phenotype, just skip it
+if ! hadoop fs -test -e "${SNPS}"; then
+    exit 0
+fi
+
+# Download the SNP list for this phenotype and ancestry
+hadoop fs -getmerge -skip-empty-file "${SNPS}" "${SNP_FILE}"
+
 # ensure that the regions directory exists and bed index file
 mkdir -p "${REGIONS_DIR}"
 touch "${BED_INDEX_FILE}"
 
-# get all unique datasets to process
-DATASETS=($(hadoop fs -ls -C "${S3_DIR}/regions/*/part-*" | xargs dirname | xargs -I @ basename "@" | uniq))
+# get all unique annotations to process
+ANNOTATIONS=($(hadoop fs -ls -C "${S3_DIR}/regions/chromatin_state/*/part-*" | xargs dirname | xargs -I @ basename "@" | sed -r 's/^name=([0-9]+_)?//' | sort | uniq))
 
-# for each dataset, merge all the part files into a single BED
-for DATASET in "${DATASETS[@]}"; do
-    BED_FILE="${REGIONS_DIR}/${DATASET}.bed"
+# debug to STDOUT all the unique annotations
+echo "Unique Annotations:"
+echo "-------------------"
+echo "${ANNOTATIONS[@]}" | tr ' ' '\n'
+echo "-------------------"
 
-    hadoop fs -getmerge -skip-empty-file "${S3_DIR}/regions/${DATASET}/part-*" "${BED_FILE}"
+# for each annotation, merge all the part files into a single BED
+for ANNOTATION in "${ANNOTATIONS[@]}"; do
+    # don't use .bed extension as we'll use the column value of the output for Neo4j
+    BED_FILE="${REGIONS_DIR}/${ANNOTATION}"
+
+    # merge all the part files together into a single glob
+    hadoop fs -getmerge -skip-empty-file "${S3_DIR}/regions/chromatin_state/name={?_,??_,}${ANNOTATION}/part-*" "${BED_FILE}"
     echo "${BED_FILE}" >> "${BED_INDEX_FILE}"
 done
 
@@ -80,4 +108,4 @@ if [[ -e "${OUT_DIR}/GREGOR.log" ]]; then
 fi
 
 # upload output back to S3
-aws s3 cp "${OUT_DIR}/StatisticSummaryFile.txt" "${S3_DIR}/summary/${ANCESTRY}/statistics.txt"
+aws s3 cp "${OUT_DIR}/StatisticSummaryFile.txt" "${S3_DIR}/summary/${PHENOTYPE}/${T2DKP_ANCESTRY}/statistics.txt"
