@@ -29,7 +29,7 @@ mkdir -p ref
 cd ref
 
 # install each REF file
-for ANCESTRY in "$ANCESTRIES[@]"; do
+for ANCESTRY in "${ANCESTRIES[@]}"; do
     REF="GREGOR.ref.${ANCESTRY}.LD.ge.${R2}.tar.gz"
 
     # download and extract the tarball for the 1000g reference
