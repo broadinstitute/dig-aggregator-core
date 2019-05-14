@@ -3,7 +3,7 @@
 import platform
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, udf  # pylint: disable=E0611
+from pyspark.sql.functions import col, udf, regexp_replace  # pylint: disable=E0611
 from pyspark.sql.types import IntegerType
 
 s3dir = 's3://dig-analysis-data'
@@ -40,7 +40,7 @@ if __name__ == '__main__':
             col('chromosome').alias('chrom'),
             col('start').alias('chromStart'),
             col('end').alias('chromEnd'),
-            col('biosample'),
+            regexp_replace(col('biosample'), ':', '_').alias('biosample'),
             col('name'),
         )
 

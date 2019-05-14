@@ -79,7 +79,7 @@ for TISSUE in "${TISSUES[@]}"; do
         BED_FILE="${REGIONS_DIR}/${TISSUE}___${ANNOTATION}"
 
         # merge all the part files together into a single glob
-        hadoop fs -getmerge -skip-empty-file "${S3_DIR}/regions/chromatin_state/biosample=${TISSUE}/name={?_,??_,}${ANNOTATION}/part-*" "${BED_FILE}"
+        hadoop fs -getmerge -skip-empty-file "${S3_DIR}/regions/chromatin_state/biosample=${TISSUE}/name=${ANNOTATION}/part-*" "${BED_FILE}"
         echo "${BED_FILE}" >> "${BED_INDEX_FILE}"
     done
 done

@@ -54,10 +54,13 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
     val pattern = raw".*/biosample=([^/]+)/name=([^/]+)/.*".r
     val path    = URLDecoder.decode(new URL(part).getPath, "UTF-8")
 
-    // extract the tissue ID and annotation name from the HDFS file location
+    // Extract the tissue ID and annotation name from the HDFS file location.
+    //
+    // NOTE: When Spark ran on on the tissues, to prevent odd characters, we replaced
+    //       ':' with '_', and here we'll put it back.
     val (tissue, name) = path match {
       case pattern(sampleId, annotation) =>
-        URLDecoder.decode(sampleId, "UTF-8") -> URLDecoder.decode(annotation, "UTF-8")
+        sampleId.replaceFirst("_", ":") -> annotation
     }
 
     val q = s"""|USING PERIODIC COMMIT 50000
