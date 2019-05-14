@@ -60,23 +60,28 @@ hadoop fs -getmerge -skip-empty-file "${SNPS}" "${SNP_FILE}"
 mkdir -p "${REGIONS_DIR}"
 touch "${BED_INDEX_FILE}"
 
-# get all unique annotations to process
-ANNOTATIONS=($(hadoop fs -ls -C "${S3_DIR}/regions/chromatin_state/*/part-*" | xargs dirname | xargs -I @ basename "@" | sed -r 's/^name=([0-9]+_)?//' | sort | uniq))
+# find all the unique tissues from the part files
+TISSUES=($(hadoop fs -ls -C "${S3_DIR}/regions/chromatin_state/*/*/part-*" | xargs dirname | xargs dirname | xargs -I @ basename "@" | sed -r 's/^biosample=//' | sort | uniq))
 
-# debug to STDOUT all the unique annotations
-echo "Unique Annotations:"
+# debug to STDOUT all the unique tissues
+echo "Unique bio-samples:"
 echo "-------------------"
-echo "${ANNOTATIONS[@]}" | tr ' ' '\n'
+echo "${TISSUES[@]}" | tr ' ' '\n'
 echo "-------------------"
 
-# for each annotation, merge all the part files into a single BED
-for ANNOTATION in "${ANNOTATIONS[@]}"; do
-    # don't use .bed extension as we'll use the column value of the output for Neo4j
-    BED_FILE="${REGIONS_DIR}/${ANNOTATION}"
+# for each tissue, get all the annotations for it, and join them into tissue+annotation bed files
+for TISSUE in "${TISSUES[@]}"; do
+    ANNOTATIONS=($(hadoop fs -ls -C "${S3_DIR}/regions/chromatin_state/tissue=${TISSUE}/*/part-*" | xargs dirname | xargs -I @ basename "@" | sed -r 's/^name=([0-9]+_)?//' | sort | uniq))
 
-    # merge all the part files together into a single glob
-    hadoop fs -getmerge -skip-empty-file "${S3_DIR}/regions/chromatin_state/name={?_,??_,}${ANNOTATION}/part-*" "${BED_FILE}"
-    echo "${BED_FILE}" >> "${BED_INDEX_FILE}"
+    # for each annotation, merge all the part files into a single BED
+    for ANNOTATION in "${ANNOTATIONS[@]}"; do
+        # don't use .bed extension as we'll use the column value of the output for Neo4j
+        BED_FILE="${REGIONS_DIR}/${TISSUE}___${ANNOTATION}"
+
+        # merge all the part files together into a single glob
+        hadoop fs -getmerge -skip-empty-file "${S3_DIR}/regions/chromatin_state/tissue=${TISSUE}/name={?_,??_,}${ANNOTATION}/part-*" "${BED_FILE}"
+        echo "${BED_FILE}" >> "${BED_INDEX_FILE}"
+    done
 done
 
 # write the configuration file for GREGOR

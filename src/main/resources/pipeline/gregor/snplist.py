@@ -6,12 +6,28 @@ import subprocess
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, concat_ws, input_file_name, regexp_extract  # pylint: disable=E0611
-from pyspark.sql.types import StructType, StructField, StringType
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
 
 s3dir = 's3://dig-analysis-data'
 
 # GREGOR doesn't work on XY, M, or MT chromosomes.
 valid_chromosomes = list(map(lambda c: str(c+1), range(22))) + ['X', 'Y']
+
+# output schema of meta-analysis
+variants_schema = StructType(
+    [
+        StructField('varId', StringType(), nullable=False),
+        StructField('chromosome', StringType(), nullable=False),
+        StructField('position', IntegerType(), nullable=False),
+        StructField('reference', StringType(), nullable=False),
+        StructField('alt', StringType(), nullable=False),
+        StructField('phenotype', StringType(), nullable=False),
+        StructField('pValue', DoubleType(), nullable=False),
+        StructField('beta', DoubleType(), nullable=False),
+        StructField('stdErr', DoubleType(), nullable=False),
+        StructField('n', DoubleType(), nullable=False),
+    ]
+)
 
 
 def test_glob(glob):
@@ -56,11 +72,16 @@ if __name__ == '__main__':
     #       When that happens, it's OK to just ignore it.
 
     if test_glob(srcdir):
-        df = spark.read.csv(srcdir, sep='\t', header=True) \
+        df = spark.read.csv(srcdir, sep='\t', header=True, schema=variants_schema) \
             .withColumn('filename', input_file_name()) \
             .withColumn('ancestry', regexp_extract('filename', r'/ancestry=([^/]+)/', 1)) \
             .filter(col('chromosome').isin(valid_chromosomes)) \
-            .filter(col('pValue') < 5.0e-8) \
+            .filter(col('pValue') < 1.0e-5) \
+            .rdd \
+            .keyBy(lambda v: (v.ancestry, v.chromosome, v.position // 500000)) \
+            .reduceByKey(lambda a, b: b if b.pValue < a.pValue else a) \
+            .map(lambda v: v[1]) \
+            .toDF() \
             .select(
                 concat_ws(':', col('chromosome'), col('position')).alias('SNP'),
                 col('ancestry'),

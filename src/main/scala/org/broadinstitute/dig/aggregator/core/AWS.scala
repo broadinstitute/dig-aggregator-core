@@ -44,74 +44,74 @@ import scala.io.Source
 import scala.util.Random
 
 /**
- * AWS controller (S3 + EMR clients).
- */
+  * AWS controller (S3 + EMR clients).
+  */
 final class AWS(config: AWSConfig) extends LazyLogging {
   import Implicits._
 
   /**
-   * The same region and bucket are used for all operations.
-   */
+    * The same region and bucket are used for all operations.
+    */
   val region: Regions = Regions.valueOf(config.region)
   val bucket: String  = config.s3.bucket
 
   /**
-   * AWS IAM credentials provider.
-   */
+    * AWS IAM credentials provider.
+    */
   val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
     new BasicAWSCredentials(config.key, config.secret)
   )
 
   /**
-   * S3 client for storage.
-   */
+    * S3 client for storage.
+    */
   val s3: AmazonS3 = AmazonS3ClientBuilder.standard
     .withRegion(region)
     .withCredentials(credentials)
     .build
 
   /**
-   * EMR client for running map/reduce jobs.
-   */
+    * EMR client for running map/reduce jobs.
+    */
   val emr: AmazonElasticMapReduce = AmazonElasticMapReduceClientBuilder.standard
     .withCredentials(credentials)
     .withRegion(region)
     .build
 
   /**
-   * Returns the URI to a given key.
-   */
+    * Returns the URI to a given key.
+    */
   def uriOf(key: String): URI = new URI(s"s3://$bucket/$key")
 
   /**
-   * Create a URI for a cluster log.
-   */
+    * Create a URI for a cluster log.
+    */
   def logUri(cluster: Cluster): URI = uriOf(s"logs/${cluster.name}")
 
   /**
-   * Test whether or not a key exists.
-   */
+    * Test whether or not a key exists.
+    */
   def exists(key: String): IO[Boolean] = IO {
     s3.keyExists(bucket, key)
   }
 
   /**
-   * Upload a string to S3 in a particular bucket.
-   */
+    * Upload a string to S3 in a particular bucket.
+    */
   def put(key: String, text: String): IO[PutObjectResult] = IO {
     s3.putObject(bucket, key, text)
   }
 
   /**
-   * Upload a file to S3 in a particular bucket.
-   */
+    * Upload a file to S3 in a particular bucket.
+    */
   def put(key: String, stream: InputStream): IO[PutObjectResult] = IO {
     s3.putObject(bucket, key, stream, new ObjectMetadata())
   }
 
   /**
-   * Upload a resource file to S3 (using a matching key) and return a URI to it.
-   */
+    * Upload a resource file to S3 (using a matching key) and return a URI to it.
+    */
   def upload(resource: String, dirKey: String = "resources"): IO[URI] = {
     val key = s"""$dirKey/${resource.stripPrefix("/")}"""
 
@@ -145,39 +145,39 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   }
 
   /**
-   * Fetch a file from an S3 bucket (does not download content).
-   */
+    * Fetch a file from an S3 bucket (does not download content).
+    */
   def get(key: String): IO[S3Object] = IO {
     s3.getObject(bucket, key)
   }
 
   /**
-   * Returns the canonical URL for a given key.
-   */
+    * Returns the canonical URL for a given key.
+    */
   def publicUrlOf(key: String): String = {
     s3.getUrl(bucket, key).toExternalForm
   }
 
   /**
-   * Delete a key from S3.
-   */
+    * Delete a key from S3.
+    */
   def rm(key: String): IO[Unit] = IO {
     s3.deleteObject(bucket, key)
   }
 
   /**
-   * List all the keys in a given S3 folder.
-   */
+    * List all the keys in a given S3 folder.
+    */
   def ls(key: String, excludeSuccess: Boolean = false): IO[Seq[String]] = IO {
-    val keys = s3.listKeys(bucket, key).toSeq
+    val keys = s3.listKeys(bucket, key)
 
     // optionally filter out _SUCCESS files
     if (excludeSuccess) keys.filterNot(_.endsWith("/_SUCCESS")) else keys
   }
 
   /**
-   * Delete (recursively) all the keys under a given key from S3.
-   */
+    * Delete (recursively) all the keys under a given key from S3.
+    */
   def rmdir(key: String): IO[Seq[String]] = {
     val ios = for (listing <- s3.listingsIterator(bucket, key)) yield {
       if (listing.getObjectSummaries.isEmpty) {
@@ -199,8 +199,8 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   }
 
   /**
-   * Create a object to be used as a folder in S3.
-   */
+    * Create a object to be used as a folder in S3.
+    */
   def mkdir(key: String, metadata: String): IO[PutObjectResult] = {
     logger.debug(s"Creating pseudo-dir '$key'")
 
@@ -211,9 +211,9 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   }
 
   /**
-   * Create a job request that will be used to create a new EMR cluster and
-   * run a series of steps.
-   */
+    * Create a job request that will be used to create a new EMR cluster and
+    * run a series of steps.
+    */
   def runJob(cluster: Cluster, steps: Seq[JobStep]): IO[RunJobFlowResult] = {
     import Implicits.RichURI
 
@@ -261,17 +261,17 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   }
 
   /**
-   * Helper: create a job that's a single step.
-   */
+    * Helper: create a job that's a single step.
+    */
   def runJob(cluster: Cluster, step: JobStep): IO[RunJobFlowResult] = {
     runJob(cluster, Seq(step))
   }
 
   /**
-   * Periodically send a request to the cluster to determine the state of all
-   * steps in the job. Log output showing the % complete the jobs is or throw
-   * an exception if the job failed or was interrupt/cancelled.
-   */
+    * Periodically send a request to the cluster to determine the state of all
+    * steps in the job. Log output showing the % complete the jobs is or throw
+    * an exception if the job failed or was interrupt/cancelled.
+    */
   def waitForJob(job: RunJobFlowResult, stepsComplete: Int = 0): IO[RunJobFlowResult] = {
     import Implicits.timer
 
@@ -310,9 +310,9 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   }
 
   /**
-   * Given a sequence of jobs, run them in parallel, but limit the maximum
-   * concurrency so too many clusters aren't created at once.
-   */
+    * Given a sequence of jobs, run them in parallel, but limit the maximum
+    * concurrency so too many clusters aren't created at once.
+    */
   def waitForJobs(jobs: Seq[IO[RunJobFlowResult]], maxClusters: Int = 5): IO[Unit] = {
     Utils.waitForTasks(jobs, maxClusters) { job =>
       job.flatMap(waitForJob(_))
@@ -320,23 +320,23 @@ final class AWS(config: AWSConfig) extends LazyLogging {
   }
 
   /**
-   * Often times there are N jobs that are all identical (aside from command
-   * line parameters) that need to be run, and can be run in parallel.
-   *
-   * This can be done by spinning up a unique cluster for each, but has the
-   * downside that the provisioning step (which can take several minutes) is
-   * run for each job.
-   *
-   * This function allows a list of "jobs" (read: a list of a list of steps)
-   * to be passed, and N clusters will be made that will run through all the
-   * jobs until complete. This way the provisioning costs are only paid for
-   * once.
-   *
-   * This should only be used if all the jobs can be run in parallel.
-   *
-   * NOTE: The jobs are shuffled so that jobs that may be large and clumped
-   *       together won't happen every time the jobs run together.
-   */
+    * Often times there are N jobs that are all identical (aside from command
+    * line parameters) that need to be run, and can be run in parallel.
+    *
+    * This can be done by spinning up a unique cluster for each, but has the
+    * downside that the provisioning step (which can take several minutes) is
+    * run for each job.
+    *
+    * This function allows a list of "jobs" (read: a list of a list of steps)
+    * to be passed, and N clusters will be made that will run through all the
+    * jobs until complete. This way the provisioning costs are only paid for
+    * once.
+    *
+    * This should only be used if all the jobs can be run in parallel.
+    *
+    * NOTE: The jobs are shuffled so that jobs that may be large and clumped
+    *       together won't happen every time the jobs run together.
+    */
   def clusterJobs(cluster: Cluster, jobs: Seq[Seq[JobStep]], maxClusters: Int = 5): Seq[IO[RunJobFlowResult]] = {
     val indexedJobs = Random.shuffle(jobs).zipWithIndex.map {
       case (job, i) => (i % maxClusters, job)

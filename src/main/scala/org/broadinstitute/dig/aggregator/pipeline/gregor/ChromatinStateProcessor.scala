@@ -8,7 +8,7 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.emr._
 import org.broadinstitute.dig.aggregator.core.processors._
 
-class GregorProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class ChromatinStateProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /** All the processors this processor depends on.
     */
@@ -33,6 +33,9 @@ class GregorProcessor(name: Processor.Name, config: BaseConfig) extends RunProce
     val install   = aws.uriOf("resources/pipeline/gregor/installGREGOR.sh")
     val run       = aws.uriOf("resources/pipeline/gregor/runGREGOR.sh")
 
+    // r-squared threshold ("0.2" or "0.7")
+    val r2 = "0.7"
+
     // cluster configuration used to process each phenotype
     val cluster = Cluster(
       name = name.toString,
@@ -40,7 +43,8 @@ class GregorProcessor(name: Processor.Name, config: BaseConfig) extends RunProce
       instances = 1,
       masterVolumeSizeInGB = 800,
       applications = Seq.empty,
-      bootstrapScripts = Seq(new BootstrapScript(bootstrap))
+      bootstrapScripts = Seq(new BootstrapScript(bootstrap)),
+      bootstrapSteps = Seq(JobStep.Script(install, r2))
     )
 
     // get all the phenotypes that need processed
@@ -58,25 +62,14 @@ class GregorProcessor(name: Processor.Name, config: BaseConfig) extends RunProce
       "SA" -> "SAN"
     )
 
-    // r-squared threshold ("0.2" or "0.7")
-    val r2 = "0.7"
+    // For each ancestry, for each phenotype, run GREGOR.
+    val jobs = for {
+      (t2dkp_ancestry, gregor_ancestry) <- ancestries
+      phenotype                         <- phenotypes
+    } yield Seq(JobStep.Script(run, gregor_ancestry, r2, phenotype, t2dkp_ancestry))
 
-    // NOTE: Do not cluster these jobs! Each one needs to run on a separate VM
-    //       so that each ancestry can be downloaded once (per VM) and reused
-    //       as opposed to having to download ALL the ancestry REF files on
-    //       all the VMs just to handle all possible cases.
-
-    // create a single job for each ancestry supported by GREGOR
-    val jobs = ancestries.map {
-      case (t2dkp_ancestry, gregor_ancestry) =>
-        val installStep = JobStep.Script(install, gregor_ancestry, r2)
-        val runSteps = phenotypes.map { phenotype =>
-          JobStep.Script(run, gregor_ancestry, r2, phenotype, t2dkp_ancestry)
-        }
-
-        // start the job for this ancestry
-        aws.runJob(cluster, Seq(installStep) ++ runSteps)
-    }
+    // cluster the jobs so each cluster has approximately the same run time
+    val clusteredJobs = aws.clusterJobs(cluster, jobs)
 
     // each phenotype is a separate output
     val runs = phenotypes.map { phenotype =>
@@ -85,7 +78,7 @@ class GregorProcessor(name: Processor.Name, config: BaseConfig) extends RunProce
 
     // run all the jobs then update the database
     for {
-      _ <- aws.waitForJobs(jobs)
+      _ <- aws.waitForJobs(clusteredJobs)
       _ <- IO(logger.info("Updating database..."))
       _ <- runs.toList.sequence
       _ <- IO(logger.info("Done"))

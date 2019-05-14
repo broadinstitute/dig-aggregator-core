@@ -2,7 +2,6 @@
 #
 # usage: installGREGOR.sh <ancestry> [r2]
 #           where
-#               ancestry = "AFR" | "AMR" | "ASN" | "EUR" | "SAN"
 #               r2       = "0.2" | "0.7" (default = "0.7")
 #
 
@@ -19,18 +18,24 @@ chmod 775 "${GREGOR_ROOT}"
 # install to the VEP directory
 cd "${GREGOR_ROOT}"
 
-# get the ancestry and r2 value to use
-ANCESTRY=$1
-R2=${2:-"0.7"}
-REF="GREGOR.ref.${ANCESTRY}.LD.ge.${R2}.tar.gz"
+# get the r2 value to use
+R2=${1:-"0.7"}
+
+# all ancestry REF files need to be installed
+ANCESTRIES=(AFR AMR ASN EUR SAN)
 
 # create the ref directory
 mkdir -p ref
 cd ref
 
-# download and extract the tarball for the 1000g reference
-aws s3 cp "${S3_BUCKET}/bin/gregor/${REF}" .
-tar zxf "${REF}"
+# install each REF file
+for ANCESTRY in "ANCESTRIES[@]"; do
+    REF="GREGOR.ref.${ANCESTRY}.LD.ge.${R2}.tar.gz"
+
+    # download and extract the tarball for the 1000g reference
+    aws s3 cp "${S3_BUCKET}/bin/gregor/${REF}" .
+    tar zxf "${REF}"
+done
 
 # download and extract GREGOR itself
 cd ${GREGOR_ROOT}
@@ -40,4 +45,3 @@ tar zxf GREGOR.v1.4.0.tar.gz
 # download the getmerge-strip-headers script and make it executable
 aws s3 cp "${S3_BUCKET}/resources/scripts/getmerge-strip-headers.sh" .
 chmod +x getmerge-strip-headers.sh
-

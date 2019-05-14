@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 
-# import argparse
 import platform
 
 from pyspark.sql import SparkSession
@@ -22,12 +21,6 @@ if __name__ == '__main__':
     """
     print('Python version: %s' % platform.python_version())
 
-    # opts = argparse.ArgumentParser()
-    # opts.add_argument('dataset', help='Dataset name to create a BED file for')
-    #
-    # # parse command line arguments
-    # args = opts.parse_args()
-
     # get the source and output directories
     srcdir = '%s/chromatin_state/*/part-*' % s3dir
     outdir = '%s/out/gregor/regions/chromatin_state' % s3dir
@@ -47,13 +40,14 @@ if __name__ == '__main__':
             col('chromosome').alias('chrom'),
             col('start').alias('chromStart'),
             col('end').alias('chromEnd'),
-            col('name').alias('name'),
+            col('biosample'),
+            col('name'),
         )
 
     # output the variants in BED format (TSV)
     df.write\
         .mode('overwrite') \
-        .partitionBy('name') \
+        .partitionBy('biosample', 'name') \
         .csv(outdir, sep='\t')
 
     # done
