@@ -71,7 +71,7 @@ echo "-------------------"
 
 # for each tissue, get all the annotations for it, and join them into tissue+annotation bed files
 for TISSUE in "${TISSUES[@]}"; do
-    ANNOTATIONS=($(hadoop fs -ls -C "${S3_DIR}/regions/chromatin_state/tissue=${TISSUE}/*/part-*" | xargs dirname | xargs -I @ basename "@" | sed -r 's/^name=([0-9]+_)?//' | sort | uniq))
+    ANNOTATIONS=($(hadoop fs -ls -C "${S3_DIR}/regions/chromatin_state/biosample=${TISSUE}/*/part-*" | xargs dirname | xargs -I @ basename "@" | sed -r 's/^name=([0-9]+_)?//' | sort | uniq))
 
     # for each annotation, merge all the part files into a single BED
     for ANNOTATION in "${ANNOTATIONS[@]}"; do
@@ -79,7 +79,7 @@ for TISSUE in "${TISSUES[@]}"; do
         BED_FILE="${REGIONS_DIR}/${TISSUE}___${ANNOTATION}"
 
         # merge all the part files together into a single glob
-        hadoop fs -getmerge -skip-empty-file "${S3_DIR}/regions/chromatin_state/tissue=${TISSUE}/name={?_,??_,}${ANNOTATION}/part-*" "${BED_FILE}"
+        hadoop fs -getmerge -skip-empty-file "${S3_DIR}/regions/chromatin_state/biosample=${TISSUE}/name={?_,??_,}${ANNOTATION}/part-*" "${BED_FILE}"
         echo "${BED_FILE}" >> "${BED_INDEX_FILE}"
     done
 done
