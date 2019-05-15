@@ -91,7 +91,7 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
     val q = s"""|MATCH (n:Region), (v:Variant) WHERE
                 |  v.chromosome = n.chromosome AND
                 |  v.position >= n.start AND
-                |  v.position <= n.end
+                |  v.position < n.end
                 |
                 |// consequences referencing a gene, but has no connection
                 |WHERE NOT ((v)-[:HAS_REGION]->(n))

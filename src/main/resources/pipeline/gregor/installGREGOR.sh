@@ -6,7 +6,13 @@
 #
 
 GREGOR_ROOT=/mnt/var/gregor
+
 S3_BUCKET="s3://dig-analysis-data"
+S3_DIR="${S3_BUCKET}/out/gregor"
+
+# locations for the region files
+BED_INDEX_FILE="${GREGOR_ROOT}/bed.file.index"
+REGIONS_DIR="${GREGOR_ROOT}/regions"
 
 # NOTE: This is performed as a STEP instead of a bootstrap step, because AWS
 #       will timeout the cluster if the bootstrap takes over 1 hour to run.
@@ -42,6 +48,38 @@ cd ${GREGOR_ROOT}
 aws s3 cp "${S3_BUCKET}/bin/gregor/GREGOR.v1.4.0.tar.gz" .
 tar zxf GREGOR.v1.4.0.tar.gz
 
-# download the getmerge-strip-headers script and make it executable
-aws s3 cp "${S3_BUCKET}/resources/scripts/getmerge-strip-headers.sh" .
-chmod +x getmerge-strip-headers.sh
+#
+# At this point, the output of the SortRegionsProcessor will be the same for every
+# run of GREGOR, so we can copy it from HDFS to the local machine once for all the
+# subsequent phenotype/ancestry combinations to use.
+#
+# The BED_INDEX_FILE will be used in every configuration file sent to GREGOR.
+#
+
+# ensure that the regions directory exists and bed index file
+mkdir -p "${REGIONS_DIR}"
+touch "${BED_INDEX_FILE}"
+
+# find all the unique tissues from the part files
+TISSUES=($(hadoop fs -ls -C "${S3_DIR}/regions/chromatin_state/*/*/part-*" | xargs dirname | xargs dirname | xargs -I @ basename "@" | sed -r 's/^biosample=//' | sort | uniq))
+
+# debug to STDOUT all the unique tissues
+echo "Unique bio-samples:"
+echo "-------------------"
+echo "${TISSUES[@]}" | tr ' ' '\n'
+echo "-------------------"
+
+# for each tissue, get all the annotations for it, and join them into tissue+annotation bed files
+for TISSUE in "${TISSUES[@]}"; do
+    ANNOTATIONS=($(hadoop fs -ls -C "${S3_DIR}/regions/chromatin_state/biosample=${TISSUE}/*/part-*" | xargs dirname | xargs -I @ basename "@" | sed -r 's/^name=([0-9]+_)?//' | sort | uniq))
+
+    # for each annotation, merge all the part files into a single BED
+    for ANNOTATION in "${ANNOTATIONS[@]}"; do
+        # don't use .bed extension as we'll use the column value of the output for Neo4j
+        BED_FILE="${REGIONS_DIR}/${TISSUE}___${ANNOTATION}"
+
+        # merge all the part files together into a single glob
+        hadoop fs -getmerge -skip-empty-file "${S3_DIR}/regions/chromatin_state/biosample=${TISSUE}/name=${ANNOTATION}/part-*" "${BED_FILE}"
+        echo "${BED_FILE}" >> "${BED_INDEX_FILE}"
+    done
+done
