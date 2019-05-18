@@ -30,10 +30,10 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
     val analysis = new Analysis(s"ChromatinState/Regions", Provenance.thisBuild)
 
     val io = for {
-      id <- analysis.create(graph)
+      //id <- analysis.create(graph)
 
       // find and upload all the sorted region part files
-      _ <- analysis.uploadParts(aws, graph, id, "out/gregor/regions/chromatin_state/")(uploadRegions)
+      //_ <- analysis.uploadParts(aws, graph, id, "out/gregor/regions/chromatin_state/")(uploadRegions)
 
       // connect all the variants to the regions that were uploaded
       _ <- IO(logger.info(s"Connecting variants to regions..."))
@@ -88,14 +88,13 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
   }
 
   def connectVariants(graph: GraphDb): IO[StatementResult] = {
-    val s = "MATCH (v:Variant) RETURN v"
-
-    // for each variant, find the region(s) it is with and link them
-    val q = s"""|MATCH (n:Region)
+    val q = s"""|MATCH (n:Region) WITH n LIMIT {limit}
                 |
-                |WHERE n.chromosome = v.chromosome
-                |AND n.start <= v.position
-                |AND n.end > v.position
+                |// find all variants within the region
+                |MATCH (v:Variant)
+                |WHERE v.chromosome = n.chromosome
+                |AND v.position >= n.start
+                |AND v.position < n.end
                 |AND NOT ((v)-[:HAS_REGION]->(n))
                 |
                 |// connect the transcript consequence to the gene
@@ -103,6 +102,6 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
                 |""".stripMargin
 
     // run the query using the APOC function
-    graph.run(s"call apoc.periodic.iterate('$s', '$q', {batchSize: 10000, parallel: true})")
+    graph.run(s"call apoc.periodic.commit('$q', {limit: 1000})")
   }
 }
