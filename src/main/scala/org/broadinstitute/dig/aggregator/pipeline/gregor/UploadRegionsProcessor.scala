@@ -36,8 +36,8 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
       _ <- analysis.uploadParts(aws, graph, id, "out/gregor/regions/chromatin_state/")(uploadRegions)
 
       // connect all the variants to the regions that were uploaded
-      _ <- IO(logger.info(s"Connecting variants to regions..."))
-      _ <- connectVariants(graph)
+      //_ <- IO(logger.info(s"Connecting variants to regions..."))
+      //_ <- connectVariants(graph)
 
       // add the result to the database
       _ <- Run.insert(pool, name, results.map(_.output).distinct, analysis.name)
@@ -82,19 +82,33 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
                 |// create the relationships to the analysis and tissue
                 |CREATE (q)-[:PRODUCED]->(n)
                 |CREATE (t)-[:HAS_REGION]->(n)
+                |
+                |//
+                |WITH n
+                |
+                |// find all variants within this region
+                |MATCH (v:Variant)
+                |WHERE v.chromosome = n.chromosome
+                |AND v.position >= n.start
+                |AND v.position < n.end
+                |AND NOT ((v)-[:HAS_REGION]->(n))
+                |
+                |// connect the variants to the region
+                |MERGE (v)-[:HAS_REGION]->(n)
                 |""".stripMargin
 
     graph.run(q)
   }
 
   def connectVariants(graph: GraphDb): IO[StatementResult] = {
-    val q = s"""|MATCH (n:Region), (v:Variant) WHERE
-                |  v.chromosome = n.chromosome AND
-                |  v.position >= n.start AND
-                |  v.position < n.end
+    val q = s"""|MATCH (n:Region) WITH n
                 |
-                |// consequences referencing a gene, but has no connection
-                |WHERE NOT ((v)-[:HAS_REGION]->(n))
+                |// find all variants in the region
+                |MATCH (v:Variant)
+                |WHERE v.chromosome = n.chromosome
+                |AND v.position >= n.start
+                |AND v.position < n.end
+                |AND NOT ((v)-[:HAS_REGION]->(n))
                 |
                 |// limit the size for each call (using APOC)
                 |WITH n, v
@@ -102,6 +116,7 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
                 |
                 |// connect the transcript consequence to the gene
                 |MERGE (v)-[:HAS_REGION]->(n)
+                |RETURN (*)
                 |""".stripMargin
 
     // run the query using the APOC function
