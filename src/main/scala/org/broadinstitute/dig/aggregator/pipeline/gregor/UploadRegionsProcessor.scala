@@ -30,14 +30,14 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
     val analysis = new Analysis(s"ChromatinState/Regions", Provenance.thisBuild)
 
     val io = for {
-      //id <- analysis.create(graph)
+      id <- analysis.create(graph)
 
       // find and upload all the sorted region part files
-      //_ <- analysis.uploadParts(aws, graph, id, "out/gregor/regions/chromatin_state/")(uploadRegions)
+      _ <- analysis.uploadParts(aws, graph, id, "out/gregor/regions/chromatin_state/")(uploadRegions)
 
       // connect all the variants to the regions that were uploaded
-      _ <- IO(logger.info(s"Connecting variants to regions..."))
-      _ <- connectVariants(graph)
+      //_ <- IO(logger.info(s"Connecting variants to regions..."))
+      //_ <- connectVariants(graph)
 
       // add the result to the database
       _ <- Run.insert(pool, name, results.map(_.output).distinct, analysis.name)
@@ -77,7 +77,7 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
                 |  a.type = 'ChromatinState'
                 |
                 |// create the result node (note the second label!)
-                |CREATE (n:Region:RegionToBeProcessed {
+                |CREATE (n:Region {
                 |  chromosome: r[0],
                 |  start: toInteger(r[1]),
                 |  end: toInteger(r[2])
@@ -111,6 +111,6 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
                 |""".stripMargin
 
     // run the query using the APOC function
-    graph.run(s"call apoc.periodic.commit('$q', {limit:1000})")
+    graph.run(s"call apoc.periodic.commit('$q', {limit:100})")
   }
 }
