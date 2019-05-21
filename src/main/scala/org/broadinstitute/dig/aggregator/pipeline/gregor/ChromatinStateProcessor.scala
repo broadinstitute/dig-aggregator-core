@@ -47,6 +47,14 @@ class ChromatinStateProcessor(name: Processor.Name, config: BaseConfig) extends 
       bootstrapSteps = Seq(JobStep.Script(install, r2))
     )
 
+    // get results of the regions processor
+    val regions = results
+      .filter(_.app == GregorPipeline.sortRegionsProcessor)
+      .map(_.output)
+      .distinct
+
+    // TODO: if regions.size > 0 then phenotypes = all SNPListProcessor outputs!
+
     // get all the phenotypes that need processed
     val phenotypes = results
       .filter(_.app == GregorPipeline.snpListProcessor)
@@ -73,7 +81,7 @@ class ChromatinStateProcessor(name: Processor.Name, config: BaseConfig) extends 
 
     // each phenotype is a separate output
     val runs = phenotypes.map { phenotype =>
-      Run.insert(pool, name, ancestries.map(_._1), s"GREGOR/$phenotype")
+      Run.insert(pool, name, regions :+ phenotype, phenotype)
     }
 
     // run all the jobs then update the database

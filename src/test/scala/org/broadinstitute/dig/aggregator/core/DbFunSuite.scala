@@ -13,9 +13,9 @@ import org.broadinstitute.dig.aggregator.core.processors.Processor
 import org.scalatest.FunSuite
 
 /**
- * @author clint
- * Aug 27, 2018
- */
+  * @author clint
+  * Aug 27, 2018
+  */
 trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
 
   def dbTest(name: String)(body: => Any): Unit = {
@@ -102,7 +102,7 @@ object DbFunSuite {
               |  `commit` varchar(800) NOT NULL,
               |  `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
               |  PRIMARY KEY (`ID`),
-              |  UNIQUE KEY `APP_IDX` (`app`,`input`),
+              |  UNIQUE KEY `APP_IDX` (`app`,`input`,`output`),
               |  KEY `RUN_IDX` (`run`, `app`)
               |)
               |""".stripMargin.update.run

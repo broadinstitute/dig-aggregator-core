@@ -15,28 +15,28 @@ import org.neo4j.driver.v1.StatementResult
 import scala.util.Random
 
 /**
- * The representation of a processor's analysis that has been uploaded to the
- * graph database.
- *
- * The name of an analysis is something that has to be unique across all
- * analyses uploaded to the database as it is used to identify result nodes
- * produced by it.
- */
+  * The representation of a processor's analysis that has been uploaded to the
+  * graph database.
+  *
+  * The name of an analysis is something that has to be unique across all
+  * analyses uploaded to the database as it is used to identify result nodes
+  * produced by it.
+  */
 final class Analysis(val name: String, val provenance: Provenance) extends LazyLogging {
   import Implicits.contextShift
 
   /**
-   * Given an S3 glob to a list of part files, call the uploadPart function for
-   * each, allowing the CSV to be written to Neo4j.
-   */
-  def uploadParts(aws: AWS, graph: GraphDb, analysisId: Long, s3path: String)(
+    * Given an S3 glob to a list of part files, call the uploadPart function for
+    * each, allowing the CSV to be written to Neo4j.
+    */
+  def uploadParts(aws: AWS, graph: GraphDb, analysisId: Long, s3path: String, ext: String = ".csv")(
       uploadPart: (GraphDb, Long, String) => IO[StatementResult]
   ): IO[Unit] = {
     for {
       listing <- aws.ls(s3path)
 
-      // only keep the part files that are CSV files which can be loaded
-      parts = listing.filter(_.toLowerCase.endsWith(".csv"))
+      // only keep the files with the proper extension
+      parts = listing.filter(_.toLowerCase.endsWith(ext.toLowerCase))
 
       // indicate how many parts are being uploaded
       _ <- IO(logger.info(s"Uploading ${parts.size} part files for analysis '$name..."))
@@ -61,10 +61,10 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
   }
 
   /**
-   * Create an analysis node in the graph. This returned the unique, internal
-   * ID of the node created (or updated) so that any result nodes can link to
-   * it explicitly.
-   */
+    * Create an analysis node in the graph. This returned the unique, internal
+    * ID of the node created (or updated) so that any result nodes can link to
+    * it explicitly.
+    */
   def create(graph: GraphDb): IO[Long] = {
     val q = s"""|CREATE (n:Analysis {
                 |  name: '$name',
@@ -89,9 +89,9 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
   }
 
   /**
-   * Detatch and delete all nodes produced by a given :Analysis node. Does not
-   * delete the analysis node as it assumes it is being updated.
-   */
+    * Detatch and delete all nodes produced by a given :Analysis node. Does not
+    * delete the analysis node as it assumes it is being updated.
+    */
   def delete(graph: GraphDb): IO[Unit] = {
     val batchSize = 10000
 

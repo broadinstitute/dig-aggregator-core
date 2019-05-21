@@ -15,5 +15,6 @@ object GregorPipeline extends Pipeline {
   val snpListProcessor: Name        = register("SNPListProcessor", new SNPListProcessor(_, _))
   val chromatinStateProcessor: Name = register("ChromatinStateProcessor", new ChromatinStateProcessor(_, _))
   val uploadRegionsProcessor: Name  = register("UploadRegionsProcessor", new UploadRegionsProcessor(_, _))
-  //val uploadGregorProcessor: Name = register("UploadGregorProcessor", new UploadGregorProcessor(_, _))
+  val uploadGlobalEnrichmentProcessor: Name =
+    register("UploadGlobalEnrichmentProcessor", new UploadGlobalEnrichmentProcessor(_, _))
 }

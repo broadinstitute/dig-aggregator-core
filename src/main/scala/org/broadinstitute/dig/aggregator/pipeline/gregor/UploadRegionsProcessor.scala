@@ -71,37 +71,46 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |MATCH (t:Tissue {name: '$tissue'})
                 |
-                |// create the result node
-                |CREATE (n:Region {
+                |// create an annotation for this region
+                |MERGE (a:Annotation {name: '$name'})
+                |ON CREATE SET
+                |  a.type = 'ChromatinState'
+                |
+                |// create the result node (note the second label!)
+                |CREATE (n:Region:RegionToBeProcessed {
                 |  chromosome: r[0],
                 |  start: toInteger(r[1]),
-                |  end: toInteger(r[2]),
-                |  annotation: '$name'
+                |  end: toInteger(r[2])
                 |})
                 |
-                |// create the relationships to the analysis and tissue
+                |// create the relationships
                 |CREATE (q)-[:PRODUCED]->(n)
                 |CREATE (t)-[:HAS_REGION]->(n)
+                |CREATE (n)-[:HAS_ANNOTATION]->(a)
                 |""".stripMargin
 
     graph.run(q)
   }
 
   def connectVariants(graph: GraphDb): IO[StatementResult] = {
-    val q = s"""|MATCH (n:Region) WITH n LIMIT {limit}
+    val q = s"""|MATCH (r:RegionToBeProcessed) WITH r LIMIT {limit}
                 |
-                |// find all variants within the region
+                |// drop the label as this region has now been processed
+                |REMOVE r:RegionToBeProcessed
+                |WITH r
+                |
+                |// find all variants within this region
                 |MATCH (v:Variant)
-                |WHERE v.chromosome = n.chromosome
-                |AND v.position >= n.start
-                |AND v.position < n.end
-                |AND NOT ((v)-[:HAS_REGION]->(n))
+                |WHERE v.chromosome = r.chromosome
+                |AND v.position >= r.start
+                |AND v.position < r.end
                 |
                 |// connect the transcript consequence to the gene
-                |MERGE (v)-[:HAS_REGION]->(n)
+                |MERGE (v)-[:HAS_REGION]->(r)
+                |RETURN count(r)
                 |""".stripMargin
 
     // run the query using the APOC function
-    graph.run(s"call apoc.periodic.commit('$q', {limit: 1000})")
+    graph.run(s"call apoc.periodic.commit('$q', {limit:1000})")
   }
 }

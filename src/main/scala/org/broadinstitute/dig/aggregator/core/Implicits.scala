@@ -96,8 +96,25 @@ object Implicits {
         }
       }
 
-    def listKeys(bucket: String, key: String): Seq[String] =
-      listingsIterator(bucket, key).flatMap(_.keys).toList
+    def listKeys(bucket: String, key: String, recursive: Boolean = true): Seq[String] = {
+      val it   = listingsIterator(bucket, key)
+      var keys = Vector.empty[String]
+
+      // find all the keys in each object listing
+      for (listing <- it) {
+        keys ++= listing.keys
+
+        if (recursive) {
+          for (prefix <- listing.commonPrefixes) {
+            keys ++= listKeys(bucket, prefix, recursive)
+          }
+        }
+
+        keys
+      }
+
+      keys
+    }
   }
 
   /** RichS3Client.listKeys returns one of these...
@@ -106,9 +123,11 @@ object Implicits {
 
     /** Extract all the object keys from an object listing iterator.
       */
-    def keys: Seq[String] = {
-      listing.getObjectSummaries.asScala.map(_.getKey).toList
-    }
+    def keys: Seq[String] = listing.getObjectSummaries.asScala.map(_.getKey).toList
+
+    /** Extract all the common prefixes.
+      */
+    def commonPrefixes: Seq[String] = listing.getCommonPrefixes.asScala
   }
 
   /** When dealing with S3 paths, it's often helpful to be able to get
