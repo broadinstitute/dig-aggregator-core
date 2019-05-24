@@ -12,37 +12,45 @@ import org.neo4j.driver.v1.Driver
 import org.neo4j.driver.v1.Session
 import org.neo4j.driver.v1.StatementResult
 
-/**
- * This processor will take the output from the frequency analysis and
- * creates :Frequency nodes in the graph database.
- *
- * The source tables are read from:
- *
- *  s3://dig-analysis-data/out/frequencyanalysis/<phenotype>/part-*
- */
+/** This processor will take the output from the frequency analysis and
+  * creates :Frequency nodes in the graph database.
+  *
+  * The source tables are read from:
+  *
+  *  s3://dig-analysis-data/out/frequencyanalysis/<phenotype>/part-*
+  */
 class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
-  /**
-   * All the processors this processor depends on.
-   */
+  /** All the processors this processor depends on.
+    */
   override val dependencies: Seq[Processor.Name] = Seq(
     FrequencyAnalysisPipeline.frequencyProcessor
   )
 
-  /**
-   * All the job scripts that need to be uploaded to AWS.
-   */
+  /** All the job scripts that need to be uploaded to AWS.
+    */
   override val resources: Seq[String] = Nil
 
-  /**
-   * Take all the phenotype results from the dependencies and process them.
-   */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
-    val phenotypes = results.map(_.output).distinct
+  /** Build the list of results to upload to the database.
+    */
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
+    results
+      .map(_.output)
+      .distinct
+      .map { p =>
+        s"MetaAnalysis/$p" -> Seq(p)
+      }
+      .toMap
+  }
 
-    // create runs for every phenotype
-    val ios = for (phenotype <- phenotypes) yield {
-      val analysis = new Analysis(s"FrequencyAnalysis/$phenotype", Provenance.thisBuild)
+  /** Take all the phenotype results from the dependencies and process them.
+    */
+  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+    val runMap = getRunOutputs(results)
+
+    // upload the results of each phenotype
+    val ios = for ((output, Seq(phenotype)) <- runMap) yield {
+      val analysis = new Analysis(output, Provenance.thisBuild)
       val graph    = new GraphDb(config.neo4j)
 
       // where the result files are to upload
@@ -53,23 +61,19 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
 
         // find and upload all the bottom-line result part files
         _ <- analysis.uploadParts(aws, graph, id, bottomLine)(uploadResults)
-
-        // add the result to the database
-        _ <- Run.insert(pool, name, Seq(phenotype), analysis.name)
-        _ <- IO(logger.info("Done"))
       } yield ()
 
       // ensure the connection to the database is closed
-      io.guarantee(graph.shutdown)
+      io.guarantee(graph.shutdown())
     }
 
     // process each phenotype serially
-    ios.toList.sequence >> IO.unit
+    ios.toList.sequence.as(())
   }
 
   /**
-   * Given a part file, upload it and create all the bottom-line nodes.
-   */
+    * Given a part file, upload it and create all the bottom-line nodes.
+    */
   def uploadResults(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     for {
       _       <- mergeVariants(graph, part)
@@ -78,8 +82,8 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
   }
 
   /**
-   * Ensure the variants for each result exist.
-   */
+    * Ensure the variants for each result exist.
+    */
   def mergeVariants(graph: GraphDb, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 50000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
@@ -98,8 +102,8 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
   }
 
   /**
-   * Create all the result nodes and relationships.
-   */
+    * Create all the result nodes and relationships.
+    */
   def createResults(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 50000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r

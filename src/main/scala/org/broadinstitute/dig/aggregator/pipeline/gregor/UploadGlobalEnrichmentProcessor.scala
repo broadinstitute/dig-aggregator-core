@@ -2,11 +2,10 @@ package org.broadinstitute.dig.aggregator.pipeline.gregor
 
 import cats.effect._
 import cats.implicits._
-
 import java.net.URL
 import java.net.URLDecoder
 
-import org.broadinstitute.dig.aggregator.core.{Analysis, GraphDb, Provenance, Run}
+import org.broadinstitute.dig.aggregator.core.{AWS, Analysis, GraphDb, Provenance, Run}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.processors.{Processor, RunProcessor}
 import org.neo4j.driver.v1.StatementResult
@@ -23,24 +22,31 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
     */
   override val resources: Seq[String] = Nil
 
+  /** Each input is a phenotype, and the output is the analysis node.
+    */
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
+    results
+      .map(_.output)
+      .distinct
+      .map { phenotype =>
+        s"GlobalEnrichment/$phenotype" -> Seq(phenotype)
+      }
+      .toMap
+  }
+
   /** Take all the phenotype results from the dependencies and process them.
     */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val graph = new GraphDb(config.neo4j)
 
-    // get all the distinct phenotypes that were processed
-    val phenotypes = results.map(_.output).distinct
-
     // each phenotype is uploaded individually
-    val ios = phenotypes.map { phenotype =>
-      val analysis = new Analysis(s"GlobalEnrichment/$phenotype", Provenance.thisBuild)
+    val ios = for ((output, Seq(phenotype)) <- getRunOutputs(results)) yield {
+      val analysis = new Analysis(output, Provenance.thisBuild)
       val parts    = s"out/gregor/summary/$phenotype/"
 
       for {
         id <- analysis.create(graph)
         _  <- analysis.uploadParts(aws, graph, id, parts, ".txt")(uploadStatistics)
-        _  <- IO(logger.info("Updating database..."))
-        _  <- Run.insert(pool, name, Seq(phenotype), analysis.name)
       } yield ()
     }
 

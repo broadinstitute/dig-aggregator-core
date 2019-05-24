@@ -276,7 +276,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
     import Implicits.timer
 
     // wait a little bit then get the status of all steps in the job
-    val getStatus = for (_ <- IO.sleep(20.seconds)) yield {
+    val getStatus = for (_ <- IO.sleep(60.seconds)) yield {
       val req = new ListStepsRequest().withClusterId(job.getJobFlowId)
 
       // extract the steps from the request response; aws reverses them

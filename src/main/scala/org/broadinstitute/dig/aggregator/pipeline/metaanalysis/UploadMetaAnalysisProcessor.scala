@@ -33,15 +33,26 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
     */
   override val resources: Seq[String] = Nil
 
+  /** Create the mapping of outputs -> inputs.
+    */
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
+    results
+      .map(_.output)
+      .distinct
+      .map { p =>
+        s"MetaAnalysis/$p" -> Seq(p)
+      }
+      .toMap
+  }
+
   /** Take all the phenotype results from the dependencies and process them.
     */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
-    val phenotypes = results.map(_.output).distinct
-    val graph      = new GraphDb(config.neo4j)
+    val graph = new GraphDb(config.neo4j)
 
-    // create runs for every phenotype
-    val ios = for (phenotype <- phenotypes) yield {
-      val analysis   = new Analysis(s"MetaAnalysis/$phenotype", Provenance.thisBuild)
+    // upload the results of each phenotype
+    val ios = for ((output, Seq(phenotype)) <- getRunOutputs(results)) yield {
+      val analysis   = new Analysis(output, Provenance.thisBuild)
       val bottomLine = s"out/metaanalysis/trans-ethnic/$phenotype/"
 
       for {
@@ -49,15 +60,11 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
 
         // find and upload all the bottom-line result part files
         _ <- analysis.uploadParts(aws, graph, id, bottomLine)(uploadResults)
-
-        // add the result to the database
-        _ <- Run.insert(pool, name, Seq(phenotype), analysis.name)
-        _ <- IO(logger.info("Done"))
       } yield ()
     }
 
     // process each phenotype serially
-    (ios.toList.sequence >> IO.unit).guarantee(graph.shutdown)
+    ios.toList.sequence.as(()).guarantee(graph.shutdown())
   }
 
   /** Given a part file, upload it and create all the bottom-line nodes.

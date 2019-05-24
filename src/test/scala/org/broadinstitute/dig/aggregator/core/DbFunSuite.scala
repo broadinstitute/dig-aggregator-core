@@ -35,12 +35,12 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     def insert(a: A): IO[_]
   }
 
-  def insertRun(app: Processor.Name, inputs: Seq[String], output: String): String = {
-    Run.insert(pool, app, inputs, output).unsafeRunSync
+  def insertRun(app: Processor.Name, output: String, inputs: Seq[String]): String = {
+    Run.insert(pool, app, output, inputs).unsafeRunSync
   }
 
   def allResults: Seq[Run.Result] = {
-    val q = sql"""|SELECT `app`,`output`,`timestamp`
+    val q = sql"""|SELECT `app`,`input`,`output`,`timestamp`
                   |FROM   `runs`
                   |""".stripMargin.query[Run.Result].to[Seq]
 

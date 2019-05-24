@@ -34,9 +34,21 @@ class SNPListProcessor(name: Processor.Name, config: BaseConfig) extends RunProc
     "pipeline/gregor/snplist.py"
   )
 
+  /** Every phenotype processed gets its own output.
+    */
+  override def getRunOutputs(work: Seq[Run.Result]): Map[String, Seq[String]] = {
+    work
+      .map(_.output)
+      .distinct
+      .map { phenotype =>
+        phenotype -> Seq(phenotype)
+      }
+      .toMap
+  }
+
   /** Find all the unique SNPs from all the output of the meta-analysis processor.
     */
-  def processResults(results: Seq[Run.Result]): IO[Unit] = {
+  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val script = aws.uriOf("resources/pipeline/gregor/snplist.py")
 
     // cluster configuration used to process each phenotype
@@ -60,16 +72,6 @@ class SNPListProcessor(name: Processor.Name, config: BaseConfig) extends RunProc
     // cluster the jobs
     val clusteredJobs = aws.clusterJobs(cluster, jobs)
 
-    // create a run per phenotype
-    val runs = phenotypes.map { phenotype =>
-      Run.insert(pool, name, Seq(phenotype), phenotype)
-    }
-
-    for {
-      _ <- aws.waitForJobs(clusteredJobs)
-      _ <- IO(logger.info("Updating database..."))
-      _ <- runs.toList.sequence
-      _ <- IO(logger.info("Done"))
-    } yield ()
+    aws.waitForJobs(clusteredJobs)
   }
 }

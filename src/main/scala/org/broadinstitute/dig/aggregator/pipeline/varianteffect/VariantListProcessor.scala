@@ -30,15 +30,18 @@ class VariantListProcessor(name: Processor.Name, config: BaseConfig) extends Dat
     "pipeline/varianteffect/listVariants.py"
   )
 
+  /** Only a single output for VEP that uses ALL datasets.
+    */
+  override def getRunOutputs(datasets: Seq[Dataset]): Map[String, Seq[String]] = {
+    Map("VEP/variants" -> datasets.map(_.dataset).distinct)
+  }
+
   /** All that matters is that there are new datasets. The input datasets are
     * actually ignored, and _everything_ is reprocessed. This is done because
     * there is only a single analysis node for all variants.
     */
   override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
     val pyScript = aws.uriOf("resources/pipeline/varianteffect/listVariants.py")
-
-    // get a list of all the new and updated datasets
-    val datasetInputs = datasets.map(_.dataset)
 
     // spark configuration settings
     val sparkConf = ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
@@ -54,9 +57,6 @@ class VariantListProcessor(name: Processor.Name, config: BaseConfig) extends Dat
       _   <- IO(logger.info("Processing datasets..."))
       job <- aws.runJob(cluster, JobStep.PySpark(pyScript))
       _   <- aws.waitForJob(job)
-      _   <- IO(logger.info("Updating database..."))
-      _   <- Run.insert(pool, name, datasetInputs, "VEP/variants")
-      _   <- IO(logger.info("Done"))
     } yield ()
   }
 }

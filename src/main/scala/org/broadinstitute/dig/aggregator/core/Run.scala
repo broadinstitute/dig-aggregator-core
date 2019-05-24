@@ -2,12 +2,9 @@ package org.broadinstitute.dig.aggregator.core
 
 import cats.effect._
 import cats.implicits._
-
 import com.typesafe.scalalogging.LazyLogging
-
 import doobie._
 import doobie.implicits._
-
 import java.util.UUID.randomUUID
 
 import org.broadinstitute.dig.aggregator.core.processors._
@@ -23,7 +20,7 @@ object Run extends LazyLogging {
     * an instance, multiple rows are inserted using the same id (`Entry.run`),
     * which is application-specific, but - for us - a milliseconds timestamp.
     *
-    * This class is private because it's only used by Doobie to insert rows and
+    * This class is private because it's only used by doobie to insert rows and
     * is never actually used outside of insertion. Use `Run.Result` for getting
     * data out of the `runs` table.
     */
@@ -39,7 +36,7 @@ object Run extends LazyLogging {
 
   /** Run entries are created and inserted atomically for a single output.
     */
-  def insert(pool: DbPool, app: Processor.Name, inputs: Seq[String], output: String): IO[String] = {
+  def insert(pool: DbPool, app: Processor.Name, output: String, inputs: Seq[String]): IO[String] = {
     val q = s"""|INSERT INTO `runs`
                 |  ( `run`
                 |  , `app`
@@ -54,7 +51,6 @@ object Run extends LazyLogging {
                 |
                 |ON DUPLICATE KEY UPDATE
                 |  `run` = VALUES(`run`),
-                |  `output` = VALUES(`output`),
                 |  `source` = VALUES(`source`),
                 |  `branch` = VALUES(`branch`),
                 |  `commit` = VALUES(`commit`),
@@ -62,17 +58,23 @@ object Run extends LazyLogging {
                 |""".stripMargin
 
     // generate the run ID and an insert-multi update
-    val runId   = randomUUID.toString
-    val prov    = Provenance.thisBuild
-    val entries = inputs.map(Entry(runId, app, _, output, prov.source, prov.branch, prov.commit))
-    val insert  = Update[Entry](q).updateMany(entries.toList)
+    val runId = randomUUID.toString
+    val prov  = Provenance.thisBuild
+
+    // create an entry per input
+    val entries = inputs.map { input =>
+      Entry(runId, app, input, output, prov.source, prov.branch, prov.commit)
+    }
+
+    val insert = Update[Entry](q).updateMany(entries.toList)
 
     for {
+      _ <- IO(logger.debug(s"Inserting run output '$output' for $app..."))
       _ <- pool.exec(insert)
     } yield runId
   }
 
-  /** Given a processor and list of invalid outputs, delete them from the DB.
+  /** Given a processor and an output, delete it from the DB.
     */
   def delete(pool: DbPool, app: Processor.Name, output: String): IO[Unit] = {
     val q = sql"DELETE FROM `runs` WHERE app=$app AND output=$output"
@@ -82,11 +84,22 @@ object Run extends LazyLogging {
     } yield ()
   }
 
+  /** Anything that can be represented as an input to a run.
+    */
+  trait Input {
+    def asRunInput: String
+  }
+
   /** When querying the `runs` table to determine what has already been
     * processed by dependency applications, this is what is returned.
     */
-  final case class Result(app: Processor.Name, input: String, output: String, timestamp: java.time.Instant) {
+  final case class Result(app: Processor.Name, input: String, output: String, timestamp: java.time.Instant)
+      extends Run.Input {
     override def toString: String = s"$app output '$output'"
+
+    /** The output of this run result is the input to another run.
+      */
+    override def asRunInput: String = output
   }
 
   /** Lookup all the results for a given run id. This is mostly used for
@@ -167,7 +180,7 @@ object Run extends LazyLogging {
     * inputs are valid (e.g. they were deleted). If a run's output is invalid
     * then it can be deleted.
     */
-  def verifyResultsOf(pool: DbPool, processor: Processor): IO[Seq[String]] = {
+  def verifyResultsOf(pool: DbPool, processor: Processor[_]): IO[Seq[String]] = {
     val getInputs = processor match {
       case dp: DatasetProcessor => Dataset.datasetsOf(pool, dp.topic, None).map(_.map(_.dataset))
       case rp: RunProcessor     => resultsOf(pool, rp.dependencies).map(_.map(_.output))

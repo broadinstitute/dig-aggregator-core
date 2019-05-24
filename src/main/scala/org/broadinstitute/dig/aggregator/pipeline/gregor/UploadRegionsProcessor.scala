@@ -4,16 +4,14 @@ import java.net.URL
 import java.net.URLDecoder
 
 import cats.effect._
-import cats.implicits._
 
-import org.broadinstitute.dig.aggregator.core.{Analysis, GraphDb, Implicits, Provenance, Run}
+import org.broadinstitute.dig.aggregator.core.{Analysis, GraphDb, Provenance, Run}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.processors.{Processor, RunProcessor}
-import org.broadinstitute.dig.aggregator.pipeline.metaanalysis.MetaAnalysisPipeline
+
 import org.neo4j.driver.v1.StatementResult
 
 class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
-  import Implicits._
 
   /** All the processors this processor depends on.
     */
@@ -25,21 +23,27 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
     */
   override val resources: Seq[String] = Nil
 
+  /** Name of the analysis node when uploading results.
+    */
+  private val analysisName: String = "ChromatinState/Regions"
+
+  /** Generate the run output for the input results.
+    */
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
+    Map(analysisName -> results.map(_.output).distinct)
+  }
+
   /** Take all the phenotype results from the dependencies and process them.
     */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val graph    = new GraphDb(config.neo4j)
-    val analysis = new Analysis(s"ChromatinState/Regions", Provenance.thisBuild)
+    val analysis = new Analysis(analysisName, Provenance.thisBuild)
 
     val io = for {
       id <- analysis.create(graph)
 
       // find and upload all the sorted region part files
       _ <- analysis.uploadParts(aws, graph, id, "out/gregor/regions/chromatin_state/")(uploadPart)
-
-      // add the result to the database
-      _ <- Run.insert(pool, name, results.map(_.output).distinct, analysis.name)
-      _ <- IO(logger.info("Done"))
     } yield ()
 
     // ensure that the graph connection is closed

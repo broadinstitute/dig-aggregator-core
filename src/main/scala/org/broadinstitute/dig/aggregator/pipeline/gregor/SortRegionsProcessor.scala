@@ -20,6 +20,12 @@ class SortRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Dat
     "pipeline/gregor/sortRegions.py"
   )
 
+  /** All datasets map to a single output.
+    */
+  override def getRunOutputs(work: Seq[Dataset]): Map[String, Seq[String]] = {
+    Map("regions/chromatin_state" -> work.map(_.dataset).distinct)
+  }
+
   /** Take any new datasets and convert them from JSON-list to BED file
     * format with all the appropriate headers and fields.
     */
@@ -37,16 +43,10 @@ class SortRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Dat
       )
     )
 
-    // all the datasets are inputs to the single output
-    val inputs = datasets.map(_.dataset)
-
     // run all the jobs then update the database
     for {
       job <- aws.runJob(cluster, JobStep.PySpark(script))
       _   <- aws.waitForJob(job)
-      _   <- IO(logger.info("Updating database..."))
-      _   <- Run.insert(pool, name, inputs, s"regions/chromatin_state")
-      _   <- IO(logger.info("Done"))
     } yield ()
   }
 }

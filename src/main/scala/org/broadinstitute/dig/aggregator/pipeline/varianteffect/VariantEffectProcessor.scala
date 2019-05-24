@@ -8,30 +8,30 @@ import org.broadinstitute.dig.aggregator.core.emr._
 import org.broadinstitute.dig.aggregator.core.processors._
 
 /**
- * Once all the distinct bi-allelic variants across all datasets have been
- * identified (VariantListProcessor) then they can be run through VEP in
- * parallel across multiple VMs.
- *
- * VEP TSV input files located at:
- *
- *  s3://dig-analysis-data/out/varianteffect/variants
- *
- * VEP output JSON written to:
- *
- *  s3://dig-analysis-data/out/varianteffect/effects
- */
+  * Once all the distinct bi-allelic variants across all datasets have been
+  * identified (VariantListProcessor) then they can be run through VEP in
+  * parallel across multiple VMs.
+  *
+  * VEP TSV input files located at:
+  *
+  *  s3://dig-analysis-data/out/varianteffect/variants
+  *
+  * VEP output JSON written to:
+  *
+  *  s3://dig-analysis-data/out/varianteffect/effects
+  */
 class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /**
-   * All the processors this processor depends on.
-   */
+    * All the processors this processor depends on.
+    */
   override val dependencies: Seq[Processor.Name] = Seq(
     VariantEffectPipeline.variantListProcessor
   )
 
   /**
-   * All the job scripts that need to be uploaded to AWS.
-   */
+    * All the job scripts that need to be uploaded to AWS.
+    */
   override val resources: Seq[String] = Seq(
     "pipeline/varianteffect/cluster-bootstrap.sh",
     "pipeline/varianteffect/installVEP.sh",
@@ -39,17 +39,20 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
     "pipeline/varianteffect/runVEP.pl"
   )
 
+  /** Only a single output for VEP that uses ALL variants.
+    */
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
+    Map("VEP/effects" -> results.map(_.output).distinct)
+  }
+
   /**
-   * The results are ignored, as all the variants are refreshed and everything
-   * needs to be run through VEP again.
-   */
+    * The results are ignored, as all the variants are refreshed and everything
+    * needs to be run through VEP again.
+    */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val clusterBootstrap = aws.uriOf("resources/pipeline/varianteffect/cluster-bootstrap.sh")
     val installScript    = aws.uriOf("resources/pipeline/varianteffect/installVEP.sh")
     val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.pl")
-
-    // get a list of distinct datasets that need VEP run on them
-    val inputs = results.map(_.output).distinct
 
     // definition of each VM "cluster" (of 1 machine) that will run VEP
     val cluster = Cluster(
@@ -87,9 +90,6 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
       // run and wait for them to finish
       _ <- IO(logger.info("Running VEP..."))
       _ <- aws.waitForJobs(clusteredJobs)
-      _ <- IO(logger.info("Updating database..."))
-      _ <- Run.insert(pool, name, inputs, "VEP/effects")
-      _ <- IO(logger.info("Done"))
     } yield ()
   }
 }

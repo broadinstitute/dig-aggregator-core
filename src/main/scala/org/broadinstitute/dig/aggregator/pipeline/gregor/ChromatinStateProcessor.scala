@@ -26,6 +26,26 @@ class ChromatinStateProcessor(name: Processor.Name, config: BaseConfig) extends 
     "pipeline/gregor/runGREGOR.sh"
   )
 
+  /**
+    */
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
+    val phenotypes = results
+      .filter(_.app == GregorPipeline.snpListProcessor)
+      .map(_.output)
+      .distinct
+
+    // updated regions
+    val regions = results
+      .filter(_.app == GregorPipeline.sortRegionsProcessor)
+      .map(_.output)
+      .distinct
+
+    // the phenotypes are the output, input are phenotype + regions
+    phenotypes.map { phenotype =>
+      phenotype -> (Seq(phenotype) ++ regions)
+    }.toMap
+  }
+
   /** Run GREGOR over the results of the SNP list and regions.
     */
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
@@ -47,19 +67,10 @@ class ChromatinStateProcessor(name: Processor.Name, config: BaseConfig) extends 
       bootstrapSteps = Seq(JobStep.Script(install, r2))
     )
 
-    // get results of the regions processor
-    val regions = results
-      .filter(_.app == GregorPipeline.sortRegionsProcessor)
-      .map(_.output)
-      .distinct
-
     // TODO: if regions.size > 0 then phenotypes = all SNPListProcessor outputs!
 
     // get all the phenotypes that need processed
-    val phenotypes = results
-      .filter(_.app == GregorPipeline.snpListProcessor)
-      .map(_.output)
-      .distinct
+    val phenotypes = getRunOutputs(results).keys
 
     // map out ancestries to that of GREGOR/1000g
     val ancestries = List(
@@ -79,17 +90,7 @@ class ChromatinStateProcessor(name: Processor.Name, config: BaseConfig) extends 
     // cluster the jobs so each cluster has approximately the same run time
     val clusteredJobs = aws.clusterJobs(cluster, jobs)
 
-    // each phenotype is a separate output
-    val runs = phenotypes.map { phenotype =>
-      Run.insert(pool, name, regions :+ phenotype, phenotype)
-    }
-
     // run all the jobs then update the database
-    for {
-      _ <- aws.waitForJobs(clusteredJobs)
-      _ <- IO(logger.info("Updating database..."))
-      _ <- runs.toList.sequence
-      _ <- IO(logger.info("Done"))
-    } yield ()
+    aws.waitForJobs(clusteredJobs)
   }
 }

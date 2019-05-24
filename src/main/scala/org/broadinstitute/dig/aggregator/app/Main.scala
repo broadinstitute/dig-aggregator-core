@@ -33,7 +33,7 @@ object Main extends IOApp with LazyLogging {
 
       // choose the run function
       val run: (String, Opts) => IO[Unit] = {
-        (opts.pipeline() -> opts.verifyAndFix()) match {
+        (opts.pipeline(), opts.verifyAndFix()) match {
           case (true, false)  => runPipeline
           case (true, true)   => verifyPipeline
           case (false, false) => runProcessor
@@ -45,8 +45,8 @@ object Main extends IOApp with LazyLogging {
       val io = confirmReprocess(opts).flatMap { confirm =>
         if (!confirm) IO.unit
         else
-          run(opts.processor, opts).guaranteeCase {
-            case ExitCase.Error(err) => fail(opts.processor, err, opts)
+          run(opts.processor(), opts).guaranteeCase {
+            case ExitCase.Error(err) => fail(opts.processor(), err, opts)
             case _                   => IO.unit
           }
       }
@@ -78,10 +78,8 @@ object Main extends IOApp with LazyLogging {
     * Run an entire pipeline until all the processors in it have no work left.
     */
   private def runPipeline(name: String, opts: Opts): IO[Unit] = {
-    val reprocess = opts.reprocess()
-
     Pipeline(name) match {
-      case Some(p) => (if (opts.yes()) p.run(_, _) else p.showWork(_, _))(opts.config, opts.processorOpts)
+      case Some(p) => (if (opts.yes()) p.run _ else p.showWork _)(opts.config, opts.processorOpts)
       case _       => IO.raiseError(new Exception(s"Unknown pipeline '$name'"))
     }
   }
@@ -91,7 +89,7 @@ object Main extends IOApp with LazyLogging {
     */
   private def runProcessor(name: String, opts: Opts): IO[Unit] = {
     Processor(name)(opts.config) match {
-      case Some(p) => (if (opts.yes()) p.run(_) else p.showWork(_))(opts.processorOpts)
+      case Some(p) => (if (opts.yes()) p.run _ else p.showWork _)(opts.processorOpts)
       case _       => IO.raiseError(new Exception(s"Unknown processor '$name'"))
     }
   }
@@ -100,7 +98,7 @@ object Main extends IOApp with LazyLogging {
     */
   private def verifyPipeline(name: String, opts: Opts): IO[Unit] = {
     Pipeline(name) match {
-      case Some(p) => IO.unit // p.verify(opts.yes())
+      case Some(_) => IO.unit // p.verify(opts.yes())
       case _       => IO.raiseError(new Exception(s"Unknown pipeline '$name'"))
     }
   }

@@ -12,45 +12,46 @@ import org.neo4j.driver.v1.Driver
 import org.neo4j.driver.v1.Session
 import org.neo4j.driver.v1.StatementResult
 
-/**
- * When variant effect processing has been complete, in S3 output are the
- * results calculated for each of the variants.
- *
- * This processor will take the output and create :VariantEffect nodes in the
- * graph database, and then take the results of the trans-ethnic analysis and
- * create :EffectAnalysis nodes.
- *
- * The source tables are read from:
- *
- *  s3://dig-analysis-data/out/varianteffects/effects/regulatory_feature_consequences
- *
- * and:
- *
- *  s3://dig-analysis-data/out/varianteffects/effects/transcript_consequences
- */
+/** When variant effect processing has been complete, in S3 output are the
+  * results calculated for each of the variants.
+  *
+  * This processor will take the output and create :VariantEffect nodes in the
+  * graph database, and then take the results of the trans-ethnic analysis and
+  * create :EffectAnalysis nodes.
+  *
+  * The source tables are read from:
+  *
+  *  s3://dig-analysis-data/out/varianteffects/effects/regulatory_feature_consequences
+  *
+  * and:
+  *
+  *  s3://dig-analysis-data/out/varianteffects/effects/transcript_consequences
+  */
 class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
-  /**
-   * All the processors this processor depends on.
-   */
+  /** All the processors this processor depends on.
+    */
   override val dependencies: Seq[Processor.Name] = Seq(
     VariantEffectPipeline.loadVariantCQSProcessor
   )
 
-  /**
-   * All the job scripts that need to be uploaded to AWS.
-   */
+  /** All the job scripts that need to be uploaded to AWS.
+    */
   override val resources: Seq[String] = Nil
 
-  /**
-   * Take all the phenotype results from the dependencies and process them.
-   */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
-    val datasets = results.map(_.output).distinct
-    val graph    = new GraphDb(config.neo4j)
+  /** Only a single output for VEP that uses ALL effects.
+    */
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
+    Map("VEP" -> results.map(_.output).distinct)
+  }
 
-    val ios = for (dataset <- datasets) yield {
-      val analysis = new Analysis(s"VEP", Provenance.thisBuild)
+  /** Take all the phenotype results from the dependencies and process them.
+    */
+  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+    val graph = new GraphDb(config.neo4j)
+
+    val ios = for ((output, _) <- getRunOutputs(results)) yield {
+      val analysis = new Analysis(output, Provenance.thisBuild)
 
       // where the output is located
       val regulatoryFeatures = s"out/varianteffect/regulatory_feature_consequences"
@@ -68,20 +69,15 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
         _ <- connectGenes(graph)
 
         // TODO: connect transcriptId and regulatoryFeatureId as well
-
-        // add the result to the database
-        _ <- Run.insert(pool, name, datasets, analysis.name)
-        _ <- IO(logger.info("Done"))
       } yield ()
     }
 
     // process each phenotype serially
-    (ios.toList.sequence >> IO.unit).guarantee(graph.shutdown)
+    ios.toList.sequence.guarantee(graph.shutdown()).as(())
   }
 
-  /**
-   * Given a part file, upload it and create all the regulatory feature nodes.
-   */
+  /** Given a part file, upload it and create all the regulatory feature nodes.
+    */
   def uploadRegulatoryFeatures(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 10000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
@@ -113,9 +109,8 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
     } yield result
   }
 
-  /**
-   * Given a part file, upload it and create all the transcript nodes.
-   */
+  /** Given a part file, upload it and create all the transcript nodes.
+    */
   def uploadTranscripts(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 10000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
@@ -256,9 +251,8 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
     } yield result
   }
 
-  /**
-   * Read the part file and create any variants not present.
-   */
+  /** Read the part file and create any variants not present.
+    */
   def mergeVariants(graph: GraphDb, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 50000
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
@@ -279,9 +273,8 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
     graph.run(q)
   }
 
-  /**
-   * Connect all transcript consequences to existing genes.
-   */
+  /** Connect all transcript consequences to existing genes.
+    */
   def connectGenes(graph: GraphDb): IO[StatementResult] = {
     val q = s"""|MATCH (n:TranscriptConsequence),
                 |      (g:Gene {ensemblId: n.geneId})

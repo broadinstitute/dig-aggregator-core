@@ -23,6 +23,12 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
     "pipeline/gregor/overlapRegions.py"
   )
 
+  /** All datasets and VEP output map to a single output.
+    */
+  override def getRunOutputs(work: Seq[Run.Result]): Map[String, Seq[String]] = {
+    Map("overlapped-variants/chromatin_state" -> work.map(_.output).distinct)
+  }
+
   /** With a new variants list or new regions, need to reprocess and get a list
     * of all regions with the variants that they overlap.
     */
@@ -40,16 +46,10 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
       )
     )
 
-    // all the results are inputs to the single output
-    val inputs = results.map(_.output)
-
     // run all the jobs then update the database
     for {
       job <- aws.runJob(cluster, JobStep.PySpark(script))
       _   <- aws.waitForJob(job)
-      _   <- IO(logger.info("Updating database..."))
-      _   <- Run.insert(pool, name, inputs, s"overlapped-variants/chromatin_state")
-      _   <- IO(logger.info("Done"))
     } yield ()
   }
 }

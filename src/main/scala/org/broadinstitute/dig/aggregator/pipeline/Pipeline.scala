@@ -2,10 +2,8 @@ package org.broadinstitute.dig.aggregator.pipeline
 
 import cats.effect._
 import cats.implicits._
-
 import com.typesafe.scalalogging.LazyLogging
-
-import org.broadinstitute.dig.aggregator.core.Implicits
+import org.broadinstitute.dig.aggregator.core.{Implicits, Run}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.processors.Processor
 import org.broadinstitute.dig.aggregator.core.processors.RunProcessor
@@ -65,7 +63,7 @@ trait Pipeline extends LazyLogging {
       import Implicits._
 
       // get a list of all processors that have known work
-      val knownWork: IO[Set[Processor]] = Pipeline.getKnownWork(allProcessors, opts)
+      val knownWork: IO[Set[Processor[_ <: Run.Input]]] = Pipeline.getKnownWork(allProcessors, opts)
 
       // determine the list of all processors that have work
       knownWork.flatMap { toRun =>
@@ -116,24 +114,25 @@ object Pipeline {
 
   /** Given a set of processors, filter those that have work.
     */
-  private def getKnownWork(processors: Set[Processor], opts: Processor.Opts): IO[Set[Processor]] = {
-    val work = processors.map { p =>
-      p.hasWork(opts).map {
-        case true  => Some(p)
-        case false => None
-      }
+  private def getKnownWork(processors: Set[Processor[_ <: Run.Input]],
+                           opts: Processor.Opts): IO[Set[Processor[_ <: Run.Input]]] = {
+    val getWork = processors.toList.map { p =>
+      p.hasWork(opts).map(p -> _)
     }
 
-    work.toList.sequence.map(_.flatten.toSet)
+    for {
+      work <- getWork.sequence
+    } yield work.filter(_._2).map(_._1).toSet
   }
 
   /** Find all processors NOT represented in `toRun` that will run due to a
     * a dependency that is in the `toRun` set.
     */
-  private def getShouldRun(allProcessors: Set[Processor], toRun: Set[Processor]): Set[Processor] = {
+  private def getShouldRun(allProcessors: Set[Processor[_ <: Run.Input]],
+                           toRun: Set[Processor[_ <: Run.Input]]): Set[Processor[_ <: Run.Input]] = {
 
     // true if immediate dependency is in the `toRun` set
-    def dependencyWillRun(r: Processor) = r match {
+    def dependencyWillRun(r: Processor[_ <: Run.Input]) = r match {
       case r: RunProcessor => r.dependencies.exists(dep => toRun.exists(_.name == dep))
       case _               => false
     }

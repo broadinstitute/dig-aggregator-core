@@ -45,6 +45,25 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Da
     "scripts/getmerge-strip-headers.sh"
   )
 
+  /** Parse datasets to extract a phenotype -> [Dataset] mapping.
+    */
+  def mapDatasetPhenotypes(datasets: Seq[Dataset]): Map[String, Seq[String]] = {
+    val pattern = raw"([^/]+)/(.*)".r
+
+    val phenotypeMapping = datasets.map(_.dataset).map {
+      case dataset @ pattern(_, phenotype) => (phenotype, dataset)
+    }
+
+    phenotypeMapping.groupBy(_._1).mapValues(_.map(_._2))
+  }
+
+  /** The phenotype is the output and the list of datasets for that phenotype
+    * are the inputs.
+    */
+  override def getRunOutputs(datasets: Seq[Dataset]): Map[String, Seq[String]] = {
+    mapDatasetPhenotypes(datasets)
+  }
+
   /** Take all the phenotype results from the dependencies and process them.
     */
   override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
@@ -58,36 +77,15 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Da
       configurations = Seq(sparkConf)
     )
 
-    // extract the dataset/phenotype pairs
-    val pattern = raw"([^/]+)/(.*)".r
-    val datasetPhenotypes = datasets.map(_.dataset).map {
-      case dataset @ pattern(_, phenotype) => (phenotype, dataset)
-    }
-
     // get the unique list of phenotypes
-    val phenotypes = datasetPhenotypes.map(_._1).toList.distinct
+    val phenotypes = mapDatasetPhenotypes(datasets).keys.toList
 
     // create a job for each phenotype; cluster them
-    val jobs          = phenotypes.distinct.map(processPhenotype)
+    val jobs          = phenotypes.map(processPhenotype)
     val clusteredJobs = aws.clusterJobs(cluster, jobs)
 
-    // create the run to record for each phenotype
-    val runs = phenotypes.map { phenotype =>
-      val datasets = datasetPhenotypes.collect {
-        case (p, dataset) if p == phenotype => dataset
-      }
-
-      // each phenotype's input is the list of datasets
-      Run.insert(pool, name, datasets, phenotype)
-    }
-
     // wait for all the jobs to complete, then insert all the results
-    for {
-      _ <- aws.waitForJobs(clusteredJobs)
-      _ <- IO(logger.info("Updating database..."))
-      _ <- runs.sequence
-      _ <- IO(logger.info("Done"))
-    } yield ()
+    aws.waitForJobs(clusteredJobs)
   }
 
   /** Create a cluster and process a single phenotype.

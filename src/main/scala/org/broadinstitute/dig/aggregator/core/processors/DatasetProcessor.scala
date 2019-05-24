@@ -1,54 +1,35 @@
 package org.broadinstitute.dig.aggregator.core.processors
 
-import cats._
 import cats.effect._
-import cats.implicits._
-
-import doobie._
-
-import com.typesafe.scalalogging.LazyLogging
 
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 
-/**
- * A DatasetProcessor is a Processor that queries the `datasets` table for
- * what datasets have been written to HDFS and have not yet been processed.
- *
- * DatasetProcessors are always the entry point to a pipeline.
- */
-abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name) {
-  import Implicits.contextShift
+/** A DatasetProcessor is a Processor that queries the `datasets` table for
+  * what datasets have been written to HDFS and have not yet been processed.
+  *
+  * DatasetProcessors are always the entry point to a pipeline.
+  */
+abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extends Processor[Dataset](name) {
 
-  /**
-   * All topic committed datasets come from.
-   */
+  /** All topic committed datasets come from.
+    */
   val topic: String
 
-  /**
-   * The collection of resources this processor needs to have uploaded
-   * before the processor can run.
-   */
-  val resources: Seq[String]
-
-  /**
-   * Database transactor for loading state, etc.
-   */
+  /** Database transactor for loading state, etc.
+    */
   protected val pool: DbPool = DbPool.fromMySQLConfig(config.mysql)
 
-  /**
-   * AWS client for uploading resources and running jobs.
-   */
+  /** AWS client for uploading resources and running jobs.
+    */
   protected val aws: AWS = new AWS(config.aws)
 
-  /**
-   * Process a set of committed datasets.
-   */
-  def processDatasets(commits: Seq[Dataset]): IO[Unit]
+  /** Process a set of committed datasets.
+    */
+  def processDatasets(datasets: Seq[Dataset]): IO[Unit]
 
-  /**
-   * Calculates the set of things this processor needs to process.
-   */
+  /** Calculates the set of things this processor needs to process.
+    */
   override def getWork(opts: Processor.Opts): IO[Seq[Dataset]] = {
     for {
       datasets <- Dataset.datasetsOf(pool, topic, if (opts.reprocess) None else Some(name))
@@ -59,14 +40,15 @@ abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extend
     }
   }
 
-  /**
-   * Determine the list of datasets that need processing, process them, and
-   * write to the database that they were processed.
-   */
+  /** Determine the list of datasets that need processing, process them, and
+    * write to the database that they were processed.
+    */
   override def run(opts: Processor.Opts): IO[Unit] = {
     for {
-      _ <- resources.map(aws.upload(_)).toList.sequence
-      _ <- getWork(opts).flatMap(processDatasets)
+      work <- getWork(opts)
+      _    <- uploadResources(aws)
+      _    <- if (opts.insertRuns) IO.unit else processDatasets(work)
+      _    <- insertRuns(pool, work)
     } yield ()
   }
 }
