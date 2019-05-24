@@ -38,18 +38,26 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
     // cluster configuration used to process each phenotype
     val cluster = Cluster(
       name = name.toString,
-      masterInstanceType = InstanceType.c5_9xlarge,
-      slaveInstanceType = InstanceType.c5_9xlarge,
+      masterInstanceType = InstanceType.c5_4xlarge,
+      slaveInstanceType = InstanceType.c5_4xlarge,
       instances = 4,
       configurations = Seq(
         ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
       )
     )
 
-    // run all the jobs then update the database
-    for {
-      job <- aws.runJob(cluster, JobStep.PySpark(script))
-      _   <- aws.waitForJob(job)
-    } yield ()
+    // all the chromosomes in the genome
+    val chromosomes = (1 to 22).map(_.toString) ++ Seq("X", "Y", "XY", "M", "MT")
+
+    // create a job per chromosome
+    val jobs = chromosomes.map { chromosome =>
+      Seq(JobStep.PySpark(script, chromosome))
+    }
+
+    // cluster the jobs across multiple machines
+    val clusteredJobs = aws.clusterJobs(cluster, jobs)
+
+    // run all the jobs
+    aws.waitForJobs(clusteredJobs)
   }
 }
