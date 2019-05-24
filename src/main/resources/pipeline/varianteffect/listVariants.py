@@ -32,14 +32,8 @@ if __name__ == '__main__':
             'position',
             'reference',
             'alt',
-        )
-
-    # find all the unique variants across all phenotypes
-    df = df.rdd \
-        .keyBy(lambda v: v.varId) \
-        .reduceByKey(lambda a, b: a) \
-        .map(lambda v: v[1]) \
-        .toDF()
+        ) \
+        .dropDuplicates(['varId'])
 
     # get the length of the reference and alternate alleles
     ref_len = length(df.reference)
