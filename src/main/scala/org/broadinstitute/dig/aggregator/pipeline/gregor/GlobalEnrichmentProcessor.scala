@@ -8,7 +8,7 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.emr._
 import org.broadinstitute.dig.aggregator.core.processors._
 
-class ChromatinStateProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
 
   /** All the processors this processor depends on.
     */

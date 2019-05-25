@@ -15,7 +15,7 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
   /** All the processors this processor depends on.
     */
   override val dependencies: Seq[Processor.Name] = Seq(
-    GregorPipeline.chromatinStateProcessor,
+    GregorPipeline.globalEnrichmentProcessor,
   )
 
   /** All the job scripts that need to be uploaded to AWS.

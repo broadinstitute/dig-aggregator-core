@@ -11,11 +11,11 @@ object GregorPipeline extends Pipeline {
 
   /** Register all processors.
     */
-  val sortRegionsProcessor: Name    = register("SortRegionsProcessor", new SortRegionsProcessor(_, _))
-  val overlapRegionsProcessor: Name = register("OverlapRegionsProcessor", new OverlapRegionsProcessor(_, _))
-  val snpListProcessor: Name        = register("SNPListProcessor", new SNPListProcessor(_, _))
-  val chromatinStateProcessor: Name = register("ChromatinStateProcessor", new ChromatinStateProcessor(_, _))
-  val uploadRegionsProcessor: Name  = register("UploadRegionsProcessor", new UploadRegionsProcessor(_, _))
+  val sortRegionsProcessor: Name      = register("SortRegionsProcessor", new SortRegionsProcessor(_, _))
+  val overlapRegionsProcessor: Name   = register("OverlapRegionsProcessor", new OverlapRegionsProcessor(_, _))
+  val snpListProcessor: Name          = register("SNPListProcessor", new SNPListProcessor(_, _))
+  val globalEnrichmentProcessor: Name = register("GlobalEnrichmentProcessor", new GlobalEnrichmentProcessor(_, _))
+  val uploadRegionsProcessor: Name    = register("UploadRegionsProcessor", new UploadRegionsProcessor(_, _))
   val uploadGlobalEnrichmentProcessor: Name =
     register("UploadGlobalEnrichmentProcessor", new UploadGlobalEnrichmentProcessor(_, _))
 }
