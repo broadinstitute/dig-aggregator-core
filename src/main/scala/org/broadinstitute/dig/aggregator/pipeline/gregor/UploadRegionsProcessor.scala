@@ -84,6 +84,8 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
                 |LOAD CSV FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
+                |WITH r, (r.chromosome + ':' + r.start + ':' + r.end) AS regionName
+                |
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
@@ -91,22 +93,20 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
                 |MATCH (t:Tissue {name: r.biosample})
                 |MATCH (a:Annotation {name: r.name})
                 |
-                |// create the result node
-                |CREATE (n:Region {
+                |// create the region node
+                |MERGE (n:Region {name: regionName})
+                |ON CREATE SET
                 |  chromosome: r.chromosome,
                 |  start: toInteger(r.start),
-                |  end: toInteger(r.stop),
-                |  score: toInteger(t.score),
-                |  itemRgb: r.itemRgb,
-                |})
+                |  end: toInteger(r.stop)
                 |
                 |// create the relationships
                 |CREATE (q)-[:PRODUCED]->(n)
                 |CREATE (t)-[:HAS_REGION]->(n)
                 |CREATE (n)-[:HAS_ANNOTATION]->(a)
                 |
-                |// find all variants in this region
-                |MATCH (v:Variant) WHERE v.name IN r.overlappedVariants
+                |// find the variant in this region
+                |MATCH (v:Variant {name: r.overlappedVariant)
                 |
                 |// create a relationship to the region
                 |CREATE (v)-[:HAS_REGION]->(n)
