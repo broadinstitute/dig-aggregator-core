@@ -39,8 +39,7 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
     val cluster = Cluster(
       name = name.toString,
       masterInstanceType = InstanceType.c5_9xlarge,
-      slaveInstanceType = InstanceType.c5_9xlarge,
-      instances = 4,
+      slaveInstanceType = InstanceType.c5_4xlarge,
       configurations = Seq(
         ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
       )
