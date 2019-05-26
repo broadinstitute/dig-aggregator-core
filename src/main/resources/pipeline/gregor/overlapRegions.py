@@ -61,13 +61,14 @@ if __name__ == '__main__':
         .select(
             col('r.id').alias('id'),
             col('v.id').alias('varId'),
-        )
+        ) \
+        .rdd
 
     # aggregate all the overlap IDs into a single value per region
-    if p.rdd.isEmpty():
-        final = p.withColumn('overlappedVariants', lit(''))
+    if p.isEmpty():
+        final = r.withColumn('overlappedVariants', lit(''))
     else:
-        overlaps = p.rdd \
+        overlaps = p \
             .keyBy(lambda row: row.id) \
             .aggregateByKey(
                 [],
