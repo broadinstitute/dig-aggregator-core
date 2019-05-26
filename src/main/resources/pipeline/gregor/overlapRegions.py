@@ -4,7 +4,7 @@ import argparse
 import platform
 
 from pyspark.sql import SparkSession, Row
-from pyspark.sql.functions import col, monotonically_increasing_id  # pylint: disable=E0611
+from pyspark.sql.functions import col, lit, monotonically_increasing_id  # pylint: disable=E0611
 from pyspark.sql.types import IntegerType, StringType, StructType, StructField
 
 s3dir = 's3://dig-analysis-data'
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     variants_src = '%s/out/varianteffect/variants/part-*' % s3dir
 
     # output location
-    outdir = '%s/out/gregor/overlapped-variants/chromatin_state' % s3dir
+    outdir = '%s/out/gregor/overlapped-variants' % s3dir
 
     # create a spark session
     spark = SparkSession.builder.appName('gregor').getOrCreate()
@@ -64,18 +64,21 @@ if __name__ == '__main__':
         )
 
     # aggregate all the overlap IDs into a single value per region
-    overlaps = p.rdd \
-        .keyBy(lambda row: row.id) \
-        .aggregateByKey(
-            [],
-            lambda acc, row: acc + [row.varId] if row.varId else acc,
-            lambda acc, ids: acc + ids
-        ) \
-        .map(lambda row: Row(id=row[0], overlappedVariants=','.join(str(o) for o in row[1]))) \
-        .toDF()
+    if p.rdd.isEmpty():
+        final = p.withColumn('overlappedVariants', lit(''))
+    else:
+        overlaps = p.rdd \
+            .keyBy(lambda row: row.id) \
+            .aggregateByKey(
+                [],
+                lambda acc, row: acc + [row.varId] if row.varId else acc,
+                lambda acc, ids: acc + ids
+            ) \
+            .map(lambda row: Row(id=row[0], overlappedVariants=','.join(str(o) for o in row[1]))) \
+            .toDF()
 
-    # join the overlap IDs into the original set of regions
-    final = regions.join(overlaps, 'id')
+        # join the overlap IDs into the original set of regions
+        final = regions.join(overlaps, 'id')
 
     # output the regions to be loaded into Neo4j
     final.write \

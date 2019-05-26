@@ -38,7 +38,7 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val graph    = new GraphDb(config.neo4j)
     val analysis = new Analysis(analysisName, Provenance.thisBuild)
-    val s3path   = "out/gregor/overlapped-variants/chromatin_state/"
+    val s3path   = "out/gregor/overlapped-variants/"
 
     val io = for {
       id <- analysis.create(graph)
