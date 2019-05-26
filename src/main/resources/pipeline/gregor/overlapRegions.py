@@ -70,11 +70,7 @@ if __name__ == '__main__':
     else:
         overlaps = p \
             .keyBy(lambda row: row.id) \
-            .aggregateByKey(
-                [],
-                lambda acc, row: acc + [row.varId] if row.varId else acc,
-                lambda acc, ids: acc + ids
-            ) \
+            .groupByKey() \
             .map(lambda row: Row(id=row[0], overlappedVariants=','.join(str(o) for o in row[1]))) \
             .toDF()
 
