@@ -60,26 +60,11 @@ if __name__ == '__main__':
     p = r.join(v, (v.position >= r.start) & (v.position < r.end), 'left_outer') \
         .select(
             col('r.id').alias('id'),
-            col('v.id').alias('varId'),
-        ) \
-        .rdd
+            col('v.id').alias('overlappedVariant'),
+        )
 
-    # aggregate all the overlap IDs into a single value per region
-    if p.isEmpty():
-        final = r.withColumn('overlappedVariants', lit(''))
-    else:
-        overlaps = p \
-            .keyBy(lambda row: row.id) \
-            .aggregateByKey(
-                [],
-                lambda acc, row: acc + [row.varId] if row.varId else acc,
-                lambda acc, ids: acc + ids
-            ) \
-            .map(lambda row: Row(id=row[0], overlappedVariants=','.join(str(o) for o in row[1]))) \
-            .toDF()
-
-        # join the overlap IDs into the original set of regions
-        final = regions.join(overlaps, 'id')
+    # join the overlapped variants into the regions table
+    final = regions.join(p, 'id')
 
     # output the regions to be loaded into Neo4j
     final.write \
