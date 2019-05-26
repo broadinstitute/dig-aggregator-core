@@ -3,8 +3,8 @@
 import argparse
 import platform
 
-from pyspark.sql import SparkSession, Row
-from pyspark.sql.functions import col, lit, monotonically_increasing_id  # pylint: disable=E0611
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col  # pylint: disable=E0611
 from pyspark.sql.types import IntegerType, StringType, StructType, StructField
 
 s3dir = 's3://dig-analysis-data'
@@ -44,20 +44,31 @@ if __name__ == '__main__':
 
     # load all the source regions for the given chromosome and give them a unique ID
     regions = spark.read.json(regions_src) \
-        .withColumn('id', monotonically_increasing_id()) \
-        .filter(col('chromosome') == args.chromosome)
+        .filter(col('chromosome') == args.chromosome) \
+        .select(
+            col('chromosome'),
+            col('start'),
+            col('end'),
+        )
 
-    # load all the variants for the given chromosome
-    variants = spark.read \
-        .csv(variants_src, sep='\t', header=None, schema=variants_schema) \
-        .filter(col('chromosome') == args.chromosome)
+    # load all the variants, just keep locus information
+    variants = spark.read.csv(variants_src, sep='\t', header=None, schema=variants_schema) \
+        .filter(col('chromosome') == args.chromosome) \
+        .select(
+            col('id'),
+            col('chromosome'),
+            col('position'),
+        )
 
     # alias the frame for different names for the join
     r = regions.alias('r')
-    v = variants.alias('v').select('id', 'chromosome', 'position')
+    v = variants.alias('v')
+
+    # test if a region overlaps the given variant
+    overlap = (v.chromosome == r.chromosome) & (v.position >= r.start) & (v.position < r.end)
 
     # find all the variants that overlap each region
-    final = r.join(v, (v.position >= r.start) & (v.position < r.end), 'left_outer') \
+    final = r.join(v, overlap, 'left_outer') \
         .select(
             col('r.chromosome').alias('chromosome'),
             col('r.start').alias('start'),
