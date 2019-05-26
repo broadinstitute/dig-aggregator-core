@@ -38,37 +38,24 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val graph    = new GraphDb(config.neo4j)
     val analysis = new Analysis(analysisName, Provenance.thisBuild)
+    val s3path   = "out/gregor/overlapped-variants/chromatin_state/"
 
     val io = for {
       id <- analysis.create(graph)
 
       // find and upload all the sorted region part files
-      _ <- analysis.uploadParts(aws, graph, id, "out/gregor/regions/chromatin_state/")(uploadPart)
+      _ <- analysis.uploadParts(aws, graph, id, s3path)(uploadPart)
     } yield ()
 
     // ensure that the graph connection is closed
     io.guarantee(graph.shutdown())
   }
 
-  /** Extract the tissue and annotation names from the HDFS path.
-    */
-  def parseTissueAndAnnotation(part: String): (String, String) = {
-    val pattern = raw".*/biosample=([^/]+)/name=([^/]+)/.*".r
-    val path    = URLDecoder.decode(new URL(part).getPath, "UTF-8")
-
-    // NOTE: When Spark ran on on the tissues, to prevent odd characters, we replaced
-    //       ':' with '_', and here we'll put it back.
-    path match {
-      case pattern(tissue, annotation) =>
-        (tissue.replaceFirst("_", ":"), annotation)
-    }
-  }
-
   /** Upload each individual part file.
     */
   def uploadPart(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     for {
-      _      <- createAnnotation(graph, part)
+      _      <- createAnnotations(graph, part)
       result <- uploadRegions(graph, id, part)
     } yield result
   }
@@ -77,11 +64,12 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
     * the annotation is present in the database before creating the regions linking
     * to it.
     */
-  def createAnnotation(graph: GraphDb, part: String): IO[StatementResult] = {
-    val (_, annotation) = parseTissueAndAnnotation(part)
-
-    // create the annotation if it doesn't already exist
-    val q = s"""|MERGE (a:Annotation {name: '$annotation'})
+  def createAnnotations(graph: GraphDb, part: String): IO[StatementResult] = {
+    val q = s"""|LOAD CSV WITH HEADERS FROM '$part' AS r
+                |FIELDTERMINATOR '\t'
+                |
+                |// create the annotation if it doesn't exist
+                |MERGE (a:Annotation {name: r.name})
                 |ON CREATE SET
                 |  a.type = 'ChromatinState'
                 |""".stripMargin
@@ -92,25 +80,24 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
   /** Create all the region nodes.
     */
   def uploadRegions(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
-    val (tissue, annotation) = parseTissueAndAnnotation(part)
-
-    val q = s"""|USING PERIODIC COMMIT
+    val q = s"""|USING PERIODIC COMMIT 10000
                 |LOAD CSV FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
-                |// parse the row fields
-                |WITH r[0] AS chromosome, toInteger(r[1]) AS start, toInteger(r[2]) AS stop
-                |
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
-                |MATCH (t:Tissue {name: '$tissue'})
-                |MATCH (a:Annotation {name: '$annotation'})
                 |
-                |// create the result node (note the second label!)
+                |// lookup the tissue and annotation to connect
+                |MATCH (t:Tissue {name: r.biosample})
+                |MATCH (a:Annotation {name: r.name})
+                |
+                |// create the result node
                 |CREATE (n:Region {
-                |  chromosome: chromosome,
-                |  start: start,
-                |  end: stop
+                |  chromosome: r.chromosome,
+                |  start: toInteger(r.start),
+                |  end: toInteger(r.stop),
+                |  score: toInteger(t.score),
+                |  itemRgb: r.itemRgb,
                 |})
                 |
                 |// create the relationships
@@ -119,39 +106,12 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
                 |CREATE (n)-[:HAS_ANNOTATION]->(a)
                 |
                 |// find all variants in this region
-                |MATCH (v:Variant)
-                |WHERE v.chromosome = chromosome
-                |AND v.position >= start
-                |AND v.end < stop
+                |MATCH (v:Variant) WHERE v.name IN r.overlappedVariants
                 |
                 |// create a relationship to the region
                 |CREATE (v)-[:HAS_REGION]->(n)
                 |""".stripMargin
 
     graph.run(q)
-  }
-
-  def connectVariants(graph: GraphDb /*, chromosome: String*/ ): IO[StatementResult] = {
-    val s = s"""|CYPHER runtime=slotted
-                |MATCH (r:RegionToBeProcessed)
-                |RETURN r
-                |""".stripMargin
-
-    // for each region in the stream...
-    val q = s"""|//REMOVE r:RegionToBeProcessed
-                |//WITH r
-                |
-                |// find all variants within this region
-                |MATCH (v:Variant)
-                |WHERE v.chromosome = r.chromosome
-                |AND v.position >= r.start
-                |AND v.position < r.end
-                |
-                |// connect the variant to the region
-                |MERGE (v)-[:HAS_REGION]->(r)
-                |""".stripMargin
-
-    // run the query using the APOC function
-    graph.run(s"call apoc.periodic.iterate('$s', '$q', {parallel: true})")
   }
 }

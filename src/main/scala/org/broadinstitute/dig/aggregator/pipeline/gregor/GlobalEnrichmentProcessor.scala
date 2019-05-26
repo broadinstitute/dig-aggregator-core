@@ -59,7 +59,7 @@ class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extend
     // cluster configuration used to process each phenotype
     val cluster = Cluster(
       name = name.toString,
-      masterInstanceType = InstanceType.c5_4xlarge,
+      masterInstanceType = InstanceType.c5_9xlarge,
       instances = 1,
       masterVolumeSizeInGB = 800,
       applications = Seq.empty,

@@ -1,7 +1,5 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats._
-import cats.data._
 import cats.effect._
 import cats.implicits._
 
@@ -11,25 +9,13 @@ import com.amazonaws.regions.Regions
 import com.amazonaws.services.s3._
 import com.amazonaws.services.s3.model._
 import com.amazonaws.services.elasticmapreduce._
-import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsRequest
-import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsResult
-import com.amazonaws.services.elasticmapreduce.model.BootstrapActionConfig
-import com.amazonaws.services.elasticmapreduce.model.EbsBlockDeviceConfig
-import com.amazonaws.services.elasticmapreduce.model.EbsConfiguration
-import com.amazonaws.services.elasticmapreduce.model.InstanceGroupConfig
-import com.amazonaws.services.elasticmapreduce.model.JobFlowDetail
 import com.amazonaws.services.elasticmapreduce.model.JobFlowInstancesConfig
 import com.amazonaws.services.elasticmapreduce.model.ListStepsRequest
 import com.amazonaws.services.elasticmapreduce.model.RunJobFlowRequest
 import com.amazonaws.services.elasticmapreduce.model.RunJobFlowResult
-import com.amazonaws.services.elasticmapreduce.model.ScriptBootstrapActionConfig
-import com.amazonaws.services.elasticmapreduce.model.StepState
 import com.amazonaws.services.elasticmapreduce.model.StepSummary
-import com.amazonaws.services.elasticmapreduce.model.VolumeSpecification
 
 import com.typesafe.scalalogging.LazyLogging
-
-import fs2._
 
 import java.io.InputStream
 import java.net.URI
@@ -39,78 +25,66 @@ import org.broadinstitute.dig.aggregator.core.emr.Cluster
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.io.Source
 import scala.util.Random
 
-/**
-  * AWS controller (S3 + EMR clients).
+/** AWS controller (S3 + EMR clients).
   */
 final class AWS(config: AWSConfig) extends LazyLogging {
   import Implicits._
 
-  /**
-    * The same region and bucket are used for all operations.
+  /** The same region and bucket are used for all operations.
     */
   val region: Regions = Regions.valueOf(config.region)
   val bucket: String  = config.s3.bucket
 
-  /**
-    * AWS IAM credentials provider.
+  /** AWS IAM credentials provider.
     */
   val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
     new BasicAWSCredentials(config.key, config.secret)
   )
 
-  /**
-    * S3 client for storage.
+  /** S3 client for storage.
     */
   val s3: AmazonS3 = AmazonS3ClientBuilder.standard
     .withRegion(region)
     .withCredentials(credentials)
     .build
 
-  /**
-    * EMR client for running map/reduce jobs.
+  /** EMR client for running map/reduce jobs.
     */
   val emr: AmazonElasticMapReduce = AmazonElasticMapReduceClientBuilder.standard
     .withCredentials(credentials)
     .withRegion(region)
     .build
 
-  /**
-    * Returns the URI to a given key.
+  /** Returns the URI to a given key.
     */
   def uriOf(key: String): URI = new URI(s"s3://$bucket/$key")
 
-  /**
-    * Create a URI for a cluster log.
+  /** Create a URI for a cluster log.
     */
   def logUri(cluster: Cluster): URI = uriOf(s"logs/${cluster.name}")
 
-  /**
-    * Test whether or not a key exists.
+  /** Test whether or not a key exists.
     */
   def exists(key: String): IO[Boolean] = IO {
     s3.keyExists(bucket, key)
   }
 
-  /**
-    * Upload a string to S3 in a particular bucket.
+  /** Upload a string to S3 in a particular bucket.
     */
   def put(key: String, text: String): IO[PutObjectResult] = IO {
     s3.putObject(bucket, key, text)
   }
 
-  /**
-    * Upload a file to S3 in a particular bucket.
+  /** Upload a file to S3 in a particular bucket.
     */
   def put(key: String, stream: InputStream): IO[PutObjectResult] = IO {
     s3.putObject(bucket, key, stream, new ObjectMetadata())
   }
 
-  /**
-    * Upload a resource file to S3 (using a matching key) and return a URI to it.
+  /** Upload a resource file to S3 (using a matching key) and return a URI to it.
     */
   def upload(resource: String, dirKey: String = "resources"): IO[URI] = {
     val key = s"""$dirKey/${resource.stripPrefix("/")}"""
@@ -130,7 +104,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
         IO(stream.close())
 
       // open, load, and ensure closed
-      streamIo.bracket(getContents(_))(closeStream(_))
+      streamIo.bracket(getContents)(closeStream)
     }
 
     for {
@@ -144,29 +118,25 @@ final class AWS(config: AWSConfig) extends LazyLogging {
     }
   }
 
-  /**
-    * Fetch a file from an S3 bucket (does not download content).
+  /** Fetch a file from an S3 bucket (does not download content).
     */
   def get(key: String): IO[S3Object] = IO {
     s3.getObject(bucket, key)
   }
 
-  /**
-    * Returns the canonical URL for a given key.
+  /** Returns the canonical URL for a given key.
     */
   def publicUrlOf(key: String): String = {
     s3.getUrl(bucket, key).toExternalForm
   }
 
-  /**
-    * Delete a key from S3.
+  /** Delete a key from S3.
     */
   def rm(key: String): IO[Unit] = IO {
     s3.deleteObject(bucket, key)
   }
 
-  /**
-    * List all the keys in a given S3 folder.
+  /** List all the keys in a given S3 folder.
     */
   def ls(key: String, excludeSuccess: Boolean = false): IO[Seq[String]] = IO {
     val keys = s3.listKeys(bucket, key)
@@ -175,8 +145,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
     if (excludeSuccess) keys.filterNot(_.endsWith("/_SUCCESS")) else keys
   }
 
-  /**
-    * Delete (recursively) all the keys under a given key from S3.
+  /** Delete (recursively) all the keys under a given key from S3.
     */
   def rmdir(key: String): IO[Seq[String]] = {
     val ios = for (listing <- s3.listingsIterator(bucket, key)) yield {
@@ -185,7 +154,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
       } else {
         val keys        = listing.keys
         val keyVersions = keys.map(new DeleteObjectsRequest.KeyVersion(_))
-        val request     = new DeleteObjectsRequest(bucket).withKeys(keyVersions.toSeq.asJava)
+        val request     = new DeleteObjectsRequest(bucket).withKeys(keyVersions.asJava)
 
         for {
           _ <- IO(logger.debug(s"Deleting ${keys.head} + ${keys.tail.size} more keys..."))
@@ -198,26 +167,21 @@ final class AWS(config: AWSConfig) extends LazyLogging {
     ios.toList.parSequence.map(_.flatten)
   }
 
-  /**
-    * Create a object to be used as a folder in S3.
+  /** Create a object to be used as a folder in S3.
     */
   def mkdir(key: String, metadata: String): IO[PutObjectResult] = {
     logger.debug(s"Creating pseudo-dir '$key'")
 
     for {
-      keysDeleted <- rmdir(key)
-      metadata    <- put(s"$key/metadata", metadata)
+      _        <- rmdir(key)
+      metadata <- put(s"$key/metadata", metadata)
     } yield metadata
   }
 
-  /**
-    * Create a job request that will be used to create a new EMR cluster and
+  /** Create a job request that will be used to create a new EMR cluster and
     * run a series of steps.
     */
   def runJob(cluster: Cluster, steps: Seq[JobStep]): IO[RunJobFlowResult] = {
-    import Implicits.RichURI
-
-    // create all the bootstrap actions for this cluster (including steps)
     val bootstrapConfigs = cluster.bootstrapScripts.map(_.config)
     val allSteps         = cluster.bootstrapSteps ++ steps
 
@@ -260,15 +224,13 @@ final class AWS(config: AWSConfig) extends LazyLogging {
     }
   }
 
-  /**
-    * Helper: create a job that's a single step.
+  /** Helper: create a job that's a single step.
     */
   def runJob(cluster: Cluster, step: JobStep): IO[RunJobFlowResult] = {
     runJob(cluster, Seq(step))
   }
 
-  /**
-    * Periodically send a request to the cluster to determine the state of all
+  /** Periodically send a request to the cluster to determine the state of all
     * steps in the job. Log output showing the % complete the jobs is or throw
     * an exception if the job failed or was interrupt/cancelled.
     */
@@ -319,8 +281,7 @@ final class AWS(config: AWSConfig) extends LazyLogging {
     }
   }
 
-  /**
-    * Often times there are N jobs that are all identical (aside from command
+  /** Often times there are N jobs that are all identical (aside from command
     * line parameters) that need to be run, and can be run in parallel.
     *
     * This can be done by spinning up a unique cluster for each, but has the

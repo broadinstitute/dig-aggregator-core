@@ -96,7 +96,7 @@ if __name__ == '__main__':
             .withColumn('filename', input_file_name()) \
             .withColumn('ancestry', regexp_extract('filename', r'/ancestry=([^/]+)/', 1)) \
             .filter(col('chromosome').isin(valid_chromosomes)) \
-            .filter(col('pValue') < 1.0e-5)
+            .filter(col('pValue') < 5.0e-8)
 
         # get a distinct list of each ancestries
         ancestries = df.select(df.ancestry) \

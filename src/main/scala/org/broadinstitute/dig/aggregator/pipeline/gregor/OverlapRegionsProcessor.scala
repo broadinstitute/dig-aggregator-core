@@ -47,7 +47,7 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
     )
 
     // all the chromosomes in the genome
-    val chromosomes = (1 to 22).map(_.toString) ++ Seq("X", "Y", "XY", "M", "MT")
+    val chromosomes = (1 to 22).map(_.toString) ++ Seq("X", "Y", "XY", "M")
 
     // create a job per chromosome
     val jobs = chromosomes.map { chromosome =>
