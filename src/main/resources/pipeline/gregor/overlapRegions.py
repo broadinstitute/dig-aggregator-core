@@ -57,14 +57,13 @@ if __name__ == '__main__':
     v = variants.alias('v').select('id', 'chromosome', 'position')
 
     # find all the variants that overlap each region
-    p = r.join(v, (v.position >= r.start) & (v.position < r.end), 'left_outer') \
+    final = r.join(v, (v.position >= r.start) & (v.position < r.end), 'left_outer') \
         .select(
-            col('r.id').alias('id'),
+            col('r.chromosome').alias('chromosome'),
+            col('r.start').alias('start'),
+            col('r.end').alias('end'),
             col('v.id').alias('overlappedVariant'),
         )
-
-    # join the overlapped variants into the regions table
-    final = regions.join(p, 'id')
 
     # output the regions to be loaded into Neo4j
     final.write \
