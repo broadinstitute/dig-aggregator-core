@@ -1,8 +1,5 @@
 package org.broadinstitute.dig.aggregator.pipeline.gregor
 
-import java.net.URL
-import java.net.URLDecoder
-
 import cats.effect._
 
 import org.broadinstitute.dig.aggregator.core.{Analysis, GraphDb, Provenance, Run}
@@ -16,7 +13,7 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
   /** All the processors this processor depends on.
     */
   override val dependencies: Seq[Processor.Name] = Seq(
-    GregorPipeline.sortRegionsProcessor,
+    GregorPipeline.overlapRegionsProcessor,
   )
 
   /** All the job scripts that need to be uploaded to AWS.
@@ -38,7 +35,7 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
   override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val graph    = new GraphDb(config.neo4j)
     val analysis = new Analysis(analysisName, Provenance.thisBuild)
-    val s3path   = "out/gregor/overlapped-variants/"
+    val s3path   = "out/gregor/overlapped-regions/"
 
     val io = for {
       id <- analysis.create(graph)
@@ -55,23 +52,38 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
     */
   def uploadPart(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     for {
-      _      <- createAnnotations(graph, part)
+      _      <- uploadOverlappedRegions(graph, id, part)
       result <- uploadRegions(graph, id, part)
     } yield result
   }
 
-  /** The name of each part file has the tissue and annotation in it, need to ensure
-    * the annotation is present in the database before creating the regions linking
-    * to it.
+  /** Create all the region nodes.
     */
-  def createAnnotations(graph: GraphDb, part: String): IO[StatementResult] = {
-    val q = s"""|LOAD CSV WITH HEADERS FROM '$part' AS r
+  def uploadRegions(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
+    val q = s"""|USING PERIODIC COMMIT 10000
+                |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
-                |// create the annotation if it doesn't exist
-                |MERGE (a:Annotation {name: r.name})
+                |// lookup the analysis node
+                |MATCH (q:Analysis) WHERE ID(q)=$id
+                |
+                |// lookup the tissue, annotation, and overlapped region
+                |MATCH (t:Tissue {name: r.tissue})
+                |MATCH (o:OverlappedRegion {name: r.overlappedRegion})
+                |
+                |// create the region node
+                |MERGE (n:Region {name: r.name})
                 |ON CREATE SET
-                |  a.type = 'ChromatinState'
+                |  n.chromosome=r.chromosome,
+                |  n.start=toInteger(r.start),
+                |  n.end=toInteger(r.end)
+                |
+                |// create the required relationships
+                |MERGE (q)-[:PRODUCED]->(n)
+                |MERGE (n)-[:OVERLAPS]->(o)
+                |
+                |// create the relationship from region -> annotation -> tissue
+                |MERGE (t)-[:HAS_REGION {annotation: r.annotation, itemRgb: r.itemRgb}]->(n)
                 |""".stripMargin
 
     graph.run(q)
@@ -79,37 +91,25 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
 
   /** Create all the region nodes.
     */
-  def uploadRegions(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
+  def uploadOverlappedRegions(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 10000
-                |LOAD CSV FROM '$part' AS r
+                |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
-                |
-                |WITH r, (r.chromosome + ':' + r.start + ':' + r.end) AS regionName
                 |
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
+                |// split the name into chromosome and start position
+                |WITH q, r, split(r.overlappedRegion, ':') AS locus
+                |
                 |// lookup the tissue and annotation to connect
-                |MATCH (t:Tissue {name: r.biosample})
-                |MATCH (a:Annotation {name: r.name})
-                |
-                |// create the region node
-                |MERGE (n:Region {name: regionName})
+                |MERGE (n:OverlappedRegion {name: r.overlappedRegion})
                 |ON CREATE SET
-                |  chromosome: r.chromosome,
-                |  start: toInteger(r.start),
-                |  end: toInteger(r.stop)
+                |  n.chromosome=locus[0],
+                |  n.start=toInteger(locus[1])
                 |
-                |// create the relationships
-                |CREATE (q)-[:PRODUCED]->(n)
-                |CREATE (t)-[:HAS_REGION]->(n)
-                |CREATE (n)-[:HAS_ANNOTATION]->(a)
-                |
-                |// find the variant in this region
-                |MATCH (v:Variant {name: r.overlappedVariant)
-                |
-                |// create a relationship to the region
-                |CREATE (v)-[:HAS_REGION]->(n)
+                |// connect to the analysis node
+                |MERGE (q)-[:PRODUCED]->(n)
                 |""".stripMargin
 
     graph.run(q)
