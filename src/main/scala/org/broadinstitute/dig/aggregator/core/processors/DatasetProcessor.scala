@@ -35,8 +35,8 @@ abstract class DatasetProcessor(name: Processor.Name, config: BaseConfig) extend
       datasets <- Dataset.datasetsOf(pool, topic, if (opts.reprocess) None else Some(name))
     } yield {
       datasets
-        .filter(d => opts.onlyGlob.matches(d.dataset))
-        .filterNot(d => opts.excludeGlob.matches(d.dataset))
+        .filter(d => opts.onlyGlobs.exists(_.matches(d.dataset)))
+        .filterNot(d => opts.excludeGlobs.exists(_.matches(d.dataset)))
     }
   }
 

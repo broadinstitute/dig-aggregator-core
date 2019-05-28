@@ -28,16 +28,16 @@ sbt "run --reprocess <processor>"
 
 _Again, note that the above will only show the work that would be done, pass `--yes` along with `--reprocess` to actually do the work._
 
-When testing changes to processors, it can be quite a pain to run over _everything_. You can pass `--only` along with an input parameter to limit what inputs actually get processed to a single one for testing purposes:
+When testing changes to processors, it can be quite a pain to run over _everything_. You can pass `--only` along with an input parameter which is a comma-separated list of globs to limit what inputs actually get processed to a single one for testing purposes:
 
 ```bash
-sbt "run --yes --only T2D MetaAnalysisProcessor"
+sbt "run --yes --only T2D,BMI,CKD* MetaAnalysisProcessor"
 ```
 
 Similarly, you can use the `--exclude` flag to remove something that would otherwise be processed from the list:
 
 ```bash
-sbt "run --yes --exclude T2D MetaAnalysisProcessor"
+sbt "run --yes --exclude T2D,CKD* MetaAnalysisProcessor"
 ```
 
 _You can use `--only` and `--exclude` together as well._

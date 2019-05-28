@@ -94,10 +94,10 @@ object Processor extends LazyLogging {
     import Glob.String2Glob
 
     /** Returns a glob for the only option. */
-    lazy val onlyGlob: Glob = only.map(_.toGlob).getOrElse(Glob.True)
+    lazy val onlyGlobs: Seq[Glob] = only.map(_.split(",").map(_.toGlob).toSeq).getOrElse(List(Glob.True))
 
     /** Returns a glob for the exclude option. */
-    lazy val excludeGlob: Glob = exclude.map(_.toGlob).getOrElse(Glob.False)
+    lazy val excludeGlobs: Seq[Glob] = exclude.map(_.split(",").map(_.toGlob).toSeq).getOrElse(List(Glob.False))
   }
 
   /** Processors are required to have a unique name that is unique across all
