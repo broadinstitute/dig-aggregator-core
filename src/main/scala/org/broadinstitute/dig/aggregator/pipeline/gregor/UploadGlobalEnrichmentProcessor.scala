@@ -84,7 +84,6 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |
                 |// find the tissue
                 |MATCH (t:Tissue {name: tissue})
-                |MATCH (k:Annotation {name: annotation})
                 |
                 |// skip any enrichment with no p-value
                 |WHERE NOT toFloat(r.PValue) IS NULL
@@ -98,10 +97,9 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |
                 |// create the relationships
                 |CREATE (q)-[:PRODUCED]->(n)
-                |CREATE (n)-[:HAS_ANNOTATION]->(k)
                 |CREATE (p)-[:HAS_GLOBAL_ENRICHMENT]->(n)
                 |CREATE (a)-[:HAS_GLOBAL_ENRICHMENT]->(n)
-                |CREATE (t)-[:HAS_GLOBAL_ENRICHMENT]->(n)
+                |CREATE (t)-[:HAS_GLOBAL_ENRICHMENT {annotation: annotation}]->(n)
                 |""".stripMargin
 
     graph.run(q)
