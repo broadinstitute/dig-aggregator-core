@@ -42,14 +42,14 @@ abstract class Processor[T <: Run.Input](val name: Processor.Name) extends LazyL
       require(allOutputInputs contains input)
     }
 
-    // build a list of all inserts
-    val runs = for ((output, inputs) <- runOutputs) yield {
+    // build a list of all inserts, sorted by output
+    val runs = for ((output, inputs) <- runOutputs.toList.sortBy(_._1)) yield {
       Run.insert(pool, name, output, inputs)
     }
 
     for {
       _   <- IO(logger.info("Updating database..."))
-      ids <- runs.toList.sequence
+      ids <- runs.sequence
       _   <- IO(logger.info("Done"))
     } yield ids
   }
