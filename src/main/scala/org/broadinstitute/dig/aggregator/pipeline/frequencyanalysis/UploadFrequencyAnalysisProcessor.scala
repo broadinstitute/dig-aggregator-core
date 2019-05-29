@@ -38,7 +38,7 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
       .map(_.output)
       .distinct
       .map { p =>
-        s"MetaAnalysis/$p" -> Seq(p)
+        s"FrequencyAnalysis/$p" -> Seq(p)
       }
       .toMap
   }
