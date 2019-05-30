@@ -67,23 +67,24 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
-                |// lookup the tissue, annotation, and overlapped region
+                |// lookup the tissue and overlapped region
                 |MATCH (t:Tissue {name: r.tissue})
                 |MATCH (o:OverlappedRegion {name: r.overlappedRegion})
                 |
                 |// create the region node
-                |MERGE (n:Region {name: r.name})
-                |ON CREATE SET
-                |  n.chromosome=r.chromosome,
-                |  n.start=toInteger(r.start),
-                |  n.end=toInteger(r.end)
+                |CREATE (n:Region {
+                |  name: r.name,
+                |  annotation: r.annotation,
+                |  chromosome: r.chromosome,
+                |  start: toInteger(r.start),
+                |  end: toInteger(r.end),
+                |  rgb: r.itemRgb
+                |})
                 |
                 |// create the required relationships
-                |MERGE (q)-[:PRODUCED]->(n)
-                |MERGE (n)-[:OVERLAPS]->(o)
-                |
-                |// create the relationship from region -> annotation -> tissue
-                |MERGE (t)-[:HAS_REGION {annotation: r.annotation, itemRgb: r.itemRgb}]->(n)
+                |CREATE (q)-[:PRODUCED]->(n)
+                |CREATE (n)-[:OVERLAPS]->(o)
+                |CREATE (t)-[:HAS_REGION]->(n)
                 |""".stripMargin
 
     graph.run(q)

@@ -78,11 +78,14 @@ if __name__ == '__main__':
             ((df.end >= overlappedRegions.start) & (df.end < overlappedRegions.end)) | \
             ((df.start <= overlappedRegions.start) & (df.end >= overlappedRegions.end))
 
+        # unique naming of regions: CHROMOSOME:START-END
+        region_name = concat_ws('-', concat_ws(':', col('region.chromosome'), col('region.start')), col('region.end'))
+
         # join the regions with the overlapped regions
         df = df.alias('region')\
             .join(broadcast(overlappedRegions).alias('overlapped'), cond, 'left_outer') \
             .select(
-                concat_ws(':', col('region.chromosome'), col('region.start'), col('region.end')).alias('name'),
+                region_name.alias('name'),
                 col('region.chromosome').alias('chromosome'),
                 col('region.start').alias('start'),
                 col('region.end').alias('end'),

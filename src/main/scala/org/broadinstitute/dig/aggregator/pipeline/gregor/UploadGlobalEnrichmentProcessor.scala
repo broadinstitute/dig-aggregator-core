@@ -90,6 +90,7 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |
                 |// create the result node
                 |CREATE (n:GlobalEnrichment {
+                |  annotation: annotation,
                 |  inBedIndexSNP: toFloat(r.InBed_Index_SNP),
                 |  expectedInBedIndexSNP: toFloat(r.ExpectNum_of_InBed_SNP),
                 |  pValue: toFloat(r.PValue)
@@ -99,7 +100,7 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |CREATE (q)-[:PRODUCED]->(n)
                 |CREATE (p)-[:HAS_GLOBAL_ENRICHMENT]->(n)
                 |CREATE (a)-[:HAS_GLOBAL_ENRICHMENT]->(n)
-                |CREATE (t)-[:HAS_GLOBAL_ENRICHMENT {annotation: annotation}]->(n)
+                |CREATE (t)-[:HAS_GLOBAL_ENRICHMENT]->(n)
                 |""".stripMargin
 
     graph.run(q)
