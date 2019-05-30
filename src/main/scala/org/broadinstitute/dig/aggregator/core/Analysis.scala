@@ -91,7 +91,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
       s"""|CALL apoc.periodic.iterate(
           |  "MATCH (:Analysis {name: '$name'})<-[:PRODUCED]->(n) RETURN n",
           |  "DETACH DELETE n",
-          |  {batchSize: $batchSize, parallel: true}
+          |  {batchSize: $batchSize, parallel: false}
           |)
           |""".stripMargin
 
