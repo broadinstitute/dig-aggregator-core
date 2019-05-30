@@ -34,7 +34,7 @@ class GraphDb(config: Neo4jConfig) {
 
   /** Shutdown the driver.
     */
-  def shutdown(): IO[Unit] = IO(driver.close)
+  def shutdown(): IO[Unit] = IO(driver.close())
 
   /** Run a query, retry if something bad happens with exponential backoff.
     *
@@ -47,7 +47,7 @@ class GraphDb(config: Neo4jConfig) {
 
       // run the query, close it
       run   = IO(session.run(query, params.asJava))
-      close = IO(session.close)
+      close = IO(session.close())
 
       // retry the query on failure, always close the session when done
       result <- retry(run).guarantee(close)
