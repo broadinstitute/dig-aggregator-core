@@ -276,21 +276,16 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
   /** Connect all transcript consequences to existing genes.
     */
   def connectGenes(graph: GraphDb): IO[StatementResult] = {
-    val q = s"""|MATCH (n:TranscriptConsequence),
-                |      (g:Gene {ensemblId: n.geneId})
+    val s = "MATCH (n:TranscriptConsequence) RETURN n"
+
+    // for every transcript consequence, link the gene if one exists
+    val q = s"""|MATCH (g:Gene {ensemblId: n.geneId})
                 |
-                |// consequences referencing a gene, but has no connection
-                |WHERE exists(n.geneId) AND NOT ((g)-[:HAS_TRANSCRIPT_CONSEQUENCE]->(n))
-                |
-                |// limit the size for each call (using APOC)
-                |WITH n, g
-                |LIMIT {limit}
-                |
-                |// connect the transcript consequence to the gene
+                |// make the connection if not present
                 |MERGE (g)-[:HAS_TRANSCRIPT_CONSEQUENCE]->(n)
                 |""".stripMargin
 
-    // run the query using the APOC function
-    graph.run(s"call apoc.periodic.commit('$q', {limit: 10000})")
+    // run the query using APOC
+    graph.run(s"call apoc.periodic.iterate('$s', '$q', {batchSize: 10000})")
   }
 }
