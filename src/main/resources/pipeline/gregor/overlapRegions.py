@@ -61,10 +61,13 @@ if __name__ == '__main__':
 
         # compute all the overlapping region boundaries
         for i in range(first, last + 1):
+            start = i * overlappedRegionSize
+            end = start + overlappedRegionSize
+
             regions.append(Row(
-                name='%s:%d' % (args.chromosome, i * overlappedRegionSize),
-                start=i * overlappedRegionSize,
-                end=(i + 1) * overlappedRegionSize,
+                name='%s:%d-%d' % (args.chromosome, start, end),
+                start=start,
+                end=end,
             ))
 
         # create the overlapping regions frame

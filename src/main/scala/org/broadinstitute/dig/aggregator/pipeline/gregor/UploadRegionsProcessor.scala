@@ -102,12 +102,14 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
                 |
                 |// split the name into chromosome and start position
                 |WITH q, r, split(r.overlappedRegion, ':') AS locus
+                |WITH q, r, locus[0] AS chromosome, split(locus[1], '-') AS position
                 |
                 |// lookup the tissue and annotation to connect
                 |MERGE (n:OverlappedRegion {name: r.overlappedRegion})
                 |ON CREATE SET
-                |  n.chromosome=locus[0],
-                |  n.start=toInteger(locus[1])
+                |  n.chromosome=chromosome,
+                |  n.start=toInteger(position[0]),
+                |  n.end=toInteger(position[1])
                 |
                 |// connect to the analysis node
                 |MERGE (q)-[:PRODUCED]->(n)
