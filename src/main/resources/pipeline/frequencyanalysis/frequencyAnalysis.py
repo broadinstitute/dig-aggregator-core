@@ -36,8 +36,8 @@ def calc_freq(df, ancestry):
             .keyBy(lambda v: v.varId) \
             .aggregateByKey(
                 (0, 0),
-                lambda a,b: (a[0] + b.eaf, a[1] + 1),
-                lambda a,b: (a[0] + b[0], a[1] + b[1])
+                lambda a, b: (a[0] + b.eaf, a[1] + 1),
+                lambda a, b: (a[0] + b[0], a[1] + b[1])
             ) \
             .map(lambda v: Row(varId=v[0], eaf=v[1][0] / v[1][1])) \
             .toDF()
