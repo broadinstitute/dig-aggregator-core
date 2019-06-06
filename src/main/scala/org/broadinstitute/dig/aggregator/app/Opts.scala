@@ -14,8 +14,8 @@ import org.rogach.scallop.exceptions.ScallopException
 import scala.io.Source
 
 /**
- * Command line and configuration file argument parsing.
- */
+  * Command line and configuration file argument parsing.
+  */
 final class Opts(args: Seq[String]) extends ScallopConf(args) {
 
   /** JSON configuration file where settings are. */
@@ -45,12 +45,23 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   /** Email errors. */
   val emailOnFailure: ScallopOption[Boolean] = opt("email-on-failure")
 
+  /** Validate run results and delete (fix) runs from the database if necessary. */
+  val verifyAndFix: ScallopOption[Boolean] = opt("verify-and-fix")
+
+  /** Skip running, assume complete, and insert runs into the database. */
+  val insertRuns: ScallopOption[Boolean] = opt("insert-runs")
+
   /** The processor (or pipeline if --pipeline specified) to run. */
   val processorName: ScallopOption[String] = trailArg(required = false)
 
   // test for options that don't go together
   mutuallyExclusive(version, processorName)
   mutuallyExclusive(only, pipeline)
+  mutuallyExclusive(verifyAndFix, reprocess)
+  mutuallyExclusive(verifyAndFix, only)
+  mutuallyExclusive(verifyAndFix, exclude)
+  mutuallyExclusive(verifyAndFix, insertRuns)
+  mutuallyExclusive(insertRuns, pipeline)
 
   // parse the command line options
   verify
@@ -75,12 +86,12 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
 
   /** The options used by processors. */
   def processorOpts: Processor.Opts = {
-    Processor.Opts(reprocess(), only.toOption, exclude.toOption)
+    Processor.Opts(reprocess(), insertRuns(), only.toOption, exclude.toOption)
   }
 
   /**
-   * Outputs standard help from Scallop along with an additional message.
-   */
+    * Outputs standard help from Scallop along with an additional message.
+    */
   private def printHelp(message: String): Unit = {
     printHelp()
     println()
@@ -92,8 +103,8 @@ object Opts {
   import org.broadinstitute.dig.aggregator.core.config._
 
   /**
-   * A default implementation of BaseConfig.
-   */
+    * A default implementation of BaseConfig.
+    */
   final case class Config(
       aws: AWSConfig,
       mysql: MySQLConfig,

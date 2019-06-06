@@ -1,0 +1,52 @@
+package org.broadinstitute.dig.aggregator.pipeline.gregor
+
+import cats.effect._
+import cats.implicits._
+
+import org.broadinstitute.dig.aggregator.core._
+import org.broadinstitute.dig.aggregator.core.config.BaseConfig
+import org.broadinstitute.dig.aggregator.core.emr._
+import org.broadinstitute.dig.aggregator.core.processors._
+
+class SortRegionsProcessor(name: Processor.Name, config: BaseConfig) extends DatasetProcessor(name, config) {
+
+  /** Topic to consume.
+    */
+  override val topic: String = "chromatin_state"
+
+  /** All the job scripts that need to be uploaded to AWS.
+    */
+  override val resources: Seq[String] = Seq(
+    "pipeline/gregor/sortRegions.py"
+  )
+
+  /** All datasets map to a single output.
+    */
+  override def getRunOutputs(work: Seq[Dataset]): Map[String, Seq[String]] = {
+    Map("regions/chromatin_state" -> work.map(_.dataset).distinct)
+  }
+
+  /** Take any new datasets and convert them from JSON-list to BED file
+    * format with all the appropriate headers and fields.
+    */
+  override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
+    val script = aws.uriOf("resources/pipeline/gregor/sortRegions.py")
+
+    // cluster configuration used to process each phenotype
+    val cluster = Cluster(
+      name = name.toString,
+      masterInstanceType = InstanceType.c5_4xlarge,
+      slaveInstanceType = InstanceType.c5_2xlarge,
+      instances = 5,
+      configurations = Seq(
+        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
+      )
+    )
+
+    // run all the jobs then update the database
+    for {
+      job <- aws.runJob(cluster, JobStep.PySpark(script))
+      _   <- aws.waitForJob(job)
+    } yield ()
+  }
+}
