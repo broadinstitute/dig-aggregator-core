@@ -120,9 +120,12 @@ object Pipeline {
       p.hasWork(opts).map(p -> _)
     }
 
-    for {
-      work <- getWork.sequence
-    } yield work.filter(_._2).map(_._1).toSet
+    for (work <- getWork.sequence) yield {
+      work
+        .filter { case (_, hasWork) => hasWork }
+        .map { case (processor, _) => processor }
+        .toSet
+    }
   }
 
   /** Find all processors NOT represented in `toRun` that will run due to a
