@@ -6,6 +6,7 @@ import cats.effect._
 import cats.implicits._
 import doobie._
 import doobie.implicits._
+import java.util.UUID
 import org.scalatest.FunSuite
 
 /**
@@ -31,19 +32,21 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     def insert(a: A): IO[_]
   }
 
-  def insertRun(app: Processor.Name, output: String, inputs: Seq[String]): String = {
-    Run.insert(pool, app, output, inputs).unsafeRunSync
+  def insertRun(processor: Processor.Name, output: String, inputs: NonEmptyList[UUID]): UUID = {
+    Run.insert(pool, processor, output, inputs).unsafeRunSync
   }
 
   def allResults: Seq[Run.Result] = {
-    val q = sql"""|SELECT `app`,`input`,`output`,`timestamp`
+    import Run.UUIDGet // REQUIRED for doobie!
+
+    val q = sql"""|SELECT `uuid`, `processor`, `output`, `timestamp`
                   |FROM   `runs`
                   |""".stripMargin.query[Run.Result].to[Seq]
 
     pool.exec(q).unsafeRunSync
   }
 
-  def runResults(run: String): Seq[Run.Result] = {
+  def runResults(run: UUID): Seq[Run.Result] = {
     Run.resultsOfRun(pool, run).unsafeRunSync
   }
 
@@ -89,17 +92,17 @@ object DbFunSuite {
       override val create: ConnectionIO[Int] =
         sql"""|CREATE TABLE `runs` (
               |  `ID` int(11) NOT NULL AUTO_INCREMENT,
-              |  `run` varchar(36) NOT NULL,
-              |  `app` varchar(180) NOT NULL,
-              |  `input` varchar(800) NOT NULL,
+              |  `uuid` varchar(36) NOT NULL,
+              |  `processor` varchar(180) NOT NULL,
+              |  `input` varchar(36),
               |  `output` varchar(800) NOT NULL,
-              |  `source` varchar(800) NOT NULL,
+              |  `repo` varchar(800) NOT NULL,
               |  `branch` varchar(800) NOT NULL,
               |  `commit` varchar(800) NOT NULL,
               |  `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
               |  PRIMARY KEY (`ID`),
-              |  UNIQUE KEY `APP_IDX` (`app`,`input`,`output`),
-              |  KEY `RUN_IDX` (`run`, `app`)
+              |  UNIQUE KEY `APP_IDX` (`processor`,`input`,`output`),
+              |  KEY `RUN_IDX` (`uuid`)
               |)
               |""".stripMargin.update.run
     }

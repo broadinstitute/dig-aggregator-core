@@ -1,5 +1,6 @@
 package org.broadinstitute.dig.aggregator.core
 
+import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
 
@@ -22,9 +23,10 @@ abstract class Processor(val name: Processor.Name, config: BaseConfig) extends L
     * location in HDFS so they may be referenced by scripts used to run
     * the processor on a cloud cluster.
     */
-  val resources: Seq[String]
+  val resources: Seq[String] = Seq.empty
 
-  /** All the processors this processor depends on.
+  /** All the processors this processor depends on. Root processors should
+    * depend on one (or more) of the processors in the IntakePipeline.
     */
   val dependencies: Seq[Processor.Name]
 
@@ -81,13 +83,13 @@ abstract class Processor(val name: Processor.Name, config: BaseConfig) extends L
     }
 
     // build a list of all inserts, sorted by output
-    val runs = for ((output, inputs) <- runOutputs.toList.sortBy(_._1)) yield {
-      Run.insert(pool, name, output, Some(inputs))
+    val insertRuns = for ((output, inputs) <- runOutputs.toList.sortBy(_._1)) yield {
+      Run.insert(pool, name, output, NonEmptyList.fromListUnsafe(inputs.toList))
     }
 
     for {
       _   <- IO(logger.info("Updating database..."))
-      ids <- runs.sequence
+      ids <- insertRuns.sequence
       _   <- IO(logger.info("Done"))
     } yield ids
   }

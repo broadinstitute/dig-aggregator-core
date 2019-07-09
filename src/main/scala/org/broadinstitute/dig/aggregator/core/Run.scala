@@ -1,5 +1,6 @@
 package org.broadinstitute.dig.aggregator.core
 
+import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
 
@@ -37,12 +38,12 @@ object Run extends LazyLogging {
 
   /** Implicit conversion to/from DB string from/to UUID for doobie.
     */
-  implicit val nameGet: Get[UUID] = Get[String].tmap(UUID.fromString)
-  implicit val namePut: Put[UUID] = Put[String].tcontramap(_.toString)
+  implicit val UUIDGet: Get[UUID] = Get[String].tmap(UUID.fromString)
+  implicit val UUIDPut: Put[UUID] = Put[String].tcontramap(_.toString)
 
   /** Run entries are created and inserted atomically for a single output.
     */
-  def insert(pool: DbPool, processor: Processor.Name, output: String, inputs: Option[Seq[UUID]]): IO[UUID] = {
+  def insert(pool: DbPool, processor: Processor.Name, output: String, inputs: NonEmptyList[UUID]): IO[UUID] = {
     val q = s"""|INSERT INTO `runs`
                 |  ( `uuid`
                 |  , `processor`
@@ -53,10 +54,10 @@ object Run extends LazyLogging {
                 |  , `commit`
                 |  )
                 |
-                |VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                |VALUES (?, ?, ?, ?, ?, ?, ?)
                 |
                 |ON DUPLICATE KEY UPDATE
-                |  `run` = VALUES(`run`),
+                |  `uuid` = VALUES(`uuid`),
                 |  `repo` = VALUES(`repo`),
                 |  `branch` = VALUES(`branch`),
                 |  `commit` = VALUES(`commit`),
@@ -67,20 +68,16 @@ object Run extends LazyLogging {
     val uuid = UUID.randomUUID
     val prov = Provenance.thisBuild
 
-    // create an entry per input or a single entry with no input
-    val entries = inputs match {
-      case None => Seq(Entry(uuid, processor, None, output, prov.source, prov.branch, prov.commit))
-      case Some(ids) =>
-        ids.map { uuid =>
-          Entry(uuid, processor, Some(uuid), output, prov.source, prov.branch, prov.commit)
-        }
+    // create an entry per input
+    val entries = inputs.map { input =>
+      Entry(uuid, processor, Some(input), output, prov.source, prov.branch, prov.commit)
     }
 
-    // insert a row per entry
+    // batch insert
     val insert = Update[Entry](q).updateMany(entries.toList)
 
     for {
-      _ <- IO(logger.debug(s"Inserting run output '$output' for $processor..."))
+      _ <- IO(logger.debug(s"Inserting run output '$output' (${inputs.size} inputs) for $processor..."))
       _ <- pool.exec(insert)
     } yield uuid
   }
@@ -97,13 +94,6 @@ object Run extends LazyLogging {
     pool.exec(sql"DELETE FROM `runs` WHERE `processor`=$processor".update.run).as(())
   }
 
-  /** When querying the `runs` table to determine what has already been
-    * processed by dependency applications, this is what is returned.
-    */
-  final case class Result(uuid: UUID, processor: Processor.Name, output: String, timestamp: java.time.Instant) {
-    override def toString: String = s"$processor:$output"
-  }
-
   /** Lookup the runs of a given processor.
     */
   def runsOfProcessor(pool: DbPool, processor: Processor.Name): IO[Seq[UUID]] = {
@@ -118,6 +108,13 @@ object Run extends LazyLogging {
     pool
       .exec(q.query[Option[UUID]].to[Seq])
       .map(_.flatten)
+  }
+
+  /** When querying the `runs` table to determine what has already been
+    * processed by dependency applications, this is what is returned.
+    */
+  final case class Result(uuid: UUID, processor: Processor.Name, output: String, timestamp: java.time.Instant) {
+    override def toString: String = s"$processor:$output"
   }
 
   /** Lookup all the results for a given run id. This is mostly used for testing.
