@@ -2,12 +2,10 @@ package org.broadinstitute.dig.aggregator.app
 
 import java.io.File
 
+import org.broadinstitute.dig.aggregator.core.Processor
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.processors.Processor
-
 import org.json4s._
 import org.json4s.jackson.Serialization.read
-
 import org.rogach.scallop._
 import org.rogach.scallop.exceptions.ScallopException
 

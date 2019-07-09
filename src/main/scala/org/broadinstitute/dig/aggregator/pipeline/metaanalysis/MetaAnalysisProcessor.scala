@@ -3,10 +3,12 @@ package org.broadinstitute.dig.aggregator.pipeline.metaanalysis
 import cats.effect._
 import cats.implicits._
 
+import java.util.UUID
+
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.emr._
-import org.broadinstitute.dig.aggregator.core.processors._
+import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
 
 /** After all the variants for a particular phenotype have been processed and
   * partitioned, meta-analysis is run on them.
@@ -29,11 +31,11 @@ import org.broadinstitute.dig.aggregator.core.processors._
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends DatasetProcessor(name, config) {
+class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
-  /** Topic to consume.
+  /** Processor inputs.
     */
-  override val topic: String = "variants"
+  override val dependencies: Seq[Processor.Name] = Seq(IntakePipeline.variants)
 
   /** All the job scripts that need to be uploaded to AWS.
     */
@@ -45,28 +47,25 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Da
     "scripts/getmerge-strip-headers.sh"
   )
 
-  /** Parse datasets to extract a phenotype -> [Dataset] mapping.
-    */
-  def mapDatasetPhenotypes(datasets: Seq[Dataset]): Map[String, Seq[String]] = {
-    val pattern = raw"([^/]+)/(.*)".r
-
-    val phenotypeMapping = datasets.map(_.dataset).map {
-      case dataset @ pattern(_, phenotype) => (phenotype, dataset)
-    }
-
-    phenotypeMapping.groupBy(_._1).mapValues(_.map(_._2))
-  }
-
   /** The phenotype is the output and the list of datasets for that phenotype
     * are the inputs.
     */
-  override def getRunOutputs(datasets: Seq[Dataset]): Map[String, Seq[String]] = {
-    mapDatasetPhenotypes(datasets)
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
+    val pattern = raw"([^/]+)/(.*)".r
+
+    // find all the unique phenotypes that need processed
+    val phenotypeMap = results.map { run =>
+      run.output match {
+        case pattern(_, phenotype) => (phenotype, run.uuid)
+      }
+    }
+
+    phenotypeMap.groupBy(_._1).mapValues(_.map(_._2))
   }
 
   /** Take all the phenotype results from the dependencies and process them.
     */
-  override def processDatasets(datasets: Seq[Dataset]): IO[Unit] = {
+  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
     val bootstrapUri = aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh")
     val sparkConf    = ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
 
@@ -78,7 +77,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Da
     )
 
     // get the unique list of phenotypes
-    val phenotypes = mapDatasetPhenotypes(datasets).keys.toList
+    val phenotypes = getRunOutputs(results).keys.toList
 
     // create a job for each phenotype; cluster them
     val jobs          = phenotypes.map(processPhenotype)

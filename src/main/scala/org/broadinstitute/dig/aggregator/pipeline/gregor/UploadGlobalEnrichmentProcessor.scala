@@ -2,15 +2,15 @@ package org.broadinstitute.dig.aggregator.pipeline.gregor
 
 import cats.effect._
 import cats.implicits._
-import java.net.URL
-import java.net.URLDecoder
 
-import org.broadinstitute.dig.aggregator.core.{AWS, Analysis, GraphDb, Provenance, Run}
+import java.net.{URL, URLDecoder}
+import java.util.UUID
+
+import org.broadinstitute.dig.aggregator.core.{AWS, Analysis, GraphDb, Processor, Provenance, Run}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.processors.{Processor, RunProcessor}
 import org.neo4j.driver.v1.StatementResult
 
-class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
   /** All the processors this processor depends on.
     */
@@ -24,14 +24,12 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
 
   /** Each input is a phenotype, and the output is the analysis node.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
-    results
-      .map(_.output)
-      .distinct
-      .map { phenotype =>
-        s"GlobalEnrichment/$phenotype" -> Seq(phenotype)
-      }
-      .toMap
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
+    val phenotypes = results.map(_.output).distinct
+
+    phenotypes.map { phenotype =>
+      s"GlobalEnrichment/$phenotype" -> results.filter(_.output == phenotype).map(_.uuid).distinct
+    }.toMap
   }
 
   /** Take all the phenotype results from the dependencies and process them.

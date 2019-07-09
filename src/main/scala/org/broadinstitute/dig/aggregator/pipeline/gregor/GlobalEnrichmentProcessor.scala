@@ -3,12 +3,13 @@ package org.broadinstitute.dig.aggregator.pipeline.gregor
 import cats.effect._
 import cats.implicits._
 
+import java.util.UUID
+
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.emr._
-import org.broadinstitute.dig.aggregator.core.processors._
 
-class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
   /** All the processors this processor depends on.
     */
@@ -28,21 +29,26 @@ class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extend
 
   /**
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
     val phenotypes = results
-      .filter(_.app == GregorPipeline.snpListProcessor)
+      .filter(_.processor == GregorPipeline.snpListProcessor)
       .map(_.output)
       .distinct
 
+    val phenotypeInputs = results
+      .filter(_.processor == GregorPipeline.snpListProcessor)
+      .map(_.uuid)
+      .distinct
+
     // updated regions
-    val regions = results
-      .filter(_.app == GregorPipeline.sortRegionsProcessor)
-      .map(_.output)
+    val regionInputs = results
+      .filter(_.processor == GregorPipeline.sortRegionsProcessor)
+      .map(_.uuid)
       .distinct
 
     // the phenotypes are the output, input are phenotype + regions
     phenotypes.map { phenotype =>
-      phenotype -> (Seq(phenotype) ++ regions)
+      phenotype -> (phenotypeInputs ++ regionInputs)
     }.toMap
   }
 

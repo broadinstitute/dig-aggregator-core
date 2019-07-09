@@ -1,41 +1,79 @@
-package org.broadinstitute.dig.aggregator.core.processors
+package org.broadinstitute.dig.aggregator.core
 
 import cats.effect._
 import cats.implicits._
-import doobie._
+
 import com.typesafe.scalalogging.LazyLogging
+
+import doobie._
+
+import java.util.UUID
+
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.{AWS, DbPool, Glob, Run}
 
 /** Each processor has a globally unique name and a run function.
   */
-abstract class Processor[T <: Run.Input](val name: Processor.Name) extends LazyLogging {
+abstract class Processor(val name: Processor.Name, config: BaseConfig) extends LazyLogging {
 
   /** The collection of resources this processor needs to have uploaded
     * before the processor can run.
     *
     * These resources are from the classpath and are uploaded to a parallel
-    * location in HDFS!
+    * location in HDFS so they may be referenced by scripts used to run
+    * the processor on a cloud cluster.
     */
   val resources: Seq[String]
 
-  /** Determines the set of things that need to be processed.
+  /** All the processors this processor depends on.
     */
-  def getWork(opts: Processor.Opts): IO[Seq[T]]
+  val dependencies: Seq[Processor.Name]
+
+  /** Database transactor for loading state, etc.
+    */
+  protected val pool: DbPool = DbPool.fromMySQLConfig(config.mysql)
+
+  /** AWS client for uploading resources and running jobs.
+    */
+  protected val aws: AWS = new AWS(config.aws)
+
+  /** Process a set of run results.
+    */
+  def processResults(results: Seq[Run.Result]): IO[_]
 
   /** Given a set of work to do, return the Runs that should be written to
-    * the database once that work has completed.
+    * the database once that work has completed. The output of this function
+    * should be a Map of Output name -> sequence of input run IDs that were
+    * used to generate the output.
+    *
+    * If all results passed to this function are NOT represented in the
+    * output map, then it is an error!
     */
-  def getRunOutputs(work: Seq[T]): Map[String, Seq[String]]
+  def getRunOutputs(work: Seq[Run.Result]): Map[String, Seq[UUID]]
+
+  /** Determines the set of things that need to be processed.
+    */
+  def getWork(opts: Processor.Opts): IO[Seq[Run.Result]] = {
+    for {
+      results <- if (opts.reprocess) {
+        Run.resultsOf(pool, dependencies)
+      } else {
+        Run.resultsOf(pool, dependencies, name)
+      }
+    } yield {
+      results
+        .filter(r => opts.onlyGlobs.exists(_.matches(r.output)))
+        .filterNot(r => opts.excludeGlobs.exists(_.matches(r.output)))
+    }
+  }
 
   /** Complete all work and write to the database what was done.
     */
-  def insertRuns(pool: DbPool, work: Seq[T]): IO[Seq[String]] = {
+  def insertRuns(pool: DbPool, work: Seq[Run.Result]): IO[Seq[UUID]] = {
     val runOutputs = getRunOutputs(work)
 
     // validate that ALL run inputs are represented in the outputs
     val allOutputInputs = runOutputs.values.flatten.toSet
-    val allInputs       = work.map(_.asRunInput).toSet
+    val allInputs       = work.map(_.uuid).toSet
 
     // verify that allInputs are represented in allOutputInputs
     allInputs.foreach { input =>
@@ -44,7 +82,7 @@ abstract class Processor[T <: Run.Input](val name: Processor.Name) extends LazyL
 
     // build a list of all inserts, sorted by output
     val runs = for ((output, inputs) <- runOutputs.toList.sortBy(_._1)) yield {
-      Run.insert(pool, name, output, inputs)
+      Run.insert(pool, name, output, Some(inputs))
     }
 
     for {
@@ -80,7 +118,16 @@ abstract class Processor[T <: Run.Input](val name: Processor.Name) extends LazyL
 
   /** Run this processor.
     */
-  def run(opts: Processor.Opts): IO[Unit]
+  def run(opts: Processor.Opts): IO[Unit] = {
+    for {
+      work <- getWork(opts)
+      _    <- uploadResources(aws)
+
+      // if only inserting runs, skip processing
+      _ <- if (opts.insertRuns) IO.unit else processResults(work)
+      _ <- insertRuns(pool, work)
+    } yield ()
+  }
 }
 
 /** Companion object for registering the names of processors.
@@ -94,10 +141,14 @@ object Processor extends LazyLogging {
     import Glob.String2Glob
 
     /** Returns a glob for the only option. */
-    lazy val onlyGlobs: Seq[Glob] = only.map(_.split(",").map(_.toGlob).toSeq).getOrElse(List(Glob.True))
+    lazy val onlyGlobs: Seq[Glob] = {
+      only.map(_.split(",").map(_.toGlob).toSeq).getOrElse(List(Glob.True))
+    }
 
     /** Returns a glob for the exclude option. */
-    lazy val excludeGlobs: Seq[Glob] = exclude.map(_.split(",").map(_.toGlob).toSeq).getOrElse(List(Glob.False))
+    lazy val excludeGlobs: Seq[Glob] = {
+      exclude.map(_.split(",").map(_.toGlob).toSeq).getOrElse(List(Glob.False))
+    }
   }
 
   /** Processors are required to have a unique name that is unique across all
@@ -127,7 +178,7 @@ object Processor extends LazyLogging {
 
   /** Every processor is constructed with a type-safe name and configuration.
     */
-  type Constructor = (Processor.Name, BaseConfig) => Processor[_ <: Run.Input]
+  type Constructor = (Processor.Name, BaseConfig) => Processor
 
   /** A mapping of all the registered processor names.
     */
@@ -147,7 +198,7 @@ object Processor extends LazyLogging {
 
   /** Version of apply() that takes the actual process name.
     */
-  def apply(name: Name): BaseConfig => Option[Processor[_ <: Run.Input]] = {
+  def apply(name: Name): BaseConfig => Option[Processor] = {
     val ctor = names.get(name)
 
     // lambda that will create this processor with a configuration
@@ -158,7 +209,7 @@ object Processor extends LazyLogging {
 
   /** Create a processor given its name and a configuration.
     */
-  def apply(name: String): BaseConfig => Option[Processor[_ <: Run.Input]] = {
+  def apply(name: String): BaseConfig => Option[Processor] = {
     apply(new Name(name))
   }
 }

@@ -1,15 +1,12 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
-import cats._
 import cats.effect._
-import cats.implicits._
 
-import com.amazonaws.services.elasticmapreduce.model.RunJobFlowResult
+import java.util.UUID
 
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.emr._
-import org.broadinstitute.dig.aggregator.core.processors._
 
 /** After all the variants across all datasets have had VEP run on them in the
   * previous step, the results must be joined together. This is done by loading
@@ -28,7 +25,7 @@ import org.broadinstitute.dig.aggregator.core.processors._
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
   /** All the processors this processor depends on.
     */
@@ -44,8 +41,8 @@ class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extends 
 
   /** Only a single output for VEP that uses ALL effects.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
-    Map("VEP/CQS" -> results.map(_.output).distinct)
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
+    Map("VEP/CQS" -> results.map(_.uuid).distinct)
   }
 
   /** All effect results are combined together, so the results list is ignored.

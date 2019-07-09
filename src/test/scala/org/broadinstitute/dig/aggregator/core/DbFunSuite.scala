@@ -4,12 +4,8 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.implicits._
-
 import doobie._
 import doobie.implicits._
-
-import org.broadinstitute.dig.aggregator.core.processors.Processor
-
 import org.scalatest.FunSuite
 
 /**

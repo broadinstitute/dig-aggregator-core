@@ -2,12 +2,13 @@ package org.broadinstitute.dig.aggregator.pipeline.gregor
 
 import cats.effect._
 
+import java.util.UUID
+
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.emr._
-import org.broadinstitute.dig.aggregator.core.processors._
 
-class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
   /** Dependency processors.
     */
@@ -23,8 +24,8 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
 
   /** All datasets and VEP output map to a single output.
     */
-  override def getRunOutputs(work: Seq[Run.Result]): Map[String, Seq[String]] = {
-    Map("overlapped-regions" -> work.map(_.output).distinct)
+  override def getRunOutputs(work: Seq[Run.Result]): Map[String, Seq[UUID]] = {
+    Map("overlapped-regions" -> work.map(_.uuid).distinct)
   }
 
   /** With a new variants list or new regions, need to reprocess and get a list
