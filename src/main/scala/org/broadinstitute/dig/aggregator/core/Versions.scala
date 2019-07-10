@@ -9,33 +9,26 @@ import java.io.InputStream
 import scala.util.Failure
 import scala.util.Success
 
-/**
- * @author clint
- * Aug 1, 2018
- *
- * Based on the Versions class from LoamStream, created Oct 28, 2016.
- */
-final case class Versions(name: String,
-                          version: String,
-                          branch: String,
-                          lastCommit: Option[String],
-                          anyUncommittedChanges: Boolean,
-                          describedVersion: Option[String],
-                          buildDate: Instant,
-                          remoteUrl: Option[String]) {
+/** Based on the Versions class from LoamStream, created Oct 28, 2016. */
+final case class Versions(
+    name: String,
+    version: String,
+    branch: String,
+    lastCommit: Option[String],
+    anyUncommittedChanges: Boolean,
+    describedVersion: Option[String],
+    buildDate: Instant,
+    remoteUrl: Option[String]
+) {
 
+  /** Convert to a human-readable string. */
   override def toString: String = {
-    val isDirtyPart = if (anyUncommittedChanges) " (PLUS uncommitted changes!) " else " "
-
-    val branchPart = s"branch: $branch"
-
+    val isDirtyPart          = if (anyUncommittedChanges) " (PLUS uncommitted changes!) " else " "
+    val branchPart           = s"branch: $branch"
     val describedVersionPart = describedVersion.getOrElse("UNKNOWN")
-
-    val commitPart = s"commit: ${lastCommit.getOrElse("UNKNOWN")}"
-
-    val buildDatePart = s"built on: $buildDate "
-
-    val remoteUrlPart = s"from ${remoteUrl.getOrElse("UNKNOWN origin")}"
+    val commitPart           = s"commit: ${lastCommit.getOrElse("UNKNOWN")}"
+    val buildDatePart        = s"built on: $buildDate "
+    val remoteUrlPart        = s"from ${remoteUrl.getOrElse("UNKNOWN origin")}"
 
     s"$name $version ($describedVersionPart) $branchPart ${commitPart}${isDirtyPart}${buildDatePart}${remoteUrlPart}"
   }
@@ -46,8 +39,7 @@ object Versions {
   val propsFileName: String = "versionInfo.properties"
 
   private[core] def propsFrom(propsFile: String): Try[Properties] = {
-    val propStreamOption = Option(getClass.getClassLoader.getResourceAsStream(propsFile))
-
+    val propStreamOption  = Option(getClass.getClassLoader.getResourceAsStream(propsFile))
     val propStreamAttempt = toTry(propStreamOption)(s"Couldn't find '$propsFile' on the classpath")
 
     for {

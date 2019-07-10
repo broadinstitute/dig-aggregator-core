@@ -4,12 +4,8 @@ import java.io.File
 
 import org.broadinstitute.dig.aggregator.core.Processor
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.json4s._
-import org.json4s.jackson.Serialization.read
 import org.rogach.scallop._
 import org.rogach.scallop.exceptions.ScallopException
-
-import scala.io.Source
 
 /**
   * Command line and configuration file argument parsing.
@@ -55,6 +51,7 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   // test for options that don't go together
   mutuallyExclusive(version, processorName)
   mutuallyExclusive(only, pipeline)
+  mutuallyExclusive(exclude, pipeline)
   mutuallyExclusive(verifyAndFix, reprocess)
   mutuallyExclusive(verifyAndFix, only)
   mutuallyExclusive(verifyAndFix, exclude)

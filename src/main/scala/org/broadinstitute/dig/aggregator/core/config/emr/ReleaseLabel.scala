@@ -2,16 +2,14 @@ package org.broadinstitute.dig.aggregator.core.config.emr
 
 import org.json4s._
 
-/**
- * The version ID of the EMR cluster to create.
- */
+/** The version ID of the EMR cluster to create.
+  */
 final case class ReleaseLabel(value: String) {
   require(value.startsWith("emr-"), s"Invalid EMR release ID: '$value'")
 }
 
-/**
- * Companion object with a default EMR release ID that can be used.
- */
+/** Companion object with a default EMR release ID that can be used.
+  */
 object ReleaseLabel {
 
   /** Default EMR instance versions. */
@@ -32,11 +30,10 @@ object ReleaseLabel {
     case ReleaseLabel(value) => JString(value)
   }
 
-  /**
-   * Custom serializer for ReleaseLabel. To use this, add it to the default
-   * formats when deserializing...
-   *
-   * implicit val formats = json4s.DefaultFormats + ReleaseLabel.Serializer
-   */
+  /** Custom serializer for ReleaseLabel. To use this, add it to the default
+    * formats when deserializing...
+    *
+    * implicit val formats = json4s.DefaultFormats + ReleaseLabel.Serializer
+    */
   case object Serializer extends CustomSerializer[ReleaseLabel](format => deserialize -> serialize)
 }

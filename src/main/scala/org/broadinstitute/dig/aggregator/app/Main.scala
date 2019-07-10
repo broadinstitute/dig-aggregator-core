@@ -1,6 +1,5 @@
 package org.broadinstitute.dig.aggregator.app
 
-import cats._
 import cats.effect._
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging

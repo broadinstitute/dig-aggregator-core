@@ -2,17 +2,14 @@ package org.broadinstitute.dig.aggregator.core.emr
 
 import org.json4s._
 
-/**
- * EC2 instance types. Not all instance types are represented as there is a
- * bare minimum required to even run Hadoop/Spark.
- *
- * See: https://aws.amazon.com/ec2/instance-types/
- */
+/** EC2 instance types. Not all instance types are represented as there is a
+  * bare minimum required to even run Hadoop/Spark.
+  *
+  * See: https://aws.amazon.com/ec2/instance-types/
+  */
 final case class InstanceType(value: String)
 
-/**
- * Companion object with defined instances.
- */
+/** Companion object with defined instances. */
 object InstanceType {
 
   /** General-purpose, balanced. */
@@ -44,11 +41,10 @@ object InstanceType {
     case InstanceType(value) => JString(value)
   }
 
-  /**
-   * Custom serializer for InstanceType. To use this, add it to the default
-   * formats when deserializing...
-   *
-   * implicit val formats = json4s.DefaultFormats + InstanceType.Serializer
-   */
+  /** Custom serializer for InstanceType. To use this, add it to the default
+    * formats when deserializing...
+    *
+    * implicit val formats = json4s.DefaultFormats + InstanceType.Serializer
+    */
   case object Serializer extends CustomSerializer[InstanceType](format => deserialize -> serialize)
 }

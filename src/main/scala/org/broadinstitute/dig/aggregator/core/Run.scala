@@ -36,13 +36,11 @@ object Run extends LazyLogging {
       commit: String
   )
 
-  /** Implicit conversion to/from DB string from/to UUID for doobie.
-    */
+  /** Implicit conversion to/from DB string from/to UUID for doobie. */
   implicit val UUIDGet: Get[UUID] = Get[String].tmap(UUID.fromString)
   implicit val UUIDPut: Put[UUID] = Put[String].tcontramap(_.toString)
 
-  /** Run entries are created and inserted atomically for a single output.
-    */
+  /** Run entries are created and inserted atomically for a single output. */
   def insert(pool: DbPool, processor: Processor.Name, output: String, inputs: NonEmptyList[UUID]): IO[UUID] = {
     val q = s"""|INSERT INTO `runs`
                 |  ( `uuid`
@@ -82,26 +80,22 @@ object Run extends LazyLogging {
     } yield uuid
   }
 
-  /** Given a UUID, delete all run results for it.
-    */
+  /** Given a UUID, delete all run results for it. */
   def deleteRun(pool: DbPool, uuid: UUID): IO[Unit] = {
     pool.exec(sql"DELETE FROM `runs` WHERE `uuid`=$uuid".update.run).as(())
   }
 
-  /** Given a processor name, delete all runs created by it.
-    */
+  /** Given a processor name, delete all runs created by it. */
   def deleteRuns(pool: DbPool, processor: Processor.Name): IO[Unit] = {
     pool.exec(sql"DELETE FROM `runs` WHERE `processor`=$processor".update.run).as(())
   }
 
-  /** Lookup the runs of a given processor.
-    */
+  /** Lookup the runs of a given processor. */
   def runsOfProcessor(pool: DbPool, processor: Processor.Name): IO[Seq[UUID]] = {
     pool.exec(sql"SELECT DISTINCT `uuid` FROM `runs` WHERE `processor`=$processor".query[UUID].to[Seq])
   }
 
-  /** Lookup all the inputs of a given run.
-    */
+  /** Lookup all the inputs of a given run. */
   def inputsOfRun(pool: DbPool, uuid: UUID): IO[Seq[UUID]] = {
     val q = sql"SELECT `input` FROM `runs` WHERE `uuid`=$uuid"
 
@@ -117,8 +111,7 @@ object Run extends LazyLogging {
     override def toString: String = s"$processor:$output"
   }
 
-  /** Lookup all the results for a given run id. This is mostly used for testing.
-    */
+  /** Lookup all the results for a given run id. This is mostly used for testing. */
   def resultsOfRun(pool: DbPool, uuid: UUID): IO[Seq[Result]] = {
     val q = sql"""|SELECT `uuid`, `processor`, `output`, `timestamp`
                   |FROM   `runs`
@@ -128,8 +121,7 @@ object Run extends LazyLogging {
     pool.exec(q)
   }
 
-  /** Build a SQL fragment that looks up the run results of a set of processors.
-    */
+  /** Build a SQL fragment that looks up the run results of a set of processors. */
   def resultsOfFragment(processors: Seq[Processor.Name]): Fragment = {
     val selects = processors.map { processor =>
       fr"SELECT `uuid`, `processor`, `output`, `timestamp` FROM `runs` WHERE `processor`=$processor"
@@ -143,8 +135,7 @@ object Run extends LazyLogging {
     union ++ group
   }
 
-  /** Find all the run results processed by a set of processors.
-    */
+  /** Find all the run results processed by a set of processors. */
   def resultsOf(pool: DbPool, processors: Seq[Processor.Name]): IO[Seq[Result]] = {
     pool.exec(resultsOfFragment(processors).query[Result].to[Seq])
   }

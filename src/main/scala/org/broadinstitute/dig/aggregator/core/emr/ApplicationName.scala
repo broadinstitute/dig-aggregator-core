@@ -9,9 +9,7 @@ final case class ApplicationName(value: String) {
   def application: Application = new Application().withName(value)
 }
 
-/**
- * Companion object for cluster applications.
- */
+/** Companion object for cluster applications. */
 object ApplicationName {
 
   /** Applications understood by AWS to be installed with the cluster. */

@@ -32,8 +32,7 @@ class GraphDb(config: Neo4jConfig) {
     GraphDatabase.driver(config.url, auth, settings.toConfig)
   }
 
-  /** Shutdown the driver.
-    */
+  /** Shutdown the driver. */
   def shutdown(): IO[Unit] = IO(driver.close())
 
   /** Run a query, retry if something bad happens with exponential backoff.
@@ -54,8 +53,7 @@ class GraphDb(config: Neo4jConfig) {
     } yield result
   }
 
-  /** Version of run with no parameters.
-    */
+  /** Version of run with no parameters. */
   def run(query: String): IO[StatementResult] = {
     run(query, Map.empty)
   }
