@@ -45,7 +45,7 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
       .groupBy(_._1)
       .map {
         case (phenotype, phenotypeInputPairs) =>
-          s"FrequencyAnalysis/$phenotype" -> phenotypeInputPairs.map(_._2).distinct
+          s"MetaAnalysis/$phenotype" -> phenotypeInputPairs.map(_._2).distinct
       }
   }
 

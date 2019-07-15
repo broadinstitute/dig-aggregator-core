@@ -74,7 +74,7 @@ trait Pipeline extends LazyLogging {
           val io = if (shouldRun.isEmpty) {
             IO.raiseError(new Exception("There's work to do, but nothing ran!"))
           } else {
-            shouldRun.map(_.run(opts)).toList.parSequence
+            shouldRun.map(_.run(opts)).toList.sequence
           }
 
           // after they finish, recursively try again (don't reprocess!)
