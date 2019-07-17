@@ -1,15 +1,13 @@
 package org.broadinstitute.dig.aggregator.pipeline.frequencyanalysis
 
-import cats._
 import cats.effect._
 import cats.implicits._
 
+import java.util.UUID
+
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.processors._
 
-import org.neo4j.driver.v1.Driver
-import org.neo4j.driver.v1.Session
 import org.neo4j.driver.v1.StatementResult
 
 /** This processor will take the output from the frequency analysis and
@@ -19,7 +17,7 @@ import org.neo4j.driver.v1.StatementResult
   *
   *  s3://dig-analysis-data/out/frequencyanalysis/<phenotype>/part-*
   */
-class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
   /** All the processors this processor depends on.
     */
@@ -33,14 +31,17 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
 
   /** Build the list of results to upload to the database.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
-    results
-      .map(_.output)
-      .distinct
-      .map { p =>
-        s"FrequencyAnalysis/$p" -> Seq(p)
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
+    val phenotypes = results.map { run =>
+      run.output -> run.uuid
+    }
+
+    phenotypes
+      .groupBy(_._1)
+      .map {
+        case (phenotype, phenotypeInputPairs) =>
+          s"FrequencyAnalysis/$phenotype" -> phenotypeInputPairs.map(_._2).distinct
       }
-      .toMap
   }
 
   /** Take all the phenotype results from the dependencies and process them.

@@ -2,20 +2,12 @@ package org.broadinstitute.dig.aggregator.app
 
 import java.io.File
 
+import org.broadinstitute.dig.aggregator.core.Processor
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.processors.Processor
-
-import org.json4s._
-import org.json4s.jackson.Serialization.read
-
 import org.rogach.scallop._
 import org.rogach.scallop.exceptions.ScallopException
 
-import scala.io.Source
-
-/**
-  * Command line and configuration file argument parsing.
-  */
+/** Command line and configuration file argument parsing. */
 final class Opts(args: Seq[String]) extends ScallopConf(args) {
 
   /** JSON configuration file where settings are. */
@@ -57,20 +49,19 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   // test for options that don't go together
   mutuallyExclusive(version, processorName)
   mutuallyExclusive(only, pipeline)
+  mutuallyExclusive(exclude, pipeline)
   mutuallyExclusive(verifyAndFix, reprocess)
   mutuallyExclusive(verifyAndFix, only)
   mutuallyExclusive(verifyAndFix, exclude)
   mutuallyExclusive(verifyAndFix, insertRuns)
-  mutuallyExclusive(insertRuns, pipeline)
 
   // parse the command line options
   verify
 
-  /*
-   * By default, Scallop will terminate the JVM on any ScallopExceptions, which
-   * is very bad for testing. Provide new behavior, where ScallopExceptions
-   * still get thrown, but don't terminate the JVM.
-   */
+  /** By default, Scallop will terminate the JVM on any ScallopExceptions, which
+    * is very bad for testing. Provide new behavior, where ScallopExceptions
+    * still get thrown, but don't terminate the JVM.
+    */
   override def onError(e: Throwable): Unit = e match {
     case e @ ScallopException(msg) => printHelp(msg); throw e
     case ex                        => super.onError(ex)
@@ -89,9 +80,7 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
     Processor.Opts(reprocess(), insertRuns(), only.toOption, exclude.toOption)
   }
 
-  /**
-    * Outputs standard help from Scallop along with an additional message.
-    */
+  /** Outputs standard help from Scallop along with an additional message. */
   private def printHelp(message: String): Unit = {
     printHelp()
     println()
@@ -99,12 +88,11 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   }
 }
 
+/** Companion object for default configuration. */
 object Opts {
   import org.broadinstitute.dig.aggregator.core.config._
 
-  /**
-    * A default implementation of BaseConfig.
-    */
+  /** A default implementation of BaseConfig. */
   final case class Config(
       aws: AWSConfig,
       mysql: MySQLConfig,

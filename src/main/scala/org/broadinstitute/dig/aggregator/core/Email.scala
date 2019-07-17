@@ -1,20 +1,15 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats._
 import cats.effect._
 import cats.implicits._
 
 import org.broadinstitute.dig.aggregator.core.config.SendgridConfig
 
-/**
- * Helper class for sending emails to everyone on a list.
- */
+/** Helper class for sending emails to everyone on a list. */
 class Email(config: SendgridConfig) {
   import com.sendgrid
 
-  /**
-   * Send an email to everyone in the configuration.
-   */
+  /** Send an email to everyone in the configuration. */
   def send(subject: String, body: String): IO[Unit] = {
     val client    = new sendgrid.SendGrid(config.key)
     val fromEmail = new sendgrid.Email(config.from)
@@ -35,6 +30,6 @@ class Email(config: SendgridConfig) {
     }
 
     // send each of the emails in parallel
-    ios.toList.sequence >> IO.unit
+    ios.sequence >> IO.unit
   }
 }

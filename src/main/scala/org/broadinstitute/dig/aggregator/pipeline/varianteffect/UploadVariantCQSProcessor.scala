@@ -1,15 +1,13 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
-import cats._
 import cats.effect._
 import cats.implicits._
 
+import java.util.UUID
+
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.processors._
 
-import org.neo4j.driver.v1.Driver
-import org.neo4j.driver.v1.Session
 import org.neo4j.driver.v1.StatementResult
 
 /** When variant effect processing has been complete, in S3 output are the
@@ -27,7 +25,7 @@ import org.neo4j.driver.v1.StatementResult
   *
   *  s3://dig-analysis-data/out/varianteffects/effects/transcript_consequences
   */
-class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
   /** All the processors this processor depends on.
     */
@@ -41,8 +39,8 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
 
   /** Only a single output for VEP that uses ALL effects.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
-    Map("VEP" -> results.map(_.output).distinct)
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
+    Map("VEP" -> results.map(_.uuid).distinct)
   }
 
   /** Take all the phenotype results from the dependencies and process them.

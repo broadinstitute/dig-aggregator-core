@@ -2,13 +2,14 @@ package org.broadinstitute.dig.aggregator.pipeline.gregor
 
 import cats.effect._
 
-import org.broadinstitute.dig.aggregator.core.{Analysis, GraphDb, Provenance, Run}
+import java.util.UUID
+
+import org.broadinstitute.dig.aggregator.core.{Analysis, GraphDb, Processor, Provenance, Run}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.processors.{Processor, RunProcessor}
 
 import org.neo4j.driver.v1.StatementResult
 
-class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
   /** All the processors this processor depends on.
     */
@@ -26,8 +27,8 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends R
 
   /** Generate the run output for the input results.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
-    Map(analysisName -> results.map(_.output).distinct)
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
+    Map(analysisName -> results.map(_.uuid).distinct)
   }
 
   /** Take all the phenotype results from the dependencies and process them.

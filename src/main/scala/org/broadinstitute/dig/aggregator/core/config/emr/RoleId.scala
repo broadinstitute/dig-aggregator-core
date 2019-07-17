@@ -2,14 +2,12 @@ package org.broadinstitute.dig.aggregator.core.config.emr
 
 import org.json4s._
 
-/**
- * Custom role ID for a cluster setting.
- */
+/** Custom role ID for a cluster setting.
+  */
 final case class RoleId(value: String)
 
-/**
- * Companion object containing global roles.
- */
+/** Companion object containing global roles.
+  */
 object RoleId {
 
   /** The default roles that are constant. */
@@ -27,11 +25,10 @@ object RoleId {
     case RoleId(value) => JString(value)
   }
 
-  /**
-   * Custom serializer for RoleId. To use this, add it to the default
-   * formats when deserializing...
-   *
-   * implicit val formats = json4s.DefaultFormats + RoleId.Serializer
-   */
+  /** Custom serializer for RoleId. To use this, add it to the default
+    * formats when deserializing...
+    *
+    * implicit val formats = json4s.DefaultFormats + RoleId.Serializer
+    */
   case object Serializer extends CustomSerializer[RoleId](format => deserialize -> serialize)
 }

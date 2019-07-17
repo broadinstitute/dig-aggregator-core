@@ -1,12 +1,12 @@
 package org.broadinstitute.dig.aggregator.pipeline.gregor
 
 import cats.effect._
-import cats.implicits._
+
+import java.util.UUID
 
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.emr._
-import org.broadinstitute.dig.aggregator.core.processors._
 import org.broadinstitute.dig.aggregator.pipeline.metaanalysis._
 
 /** Gathers all the output variants from the trans-ethnic, meta-analysis results
@@ -20,7 +20,7 @@ import org.broadinstitute.dig.aggregator.pipeline.metaanalysis._
   *
   *   s3://dig-analysis-data/out/gregor/snp/<phenotype>/<ancestry>
   */
-class SNPListProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class SNPListProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
   /** All the processors this processor depends on.
     */
@@ -36,14 +36,12 @@ class SNPListProcessor(name: Processor.Name, config: BaseConfig) extends RunProc
 
   /** Every phenotype processed gets its own output.
     */
-  override def getRunOutputs(work: Seq[Run.Result]): Map[String, Seq[String]] = {
-    work
-      .map(_.output)
-      .distinct
-      .map { phenotype =>
-        phenotype -> Seq(phenotype)
-      }
-      .toMap
+  override def getRunOutputs(work: Seq[Run.Result]): Map[String, Seq[UUID]] = {
+    val phenotypes = work.map(_.output).distinct
+
+    phenotypes.map { phenotype =>
+      phenotype -> work.filter(_.output == phenotype).map(_.uuid).distinct
+    }.toMap
   }
 
   /** Find all the unique SNPs from all the output of the meta-analysis processor.

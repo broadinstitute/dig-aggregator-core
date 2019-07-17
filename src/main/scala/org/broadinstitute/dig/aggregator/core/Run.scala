@@ -1,13 +1,15 @@
 package org.broadinstitute.dig.aggregator.core
 
+import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
+
 import com.typesafe.scalalogging.LazyLogging
+
 import doobie._
 import doobie.implicits._
-import java.util.UUID.randomUUID
 
-import org.broadinstitute.dig.aggregator.core.processors._
+import java.util.UUID
 
 /** Companion object for determining what inputs have been processed and
   * have yet to be processed.
@@ -25,24 +27,27 @@ object Run extends LazyLogging {
     * data out of the `runs` table.
     */
   private case class Entry(
-      run: String,
-      app: Processor.Name,
-      input: String,
+      uuid: UUID,
+      processor: Processor.Name,
+      input: Option[UUID],
       output: String,
-      source: String,
+      repo: String,
       branch: String,
       commit: String
   )
 
-  /** Run entries are created and inserted atomically for a single output.
-    */
-  def insert(pool: DbPool, app: Processor.Name, output: String, inputs: Seq[String]): IO[String] = {
+  /** Implicit conversion to/from DB string from/to UUID for doobie. */
+  implicit val UUIDGet: Get[UUID] = Get[String].tmap(UUID.fromString)
+  implicit val UUIDPut: Put[UUID] = Put[String].tcontramap(_.toString)
+
+  /** Run entries are created and inserted atomically for a single output. */
+  def insert(pool: DbPool, processor: Processor.Name, output: String, inputs: NonEmptyList[UUID]): IO[UUID] = {
     val q = s"""|INSERT INTO `runs`
-                |  ( `run`
-                |  , `app`
+                |  ( `uuid`
+                |  , `processor`
                 |  , `input`
                 |  , `output`
-                |  , `source`
+                |  , `repo`
                 |  , `branch`
                 |  , `commit`
                 |  )
@@ -50,155 +55,141 @@ object Run extends LazyLogging {
                 |VALUES (?, ?, ?, ?, ?, ?, ?)
                 |
                 |ON DUPLICATE KEY UPDATE
-                |  `run` = VALUES(`run`),
-                |  `source` = VALUES(`source`),
+                |  `uuid` = VALUES(`uuid`),
+                |  `repo` = VALUES(`repo`),
                 |  `branch` = VALUES(`branch`),
                 |  `commit` = VALUES(`commit`),
                 |  `timestamp` = NOW()
                 |""".stripMargin
 
     // generate the run ID and an insert-multi update
-    val runId = randomUUID.toString
-    val prov  = Provenance.thisBuild
+    val uuid = UUID.randomUUID
+    val prov = Provenance.thisBuild
 
     // create an entry per input
     val entries = inputs.map { input =>
-      Entry(runId, app, input, output, prov.source, prov.branch, prov.commit)
+      Entry(uuid, processor, Some(input), output, prov.source, prov.branch, prov.commit)
     }
 
+    // batch insert
     val insert = Update[Entry](q).updateMany(entries.toList)
 
     for {
-      _ <- IO(logger.debug(s"Inserting run output '$output' for $app..."))
+      _ <- IO(logger.debug(s"Inserting run output '$output' (${inputs.size} inputs) for $processor..."))
       _ <- pool.exec(insert)
-    } yield runId
+    } yield uuid
   }
 
-  /** Given a processor and an output, delete it from the DB.
-    */
-  def delete(pool: DbPool, app: Processor.Name, output: String): IO[Unit] = {
-    val q = sql"DELETE FROM `runs` WHERE app=$app AND output=$output"
-
-    for {
-      _ <- pool.exec(q.update.run)
-    } yield ()
+  /** Given a UUID, delete all run results for it. */
+  def deleteRun(pool: DbPool, uuid: UUID): IO[Unit] = {
+    pool.exec(sql"DELETE FROM `runs` WHERE `uuid`=$uuid".update.run).as(())
   }
 
-  /** Anything that can be represented as an input to a run.
-    */
-  trait Input {
-    def asRunInput: String
+  /** Given a processor name, delete all runs created by it. */
+  def deleteRuns(pool: DbPool, processor: Processor.Name): IO[Unit] = {
+    pool.exec(sql"DELETE FROM `runs` WHERE `processor`=$processor".update.run).as(())
+  }
+
+  /** Lookup the runs of a given processor. */
+  def runsOfProcessor(pool: DbPool, processor: Processor.Name): IO[Seq[UUID]] = {
+    pool.exec(sql"SELECT DISTINCT `uuid` FROM `runs` WHERE `processor`=$processor".query[UUID].to[Seq])
+  }
+
+  /** Lookup all the inputs of a given run. */
+  def inputsOfRun(pool: DbPool, uuid: UUID): IO[Seq[UUID]] = {
+    val q = sql"SELECT `input` FROM `runs` WHERE `uuid`=$uuid"
+
+    pool
+      .exec(q.query[Option[UUID]].to[Seq])
+      .map(_.flatten)
   }
 
   /** When querying the `runs` table to determine what has already been
     * processed by dependency applications, this is what is returned.
     */
-  final case class Result(app: Processor.Name, input: String, output: String, timestamp: java.time.Instant)
-      extends Run.Input {
-    override def toString: String = s"$app output '$output'"
-
-    /** The output of this run result is the input to another run.
-      */
-    override def asRunInput: String = output
+  final case class Result(uuid: UUID, processor: Processor.Name, output: String, timestamp: java.time.Instant) {
+    override def toString: String = s"$processor:$output"
   }
 
-  /** Lookup all the results for a given run id. This is mostly used for
-    * testing.
-    */
-  def resultsOfRun(pool: DbPool, run: String): IO[Seq[Result]] = {
-    val q = sql"""|SELECT `app`, `input`, `output`, `timestamp`
+  /** Lookup all the results for a given run id. This is mostly used for testing. */
+  def resultsOfRun(pool: DbPool, uuid: UUID): IO[Seq[Result]] = {
+    val q = sql"""|SELECT `uuid`, `processor`, `output`, `timestamp`
                   |FROM   `runs`
-                  |WHERE  `run`=$run
+                  |WHERE  `uuid`=$uuid
                   |""".stripMargin.query[Result].to[Seq]
 
     pool.exec(q)
   }
 
-  /** Given a list of applications, determine all the outputs produced by all
-    * of them together.
-    */
-  private def resultsOf(pool: DbPool, deps: Seq[Processor.Name]): IO[Seq[Result]] = {
-    val selects = deps.map { dep =>
-      fr"SELECT `app`, `input`, `output`, `timestamp` FROM `runs` WHERE `app`=$dep"
+  /** Build a SQL fragment that looks up the run results of a set of processors. */
+  def resultsOfFragment(processors: Seq[Processor.Name]): Fragment = {
+    val selects = processors.map { processor =>
+      fr"SELECT `uuid`, `processor`, `output`, `timestamp` FROM `runs` WHERE `processor`=$processor"
     }
 
-    // join all the dependencies together
+    // union all the runs produced by all the processors together
     val union = selects.toList.intercalate(fr"UNION ALL")
-    val select =
-      fr"SELECT `inputs`.`app`, `inputs`.`input`, `inputs`.`output`, MAX(`inputs`.`timestamp`) AS `timestamp`"
-    val from  = fr"FROM (" ++ union ++ fr") AS `inputs`"
-    val group = fr"GROUP BY `inputs`.`app`, `inputs`.`output`"
+    val group = fr"GROUP BY `processor`, `output`"
 
-    // run a select query for each application
-    val q = (select ++ from ++ group).query[Result].to[Seq]
-
-    // join all the results together into a single list
-    pool.exec(q)
+    // union all the outputs together and group them
+    union ++ group
   }
 
-  /** Given an application and a list of dependency applications, determine
-    * what outputs have been produced by the dependencies that have yet to be
-    * processed by it.
+  /** Find all the run results processed by a set of processors. */
+  def resultsOf(pool: DbPool, processors: Seq[Processor.Name]): IO[Seq[Result]] = {
+    pool.exec(resultsOfFragment(processors).query[Result].to[Seq])
+  }
+
+  /** Find all the run results processed by a set of processors, but NOT
+    * yet processed by another.
     */
-  private def resultsOf(pool: DbPool, deps: Seq[Processor.Name], notProcessedBy: Processor.Name): IO[Seq[Result]] = {
-    val selects = deps.map { dep =>
-      fr"SELECT `app`, `input`, `output`, `timestamp` FROM `runs` WHERE `app`=$dep"
-    }
+  def resultsOf(pool: DbPool, processors: Seq[Processor.Name], notProcessedBy: Processor.Name): IO[Seq[Result]] = {
+    val inputs = resultsOfFragment(processors)
 
-    // join all the dependencies together
-    val union = selects.toList.intercalate(fr"UNION ALL")
-    val select =
-      fr"SELECT `inputs`.`app`, `inputs`.`input`, `inputs`.`output`, MAX(`inputs`.`timestamp`) AS `timestamp`"
-    val from  = fr"FROM (" ++ union ++ fr") AS `inputs`"
-    val where = fr"WHERE r.`app` IS NULL"
-    val group = fr"GROUP BY `inputs`.`app`, `inputs`.`output`"
-    val join  = fr"""|LEFT OUTER JOIN runs AS r
-                     |ON r.`app` = $notProcessedBy
-                     |AND r.`input` = inputs.`output`
-                     |AND r.`timestamp` > inputs.`timestamp`
-                     |""".stripMargin
+    // use the inputs as a subquery
+    val select = fr"SELECT `inputs`.`uuid`, `inputs`.`processor`, `inputs`.`output`, `inputs`.`timestamp`"
+    val from   = fr"FROM (" ++ inputs ++ fr") AS `inputs`"
 
-    // join all the fragments together the query
-    val q = (select ++ from ++ join ++ where ++ group).query[Result].to[Seq]
+    // join with the runs that used the inputs
+    val join = fr"""|LEFT OUTER JOIN `runs` AS `r`
+                    |ON `r`.`processor` = $notProcessedBy
+                    |AND `r`.`input` = inputs.`uuid`
+                    |AND `r`.`timestamp` > inputs.`timestamp`
+                    |""".stripMargin
+
+    // filter runs where the join failed (read: was not processed)
+    val where = fr"WHERE `r`.`processor` IS NULL"
 
     // run the query
-    pool.exec(q)
+    pool.exec((select ++ from ++ join ++ where).query[Result].to[Seq])
   }
 
-  /** Helper function where the "notProcessedBy" is optional and calls the
-    * correct query accordingly.
+  /** Verify the inputs of a single run by asserting that all the inputs exist.
+    * Returns a list of invalid input runs (including the one passed in) if
+    * invalid.
     */
-  def resultsOf(pool: DbPool, deps: Seq[Processor.Name], notProcessedBy: Option[Processor.Name]): IO[Seq[Result]] = {
-    notProcessedBy match {
-      case Some(app) => resultsOf(pool, deps, app)
-      case None      => resultsOf(pool, deps)
-    }
-  }
-
-  /** Validate the runs of a given processor and return a list of outputs that
-    * are no longer valid. An run's output is considered invalid if none of the
-    * inputs are valid (e.g. they were deleted). If a run's output is invalid
-    * then it can be deleted.
-    */
-  def verifyResultsOf(pool: DbPool, processor: Processor[_]): IO[Seq[String]] = {
-    val getInputs = processor match {
-      case dp: DatasetProcessor => Dataset.datasetsOf(pool, dp.topic, None).map(_.map(_.dataset))
-      case rp: RunProcessor     => resultsOf(pool, rp.dependencies).map(_.map(_.output))
-    }
-
+  def verifyRun(pool: DbPool, run: UUID): IO[Seq[UUID]] = {
     for {
-      allResults <- resultsOf(pool, Seq(processor.name)).map(_.groupBy(_.output))
-      inputs     <- getInputs
+      inputs <- inputsOfRun(pool, run)
+
+      // recursively test the inputs for whether they are invalid
+      invalidInputs <- inputs
+        .map(uuid => verifyRun(pool, uuid))
+        .toList
+        .sequence
     } yield {
-      val invalidOutputs = allResults.flatMap {
-        case (output, results) =>
-          val validInputs = results.map(_.input).toSet & inputs.toSet
-
-          // if there are no more valid inputs, this output can be deleted
-          if (validInputs.isEmpty) List(output) else List.empty
-      }
-
-      invalidOutputs.toSeq
+      if (invalidInputs.isEmpty) Seq.empty else Seq(run) ++ invalidInputs.flatten
     }
+  }
+
+  /** Verify the results of a processor by asserting that all its inputs actually
+    * exist. This must be done recursively for each input. If an input doesn't exist
+    * any more then the output of the run is invalid and needs to be deleted.
+    */
+  def verifyRuns(pool: DbPool, processor: Processor.Name): IO[Seq[UUID]] = {
+    for {
+      runs        <- runsOfProcessor(pool, processor)
+      invalidRuns <- runs.map(verifyRun(pool, _)).toList.sequence
+    } yield invalidRuns.flatten
   }
 }

@@ -1,34 +1,16 @@
 package org.broadinstitute.dig.aggregator.core.emr
 
-import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsRequest
-import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsResult
-import com.amazonaws.services.elasticmapreduce.model.Application
-import com.amazonaws.services.elasticmapreduce.model.BootstrapActionConfig
-import com.amazonaws.services.elasticmapreduce.model.Configuration
 import com.amazonaws.services.elasticmapreduce.model.EbsBlockDeviceConfig
 import com.amazonaws.services.elasticmapreduce.model.EbsConfiguration
 import com.amazonaws.services.elasticmapreduce.model.InstanceGroupConfig
 import com.amazonaws.services.elasticmapreduce.model.InstanceRoleType
-import com.amazonaws.services.elasticmapreduce.model.JobFlowDetail
-import com.amazonaws.services.elasticmapreduce.model.JobFlowInstancesConfig
-import com.amazonaws.services.elasticmapreduce.model.ListStepsRequest
-import com.amazonaws.services.elasticmapreduce.model.RunJobFlowRequest
-import com.amazonaws.services.elasticmapreduce.model.RunJobFlowResult
-import com.amazonaws.services.elasticmapreduce.model.ScriptBootstrapActionConfig
-import com.amazonaws.services.elasticmapreduce.model.StepState
-import com.amazonaws.services.elasticmapreduce.model.StepSummary
 import com.amazonaws.services.elasticmapreduce.model.VolumeSpecification
-
-import java.net.URI
 
 import org.broadinstitute.dig.aggregator.core.JobStep
 
-import scala.collection.JavaConverters._
-
-/**
- * Parameterized configuration for an EMR cluster. Constant settings are
- * located in `config.emr.EmrConfig` and are loaded in the JSON.
- */
+/** Parameterized configuration for an EMR cluster. Constant settings are
+  * located in `config.emr.EmrConfig` and are loaded in the JSON.
+  */
 final case class Cluster(
     name: String,
     amiId: Option[AmiId] = None, //AmiId.amazonLinux_2018_3,
@@ -47,9 +29,7 @@ final case class Cluster(
   require(name.matches("[A-Za-z_]+[A-Za-z0-9_]*"), s"Illegal cluster name: $name")
   require(instances >= 1)
 
-  /**
-   * Instance configuration for the master node.
-   */
+  /** Instance configuration for the master node. */
   val masterInstanceGroupConfig: InstanceGroupConfig = {
     val volumeSpec = new VolumeSpecification()
       .withSizeInGB(masterVolumeSizeInGB)
@@ -65,9 +45,7 @@ final case class Cluster(
       .withInstanceCount(1)
   }
 
-  /**
-   * Instance configuration for the slave nodes.
-   */
+  /** Instance configuration for the slave nodes. */
   val slaveInstanceGroupConfig: InstanceGroupConfig = {
     val volumeSpec = new VolumeSpecification()
       .withSizeInGB(slaveVolumeSizeInGB)
@@ -83,18 +61,14 @@ final case class Cluster(
       .withInstanceCount(instances - 1)
   }
 
-  /**
-   * Sequence of all instance groups used to create this cluster.
-   */
+  /** Sequence of all instance groups used to create this cluster. */
   val instanceGroups: Seq[InstanceGroupConfig] = {
     Seq(masterInstanceGroupConfig, slaveInstanceGroupConfig)
       .filter(_.getInstanceCount > 0)
   }
 }
 
-/**
- * Companion object for creating an EMR cluster.
- */
+/** Companion object for creating an EMR cluster. */
 object Cluster {
 
   /** The default set used by pretty much every cluster. */

@@ -15,7 +15,7 @@ final class PipelineTest extends FunSuite {
     assert(Pipeline("VariantEffectPipeline").isDefined)
     assert(Pipeline("MetaAnalysisPipeline").isDefined)
     assert(Pipeline("FrequencyAnalysisPipeline").isDefined)
-    assert(Pipeline("LDClumpingPipeline").isDefined)
+    assert(Pipeline("GregorPipeline").isDefined)
   }
 
   test("pipeline - list processors") {

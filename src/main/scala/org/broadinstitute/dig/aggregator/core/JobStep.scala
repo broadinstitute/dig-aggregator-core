@@ -1,14 +1,6 @@
 package org.broadinstitute.dig.aggregator.core
 
-import com.amazonaws.auth.AWSStaticCredentialsProvider
-import com.amazonaws.auth.BasicAWSCredentials
-import com.amazonaws.regions.Regions
-import com.amazonaws.services.s3._
-import com.amazonaws.services.s3.model._
-import com.amazonaws.services.elasticmapreduce._
 import com.amazonaws.services.elasticmapreduce.model.ActionOnFailure
-import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsRequest
-import com.amazonaws.services.elasticmapreduce.model.AddJobFlowStepsResult
 import com.amazonaws.services.elasticmapreduce.model.HadoopJarStepConfig
 import com.amazonaws.services.elasticmapreduce.model.StepConfig
 
@@ -16,9 +8,7 @@ import java.net.URI
 
 import scala.collection.JavaConverters._
 
-/**
- * All Hadoop jobs are a series of steps.
- */
+/** All Hadoop jobs are a series of steps. */
 sealed trait JobStep {
   val config: StepConfig
 }
@@ -31,10 +21,9 @@ object JobStep {
     case nonEmpty => nonEmpty
   }
 
-  /**
-   * Create a new Map Reduce step given a JAR (S3 path) the main class to
-   * run, and any command line arguments to pass along to the JAR.
-   */
+  /** Create a new Map Reduce step given a JAR (S3 path) the main class to
+    * run, and any command line arguments to pass along to the JAR.
+    */
   final case class MapReduce(jar: URI, mainClass: String, args: Seq[String]) extends JobStep {
     val config: StepConfig = {
       val jarConfig = new HadoopJarStepConfig()
@@ -49,11 +38,10 @@ object JobStep {
     }
   }
 
-  /**
-   * Create a new JAR step that uses the built-in Command Runner supplied by
-   * AWS. This is used to spawn Spark, Pig, and more... see:
-   * https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-commandrunner.html
-   */
+  /** Create a new JAR step that uses the built-in Command Runner supplied by
+    * AWS. This is used to spawn Spark, Pig, and more... see:
+    * https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-commandrunner.html
+    */
   final case class CommandRunner(name: String, args: Seq[String]) extends JobStep {
     val config: StepConfig = {
       val jarConfig = new HadoopJarStepConfig()
@@ -67,10 +55,9 @@ object JobStep {
     }
   }
 
-  /**
-   * Create Script Runner step that will execute a generic script... see:
-   * https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-hadoop-script.html
-   */
+  /** Create Script Runner step that will execute a generic script... see:
+    * https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-hadoop-script.html
+    */
   final case class Script(script: URI, args: String*) extends JobStep {
     val config: StepConfig = {
       val jarConfig = new HadoopJarStepConfig()
@@ -84,9 +71,8 @@ object JobStep {
     }
   }
 
-  /**
-   * Create a Command Runner step that will run a Python3 spark script.
-   */
+  /** Create a Command Runner step that will run a Python3 spark script.
+    */
   final case class PySpark(script: URI, args: String*) extends JobStep {
     val config: StepConfig = {
       val commandRunnerArgs = List(
@@ -101,12 +87,11 @@ object JobStep {
     }
   }
 
-  /**
-   * Create a Command Runner step that will run a Pig script.
-   *
-   * Pig script parameters are passed in with `-p key=value` for each and
-   * every argument, and the script is finally passed with `-f file`.
-   */
+  /** Create a Command Runner step that will run a Pig script.
+    *
+    * Pig script parameters are passed in with `-p key=value` for each and
+    * every argument, and the script is finally passed with `-f file`.
+    */
   final case class Pig(script: URI, args: (String, String)*) extends JobStep {
     val config: StepConfig = {
       val commandRunnerArgs = List(

@@ -1,8 +1,7 @@
 package org.broadinstitute.dig.aggregator.core.config
 
-/**
- * MysQL configuration settings.
- */
+/** MysQL configuration settings.
+  */
 final case class MySQLConfig(
     url: String,
     driver: String,
@@ -11,15 +10,13 @@ final case class MySQLConfig(
     password: String
 ) {
 
-  /**
-   * Query parameters to the connection string URL.
-   */
+  /** Query parameters to the connection string URL.
+    */
   val qs = List("useCursorFetch" -> true, "useSSL" -> false)
     .map(p => s"${p._1}=${p._2}")
     .mkString("&")
 
-  /**
-   * The connection string to use for JDBC.
-   */
+  /** The connection string to use for JDBC.
+    */
   val connectionString = s"jdbc:mysql://$url/$schema?$qs"
 }

@@ -3,10 +3,8 @@ package org.broadinstitute.dig.aggregator.pipeline
 import cats.effect._
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dig.aggregator.core.{Implicits, Run}
+import org.broadinstitute.dig.aggregator.core.{Implicits, Processor}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.processors.Processor
-import org.broadinstitute.dig.aggregator.core.processors.RunProcessor
 
 /** A pipeline is an object that keeps runtime knowledge of all its processors.
   */
@@ -14,7 +12,7 @@ trait Pipeline extends LazyLogging {
 
   /** Inspect this pipeline for all member variables that are processor names.
     */
-  private[pipeline] lazy val processors: Set[Processor.Name] = {
+  lazy val processors: Set[Processor.Name] = {
     val fields = getClass.getDeclaredFields
       .filter(_.getType == classOf[Processor.Name])
       .map { field =>
@@ -63,7 +61,7 @@ trait Pipeline extends LazyLogging {
       import Implicits._
 
       // get a list of all processors that have known work
-      val knownWork: IO[Set[Processor[_ <: Run.Input]]] = Pipeline.getKnownWork(allProcessors, opts)
+      val knownWork: IO[Set[Processor]] = Pipeline.getKnownWork(allProcessors, opts)
 
       // determine the list of all processors that have work
       knownWork.flatMap { toRun =>
@@ -76,7 +74,7 @@ trait Pipeline extends LazyLogging {
           val io = if (shouldRun.isEmpty) {
             IO.raiseError(new Exception("There's work to do, but nothing ran!"))
           } else {
-            shouldRun.map(_.run(opts)).toList.parSequence
+            shouldRun.map(_.run(opts)).toList.sequence
           }
 
           // after they finish, recursively try again (don't reprocess!)
@@ -95,13 +93,11 @@ trait Pipeline extends LazyLogging {
   */
 object Pipeline {
 
-  /**
-    * The global list of all pipelines.
+  /** The global list of all pipelines.
     */
   def pipelines(): Map[String, Pipeline] = Map(
     "MetaAnalysisPipeline"      -> metaanalysis.MetaAnalysisPipeline,
     "FrequencyAnalysisPipeline" -> frequencyanalysis.FrequencyAnalysisPipeline,
-    "LDClumpingPipeline"        -> ldclumping.LDClumpingPipeline,
     "VariantEffectPipeline"     -> varianteffect.VariantEffectPipeline,
     "GregorPipeline"            -> gregor.GregorPipeline,
   )
@@ -114,8 +110,7 @@ object Pipeline {
 
   /** Given a set of processors, filter those that have work.
     */
-  private def getKnownWork(processors: Set[Processor[_ <: Run.Input]],
-                           opts: Processor.Opts): IO[Set[Processor[_ <: Run.Input]]] = {
+  private def getKnownWork(processors: Set[Processor], opts: Processor.Opts): IO[Set[Processor]] = {
     val getWork = processors.toList.map { p =>
       p.hasWork(opts).map(p -> _)
     }
@@ -131,13 +126,11 @@ object Pipeline {
   /** Find all processors NOT represented in `toRun` that will run due to a
     * a dependency that is in the `toRun` set.
     */
-  private def getShouldRun(allProcessors: Set[Processor[_ <: Run.Input]],
-                           toRun: Set[Processor[_ <: Run.Input]]): Set[Processor[_ <: Run.Input]] = {
+  private def getShouldRun(allProcessors: Set[Processor], toRun: Set[Processor]): Set[Processor] = {
 
     // true if immediate dependency is in the `toRun` set
-    def dependencyWillRun(r: Processor[_ <: Run.Input]) = r match {
-      case r: RunProcessor => r.dependencies.exists(dep => toRun.exists(_.name == dep))
-      case _               => false
+    def dependencyWillRun(r: Processor) = {
+      r.dependencies.exists(dep => toRun.exists(_.name == dep))
     }
 
     // find all processors not yet set to run that have a dependency that will

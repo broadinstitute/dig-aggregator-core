@@ -2,10 +2,11 @@ package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
 import cats.effect._
 
+import java.util.UUID
+
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.emr._
-import org.broadinstitute.dig.aggregator.core.processors._
 
 /**
   * Once all the distinct bi-allelic variants across all datasets have been
@@ -20,7 +21,7 @@ import org.broadinstitute.dig.aggregator.core.processors._
   *
   *  s3://dig-analysis-data/out/varianteffect/effects
   */
-class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
   /**
     * All the processors this processor depends on.
@@ -41,8 +42,8 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends R
 
   /** Only a single output for VEP that uses ALL variants.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
-    Map("VEP/effects" -> results.map(_.output).distinct)
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
+    Map("VEP/effects" -> results.map(_.uuid).distinct)
   }
 
   /**

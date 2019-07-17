@@ -3,9 +3,10 @@ package org.broadinstitute.dig.aggregator.pipeline.metaanalysis
 import cats.effect._
 import cats.implicits._
 
+import java.util.UUID
+
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.processors._
 
 import org.neo4j.driver.v1.StatementResult
 
@@ -21,7 +22,7 @@ import org.neo4j.driver.v1.StatementResult
   *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/ancestry-specific
   *  s3://dig-analysis-data/out/metaanalysis/<phenotype>/trans-ethnic
   */
-class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends RunProcessor(name, config) {
+class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
   /** All the processors this processor depends on.
     */
@@ -35,14 +36,17 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
 
   /** Create the mapping of outputs -> inputs.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[String]] = {
-    results
-      .map(_.output)
-      .distinct
-      .map { p =>
-        s"MetaAnalysis/$p" -> Seq(p)
+  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
+    val phenotypes = results.map { run =>
+      run.output -> run.uuid
+    }
+
+    phenotypes
+      .groupBy(_._1)
+      .map {
+        case (phenotype, phenotypeInputPairs) =>
+          s"MetaAnalysis/$phenotype" -> phenotypeInputPairs.map(_._2).distinct
       }
-      .toMap
   }
 
   /** Take all the phenotype results from the dependencies and process them.

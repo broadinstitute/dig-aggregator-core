@@ -2,7 +2,7 @@ package org.broadinstitute.dig.aggregator.core
 
 import cats.effect._
 
-import org.broadinstitute.dig.aggregator.core.processors._
+import java.util.UUID
 
 import org.scalatest.FunSuite
 
@@ -11,26 +11,23 @@ object TestProcessor {
 
   /** Creates a new instance of a dummy processor.
     */
-  def makeProcessor(processorName: Name, c: config.BaseConfig): Processor[_ <: Run.Input] = {
-    new Processor[Dataset](processorName) {
+  def makeProcessor(processorName: Name, c: config.BaseConfig): Processor = {
+    new Processor(processorName, c) {
 
-      /** No resources to upload.
-        */
-      override val resources: Seq[String] = Seq.empty
+      /** No dependencies to upload. */
+      override val dependencies: Seq[Processor.Name] = Seq.empty
 
-      /** There is no work for this processor.
-        */
-      override def getWork(opts: Processor.Opts): IO[Seq[Dataset]] = IO(Seq.empty)
+      /** There is no work for this processor. */
+      override def getWork(opts: Processor.Opts): IO[Seq[Run.Result]] = IO(Seq.empty)
 
-      /** There are no outputs generated.
-        */
-      override def getRunOutputs(work: Seq[Dataset]): Map[String, Seq[String]] = Map.empty
+      /** There are no outputs generated. */
+      override def getRunOutputs(work: Seq[Run.Result]): Map[String, Seq[UUID]] = Map.empty
 
-      /** Does nothing, just here for the trait.
-        */
-      override def run(opts: Processor.Opts): IO[Unit] = {
-        IO(println(name.toString))
-      }
+      /** Nothing to do. */
+      override def processResults(results: Seq[Run.Result]): IO[Unit] = IO.unit
+
+      /** Does nothing, just here for the trait. */
+      override def run(opts: Processor.Opts): IO[Unit] = IO.unit
     }
   }
 
