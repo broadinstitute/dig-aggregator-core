@@ -27,17 +27,12 @@ class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extend
     "pipeline/gregor/runGREGOR.sh"
   )
 
-  /**
+  /** Generate the run results for the chromatin state processor.
     */
   override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
     val phenotypes = results
       .filter(_.processor == GregorPipeline.snpListProcessor)
       .map(_.output)
-      .distinct
-
-    val phenotypeInputs = results
-      .filter(_.processor == GregorPipeline.snpListProcessor)
-      .map(_.uuid)
       .distinct
 
     // updated regions
@@ -48,6 +43,12 @@ class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extend
 
     // the phenotypes are the output, input are phenotype + regions
     phenotypes.map { phenotype =>
+      val phenotypeInputs = results
+        .filter(_.processor == GregorPipeline.snpListProcessor)
+        .filter(_.output == phenotype)
+        .map(_.uuid)
+        .distinct
+
       phenotype -> (phenotypeInputs ++ regionInputs)
     }.toMap
   }
