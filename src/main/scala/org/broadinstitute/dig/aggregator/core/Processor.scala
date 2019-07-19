@@ -30,7 +30,7 @@ abstract class Processor(val name: Processor.Name, config: BaseConfig) extends L
   val dependencies: Seq[Processor.Name]
 
   /** Database transactor for loading state, etc. */
-  protected val pool: DbPool = DbPool.fromMySQLConfig(config.mysql)
+  protected val pool: DBPool = DBPool.fromMySQLConfig(config.mysql)
 
   /** AWS client for uploading resources and running jobs. */
   protected val aws: AWS = new AWS(config.aws)
@@ -64,7 +64,7 @@ abstract class Processor(val name: Processor.Name, config: BaseConfig) extends L
   }
 
   /** Complete all work and write to the database what was done. */
-  def insertRuns(pool: DbPool, work: Seq[Run.Result]): IO[Seq[UUID]] = {
+  def insertRuns(pool: DBPool, work: Seq[Run.Result]): IO[Seq[UUID]] = {
     val runOutputs = getRunOutputs(work)
 
     // validate that ALL run inputs are represented in the outputs

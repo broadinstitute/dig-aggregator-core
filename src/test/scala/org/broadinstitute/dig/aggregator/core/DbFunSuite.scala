@@ -58,7 +58,7 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
 }
 
 object DbFunSuite {
-  private def dropAndCreate(pool: DbPool)(table: Table): Unit = {
+  private def dropAndCreate(pool: DBPool)(table: Table): Unit = {
     pool.exec((table.drop, table.create).mapN(_ + _)).unsafeRunSync()
     ()
   }

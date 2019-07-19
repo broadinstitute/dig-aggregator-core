@@ -3,7 +3,7 @@ package org.broadinstitute.dig.aggregator.app
 import cats.effect._
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dig.aggregator.core.{DbPool, Email, Processor, Run}
+import org.broadinstitute.dig.aggregator.core.{DBPool, Email, Processor, Run}
 import org.broadinstitute.dig.aggregator.pipeline._
 
 import scala.io.StdIn
@@ -96,7 +96,7 @@ object Main extends IOApp with LazyLogging {
   /** Verify all the runs for a given processor.
     */
   private def verifyProcessor(name: String, opts: Opts): IO[Unit] = {
-    val pool = DbPool.fromMySQLConfig(opts.config.mysql)
+    val pool = DBPool.fromMySQLConfig(opts.config.mysql)
 
     Processor(name)(opts.config) match {
       case None => IO.raiseError(new Exception(s"Unknown processor '$name'"))
