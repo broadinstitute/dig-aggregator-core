@@ -21,7 +21,7 @@ class GraphDb(config: Neo4jConfig) {
 
   /** The connection pool driver. */
   private lazy val driver: Driver = {
-    val auth = AuthTokens.basic(config.user, config.password)
+    val auth = AuthTokens.basic(config.username, config.password)
 
     // set custom connection settings
     val settings = Config.build
@@ -29,7 +29,7 @@ class GraphDb(config: Neo4jConfig) {
       .withConnectionLivenessCheckTimeout(30, TimeUnit.MINUTES)
       .withoutEncryption
 
-    GraphDatabase.driver(config.url, auth, settings.toConfig)
+    GraphDatabase.driver(s"${config.host}:${config.port}", auth, settings.toConfig)
   }
 
   /** Shutdown the driver. */

@@ -3,10 +3,11 @@ package org.broadinstitute.dig.aggregator.core.config
 /** MysQL configuration settings.
   */
 final case class MySQLConfig(
-    url: String,
+    host: String,
+    port: Int,
+    engine: String,
     driver: String,
-    schema: String,
-    user: String,
+    username: String,
     password: String
 ) {
 
@@ -18,5 +19,5 @@ final case class MySQLConfig(
 
   /** The connection string to use for JDBC.
     */
-  val connectionString = s"jdbc:mysql://$url/$schema?$qs"
+  val connectionString = s"jdbc:mysql://$host:$port/aggregator?$qs"
 }

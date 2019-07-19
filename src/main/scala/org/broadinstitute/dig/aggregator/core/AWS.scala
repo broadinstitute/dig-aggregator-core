@@ -3,17 +3,14 @@ package org.broadinstitute.dig.aggregator.core
 import cats.effect._
 import cats.implicits._
 
-import com.amazonaws.auth.AWSStaticCredentialsProvider
-import com.amazonaws.auth.BasicAWSCredentials
-import com.amazonaws.regions.Regions
-import com.amazonaws.services.s3._
-import com.amazonaws.services.s3.model._
-import com.amazonaws.services.elasticmapreduce._
 import com.amazonaws.services.elasticmapreduce.model.JobFlowInstancesConfig
 import com.amazonaws.services.elasticmapreduce.model.ListStepsRequest
 import com.amazonaws.services.elasticmapreduce.model.RunJobFlowRequest
 import com.amazonaws.services.elasticmapreduce.model.RunJobFlowResult
 import com.amazonaws.services.elasticmapreduce.model.StepSummary
+import com.amazonaws.services.elasticmapreduce._
+import com.amazonaws.services.s3._
+import com.amazonaws.services.s3.model._
 
 import com.typesafe.scalalogging.LazyLogging
 
@@ -26,7 +23,7 @@ import org.broadinstitute.dig.aggregator.core.emr.Cluster
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.io.Source
-import scala.util.Random
+import scala.util._
 
 /** AWS controller (S3 + EMR clients).
   */
@@ -35,28 +32,15 @@ final class AWS(config: AWSConfig) extends LazyLogging {
 
   /** The same region and bucket are used for all operations.
     */
-  val region: Regions = Regions.valueOf(config.region)
-  val bucket: String  = config.s3.bucket
-
-  /** AWS IAM credentials provider.
-    */
-  val credentials: AWSStaticCredentialsProvider = new AWSStaticCredentialsProvider(
-    new BasicAWSCredentials(config.key, config.secret)
-  )
+  val bucket: String = config.s3.bucket
 
   /** S3 client for storage.
     */
-  val s3: AmazonS3 = AmazonS3ClientBuilder.standard
-    .withRegion(region)
-    .withCredentials(credentials)
-    .build
+  val s3: AmazonS3 = AmazonS3ClientBuilder.standard.build
 
   /** EMR client for running map/reduce jobs.
     */
-  val emr: AmazonElasticMapReduce = AmazonElasticMapReduceClientBuilder.standard
-    .withCredentials(credentials)
-    .withRegion(region)
-    .build
+  val emr: AmazonElasticMapReduce = AmazonElasticMapReduceClientBuilder.standard.build
 
   /** Returns the URI to a given key.
     */

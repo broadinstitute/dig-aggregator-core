@@ -3,7 +3,7 @@ package org.broadinstitute.dig.aggregator.app
 import java.io.File
 
 import org.broadinstitute.dig.aggregator.core.Processor
-import org.broadinstitute.dig.aggregator.core.config.BaseConfig
+import org.broadinstitute.dig.aggregator.core.config.{BaseConfig, Settings}
 import org.rogach.scallop._
 import org.rogach.scallop.exceptions.ScallopException
 
@@ -34,8 +34,8 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   /** Exclude processing that matches a given name. */
   val exclude: ScallopOption[String] = opt("exclude")
 
-  /** Email errors. */
-  val emailOnFailure: ScallopOption[Boolean] = opt("email-on-failure")
+  /** Email errors to the given email address. */
+  val emailOnFailure: ScallopOption[String] = opt("email-on-failure")
 
   /** Validate run results and delete (fix) runs from the database if necessary. */
   val verifyAndFix: ScallopOption[Boolean] = opt("verify-and-fix")
@@ -68,8 +68,8 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   }
 
   /** Private (not in version control) configuration settings. */
-  lazy val config: Opts.Config = {
-    configFile.toOption.map(BaseConfig.load[Opts.Config]).get
+  lazy val config: BaseConfig = {
+    configFile.toOption.map(Settings.load(_).config).get
   }
 
   /** The processor (or pipeline) to run. */
@@ -86,17 +86,4 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
     println()
     println(message)
   }
-}
-
-/** Companion object for default configuration. */
-object Opts {
-  import org.broadinstitute.dig.aggregator.core.config._
-
-  /** A default implementation of BaseConfig. */
-  final case class Config(
-      aws: AWSConfig,
-      mysql: MySQLConfig,
-      neo4j: Neo4jConfig,
-      sendgrid: SendgridConfig
-  ) extends BaseConfig
 }
