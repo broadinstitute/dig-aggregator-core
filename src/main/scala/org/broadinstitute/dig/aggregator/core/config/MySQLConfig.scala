@@ -9,22 +9,19 @@ final case class MySQLConfig(
     username: String,
     password: String
 ) {
+  require(engine == "mysql")
 
   /** Query parameters to the connection string URL.
     */
-  val qs = List("useCursorFetch" -> true, "useSSL" -> false)
+  val qs: String = List("useCursorFetch" -> true, "useSSL" -> false)
     .map(p => s"${p._1}=${p._2}")
     .mkString("&")
 
-  /** Driver to use for the connection is based on the engine.
+  /** Driver to use for the connection.
     */
-  val driver: String = engine match {
-    case "mysql"      => "com.mysql.jdbc.Driver"
-    case "postgresql" => "org.postgresql.Driver"
-    case _            => "?"
-  }
+  val driver: String = "com.mysql.jdbc.Driver"
 
   /** The connection string to use for JDBC.
     */
-  val connectionString = s"jdbc:mysql://$host:$port/aggregator?$qs"
+  val connectionString = s"jdbc:$engine://$host:$port/aggregator?$qs"
 }
