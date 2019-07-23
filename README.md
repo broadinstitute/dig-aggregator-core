@@ -60,7 +60,7 @@ The default configuration parameter is `config.json`, but can be overridden with
 {
     "aws": {
         "s3": {
-            "bucket": "bucket-name"
+            "bucket": "s3-bucket-name"
         },
         "emr": {
             "subnetId": "subnet-xxx",
@@ -70,8 +70,8 @@ The default configuration parameter is `config.json`, but can be overridden with
             ]
         }
     },
-    "neo4j": "aws-secret-id",
-    "mysql":  "aws-secret-id"
+    "neo4j": "secret-id",
+    "mysql":  "secret-id"
 }
 ```
 
