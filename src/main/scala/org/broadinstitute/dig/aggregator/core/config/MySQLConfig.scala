@@ -17,9 +17,12 @@ final case class MySQLConfig(
     .map(p => s"${p._1}=${p._2}")
     .mkString("&")
 
-  /** Driver to use for the connection.
+  /** Driver to use for the connection, by default assume MySQL.
     */
-  val driver: String = "com.mysql.jdbc.Driver"
+  val driver: String = engine match {
+    case "mysql" => "com.mysql.jdbc.Driver"
+    case _       => "com.mysql.jdbc.Driver"
+  }
 
   /** The connection string to use for JDBC.
     */
