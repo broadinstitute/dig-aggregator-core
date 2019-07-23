@@ -52,6 +52,10 @@ sbt "run --pipeline <pipeline>"
 
 _Again, remember `--reprocess` and `--yes` when applicable._
 
+## AWS Secrets
+
+The aggregator makes heavy use of AWS and AWS Secrets for connection settings. Please see [https://github.com/broadinstitute/dig-secrets][secrets] for details on setting up your environment to use AWS and accessing secrets.
+
 ## Configuration Loading
 
 The default configuration parameter is `config.json`, but can be overridden with `--config <file>` on the command line. This is a sample configuration file:
@@ -116,6 +120,7 @@ Each processor knows how to save its current state and how to either pick up whe
 [hadoop]: https://hadoop.apache.org/
 [crud]: https://en.wikipedia.org/wiki/Create,_read,_update_and_delete
 [mr]: https://hadoop.apache.org/docs/r1.2.1/mapred_tutorial.html
+[secrets]: https://github.com/broadinstitute/dig-secrets
 [s3]: https://aws.amazon.com/s3/
 [emr]: https://aws.amazon.com/emr/
 [mysql]: https://www.mysql.com/
