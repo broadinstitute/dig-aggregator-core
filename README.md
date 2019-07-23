@@ -60,18 +60,18 @@ The default configuration parameter is `config.json`, but can be overridden with
 {
     "aws": {
         "s3": {
-            "bucket": "dig-analysis-data"
+            "bucket": "bucket-name"
         },
         "emr": {
-            "subnetId": "subnet-ab89bbf3",
-            "sshKeyName": "GenomeStore REST",
+            "subnetId": "subnet-xxx",
+            "sshKeyName": "AWS SSH key used to connect to EMR instances",
             "securityGroupIds": [
-                "sg-2b58c961"
+                "sg-xxx"
             ]
         }
     },
-    "neo4j": "neo4j-dev",
-    "mysql":  "dig-analysis-state"
+    "neo4j": "aws-secret-id",
+    "mysql":  "aws-secret-id"
 }
 ```
 
