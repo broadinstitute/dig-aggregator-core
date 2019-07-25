@@ -8,7 +8,7 @@ import org.json4s.{DefaultFormats, Formats}
 import scala.io.Source
 
 /** Settings are loaded from a JSON configuration file. They detail settings that are
-  * used to
+  * used to make connections to databases and spin up machine clusters for processing.
   */
 final case class Settings(aws: AWSConfig, mysqlSecretId: String, neo4jSecretId: String) {
 
