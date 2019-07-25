@@ -11,10 +11,10 @@ import java.util.UUID
 trait ProvidesH2Transactor {
   private def dbName: String = UUID.randomUUID.toString
 
-  protected val pool: DBPool = {
+  protected val pool: DbPool = {
     import Implicits.contextShift
 
     //Note mode=MySQL. This allows MySQL-dialect queries to be run against H2.
-    new DBPool("org.h2.Driver", s"jdbc:h2:mem:$dbName;DB_CLOSE_DELAY=-1;mode=MySQL", "", "")
+    new DbPool("org.h2.Driver", s"jdbc:h2:mem:$dbName;DB_CLOSE_DELAY=-1;mode=MySQL", "", "")
   }
 }

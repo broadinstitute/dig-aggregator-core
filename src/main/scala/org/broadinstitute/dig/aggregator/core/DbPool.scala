@@ -10,7 +10,7 @@ import doobie.hikari._
 import org.broadinstitute.dig.aggregator.core.config.MySQLConfig
 
 /** Hikari connection pool for MySQL. */
-class DBPool(driver: String, connectionString: String, user: String, password: String) {
+class DbPool(driver: String, connectionString: String, user: String, password: String) {
   import Implicits._
 
   /** Create a new resource for a DB transactor. */
@@ -37,10 +37,10 @@ class DBPool(driver: String, connectionString: String, user: String, password: S
 }
 
 /** Companion object. */
-object DBPool {
+object DbPool {
 
   /** Create a new connection pool from a MySQL configuration. */
-  def fromMySQLConfig(config: MySQLConfig): DBPool = {
-    new DBPool(config.driver, config.connectionString, config.username, config.password)
+  def fromMySQLConfig(config: MySQLConfig): DbPool = {
+    new DbPool(config.driver, config.connectionString, config.username, config.password)
   }
 }

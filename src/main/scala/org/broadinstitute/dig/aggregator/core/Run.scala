@@ -41,7 +41,7 @@ object Run extends LazyLogging {
   implicit val UUIDPut: Put[UUID] = Put[String].tcontramap(_.toString)
 
   /** Run entries are created and inserted atomically for a single output. */
-  def insert(pool: DBPool, processor: Processor.Name, output: String, inputs: NonEmptyList[UUID]): IO[UUID] = {
+  def insert(pool: DbPool, processor: Processor.Name, output: String, inputs: NonEmptyList[UUID]): IO[UUID] = {
     val q = s"""|INSERT INTO `runs`
                 |  ( `uuid`
                 |  , `processor`
@@ -81,22 +81,22 @@ object Run extends LazyLogging {
   }
 
   /** Given a UUID, delete all run results for it. */
-  def deleteRun(pool: DBPool, uuid: UUID): IO[Unit] = {
+  def deleteRun(pool: DbPool, uuid: UUID): IO[Unit] = {
     pool.exec(sql"DELETE FROM `runs` WHERE `uuid`=$uuid".update.run).as(())
   }
 
   /** Given a processor name, delete all runs created by it. */
-  def deleteRuns(pool: DBPool, processor: Processor.Name): IO[Unit] = {
+  def deleteRuns(pool: DbPool, processor: Processor.Name): IO[Unit] = {
     pool.exec(sql"DELETE FROM `runs` WHERE `processor`=$processor".update.run).as(())
   }
 
   /** Lookup the runs of a given processor. */
-  def runsOfProcessor(pool: DBPool, processor: Processor.Name): IO[Seq[UUID]] = {
+  def runsOfProcessor(pool: DbPool, processor: Processor.Name): IO[Seq[UUID]] = {
     pool.exec(sql"SELECT DISTINCT `uuid` FROM `runs` WHERE `processor`=$processor".query[UUID].to[Seq])
   }
 
   /** Lookup all the inputs of a given run. */
-  def inputsOfRun(pool: DBPool, uuid: UUID): IO[Seq[UUID]] = {
+  def inputsOfRun(pool: DbPool, uuid: UUID): IO[Seq[UUID]] = {
     val q = sql"SELECT `input` FROM `runs` WHERE `uuid`=$uuid"
 
     pool
@@ -112,7 +112,7 @@ object Run extends LazyLogging {
   }
 
   /** Lookup all the results for a given run id. This is mostly used for testing. */
-  def resultsOfRun(pool: DBPool, uuid: UUID): IO[Seq[Result]] = {
+  def resultsOfRun(pool: DbPool, uuid: UUID): IO[Seq[Result]] = {
     val q = sql"""|SELECT `uuid`, `processor`, `output`, `timestamp`
                   |FROM   `runs`
                   |WHERE  `uuid`=$uuid
@@ -136,14 +136,14 @@ object Run extends LazyLogging {
   }
 
   /** Find all the run results processed by a set of processors. */
-  def resultsOf(pool: DBPool, processors: Seq[Processor.Name]): IO[Seq[Result]] = {
+  def resultsOf(pool: DbPool, processors: Seq[Processor.Name]): IO[Seq[Result]] = {
     pool.exec(resultsOfFragment(processors).query[Result].to[Seq])
   }
 
   /** Find all the run results processed by a set of processors, but NOT
     * yet processed by another.
     */
-  def resultsOf(pool: DBPool, processors: Seq[Processor.Name], notProcessedBy: Processor.Name): IO[Seq[Result]] = {
+  def resultsOf(pool: DbPool, processors: Seq[Processor.Name], notProcessedBy: Processor.Name): IO[Seq[Result]] = {
     val inputs = resultsOfFragment(processors)
 
     // use the inputs as a subquery
@@ -168,7 +168,7 @@ object Run extends LazyLogging {
     * Returns a list of invalid input runs (including the one passed in) if
     * invalid.
     */
-  def verifyRun(pool: DBPool, run: UUID): IO[Seq[UUID]] = {
+  def verifyRun(pool: DbPool, run: UUID): IO[Seq[UUID]] = {
     for {
       inputs <- inputsOfRun(pool, run)
 
@@ -186,7 +186,7 @@ object Run extends LazyLogging {
     * exist. This must be done recursively for each input. If an input doesn't exist
     * any more then the output of the run is invalid and needs to be deleted.
     */
-  def verifyRuns(pool: DBPool, processor: Processor.Name): IO[Seq[UUID]] = {
+  def verifyRuns(pool: DbPool, processor: Processor.Name): IO[Seq[UUID]] = {
     for {
       runs        <- runsOfProcessor(pool, processor)
       invalidRuns <- runs.map(verifyRun(pool, _)).toList.sequence

@@ -74,14 +74,14 @@ The default configuration parameter is `config.json`, but can be overridden with
             ]
         }
     },
-    "neo4j": "secret-id",
-    "mysql":  "secret-id"
+    "neo4jSecretId": "secret-id",
+    "mysqlSecretId":  "secret-id"
 }
 ```
 
 None of the settings stored are considered to be "secret", but the configuration file is unique to the group running the aggregator and so should not be committed to version control.
 
-The `"neo4j"` and `"mysql"` properties are the AWS secret IDs used to connect to both the graph and runs databases.
+The `"neo4jSecretId"` and `"mysqlSecretId"` properties are the AWS secret IDs used to access the host, port, and user credentials needed to connect to both the graph and runs databases.
 
 ## Packages
 

@@ -10,12 +10,12 @@ import scala.io.Source
 /** Settings are loaded from a JSON configuration file. They detail settings that are
   * used to
   */
-final case class Settings(aws: AWSConfig, mysql: String, neo4j: String) {
+final case class Settings(aws: AWSConfig, mysqlSecretId: String, neo4jSecretId: String) {
 
   /** Download secrets and build the BaseConfig from the Settings. */
   lazy val config: BaseConfig = {
-    val mysqlConfig = Secrets.get[MySQLConfig](mysql)
-    val neo4jConfig = Secrets.get[Neo4jConfig](neo4j)
+    val mysqlConfig = Secrets.get[MySQLConfig](mysqlSecretId)
+    val neo4jConfig = Secrets.get[Neo4jConfig](neo4jSecretId)
 
     BaseConfig(aws, mysqlConfig.get, neo4jConfig.get)
   }
