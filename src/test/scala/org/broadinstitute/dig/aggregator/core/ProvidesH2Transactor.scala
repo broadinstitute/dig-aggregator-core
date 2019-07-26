@@ -5,9 +5,9 @@ import cats.effect.IO
 import java.util.UUID
 
 /**
- * @author clint
- * Aug 27, 2018
- */
+  * @author clint
+  * Aug 27, 2018
+  */
 trait ProvidesH2Transactor {
   private def dbName: String = UUID.randomUUID.toString
 

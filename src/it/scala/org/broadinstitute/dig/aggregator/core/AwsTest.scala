@@ -3,99 +3,104 @@ package org.broadinstitute.dig.aggregator.core
 import cats._
 import cats.effect._
 import cats.implicits._
-
 import com.amazonaws.services.s3.model.S3Object
-
 import java.nio.charset.Charset
 
 import org.broadinstitute.dig.aggregator.app.Opts
-
+import org.broadinstitute.dig.aggregator.core.config.Secrets
 import org.scalatest.FunSuite
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.Buffer
 
 /**
- * @author clint
- * Jul 27, 2018
- */
+  * @author clint
+  * Jul 27, 2018
+  */
 final class AwsTest extends AwsFunSuite {
   //Config file needs to be in place before this test will work.
   private val opts = new Opts(Array("--config", "src/it/resources/config.json"))
 
   override protected val aws = new AWS(opts.config.aws)
 
+  test("secrets") {
+    val secret = Secrets.get[SecretsTest.TestSecret]("hello")
+
+    assert(secret.isSuccess)
+    assert(secret.get.hello == "world")
+  }
+
   /**
-   * Create a cluster and run a simple script job.
-   */
+    * Create a cluster and run a simple script job.
+    */
   testWithCluster("Simple Cluster", "test_script.py")
 
   /**
-   * Put() an object, then get() it
-   */
+    * Put() an object, then get() it
+    */
   testWithPseudoDirIO("PutGet") {
     doPutGetTest
   }
 
   /**
-   * Make a pseudo-dir, then make the same one again with different metadata
-   */
+    * Make a pseudo-dir, then make the same one again with different metadata
+    */
   testWithPseudoDirIO("Mkdir") {
     doMkdirTest
   }
 
   /**
-   * Create 1 non-pseudo-dir object and list it
-   */
+    * Create 1 non-pseudo-dir object and list it
+    */
   testWithPseudoDirIO("PutLsNonDir") {
     doPutLsOneObjectTest(_ + "/foo")
   }
 
   /**
-   * Create 1 pseudo-dir object and list it
-   */
+    * Create 1 pseudo-dir object and list it
+    */
   testWithPseudoDirIO("PutLsDir") {
     doPutLsOneObjectTest(_ + "/foo/")
   }
 
   /**
-   * Create 1 object inside a pseudo-dir and list it
-   */
+    * Create 1 object inside a pseudo-dir and list it
+    */
   testWithPseudoDirIO("PutLs1") {
     doPutLsTest(1)
   }
 
   /**
-   * Create 10 objects and list them
-   */
+    * Create 10 objects and list them
+    */
   testWithPseudoDirIO("PutLs10") {
     doPutLsTest(10)
   }
 
   /**
-   * Create 2500 objects and list them
-   */
+    * Create 2500 objects and list them
+    */
   testWithPseudoDirIO("PutLs2500") {
     doPutLsTest(2500)
   }
 
   /**
-   * Create an object and delete it
-   */
+    * Create an object and delete it
+    */
   testWithPseudoDirIO("RmExists") {
     doRmTest
   }
 
   /**
-   * Create 10 objects in a pseudo-dir and delete them
-   */
+    * Create 10 objects in a pseudo-dir and delete them
+    */
   testWithPseudoDirIO("RmDir10") {
     doRmDirTest(10)
   }
 
   /**
-   * Create 2500 objects in a pseudo-dir and delete them
-   */
+    * Create 2500 objects in a pseudo-dir and delete them
+    */
   testWithPseudoDirIO("RmDir2500") {
     doRmDirTest(2500)
   }
@@ -287,4 +292,8 @@ final class AwsTest extends AwsFunSuite {
       s3Object.close()
     }
   }
+}
+
+object SecretsTest {
+  case class TestSecret(hello: String)
 }

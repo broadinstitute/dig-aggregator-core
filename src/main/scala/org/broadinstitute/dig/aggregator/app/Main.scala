@@ -126,10 +126,9 @@ object Main extends IOApp with LazyLogging {
   /** Reports an exception on the log and optionally sending an email.
     */
   private def fail(pipeline: String, err: Throwable, opts: Opts): IO[Unit] = {
-    if (opts.emailOnFailure()) {
-      new Email(opts.config.sendgrid).send(s"$pipeline terminated", err.getMessage)
-    } else {
-      IO(logger.error(s"$pipeline terminated: ${err.getMessage}"))
+    opts.emailOnFailure.toOption match {
+      case Some(to) => Email.send(to, s"$pipeline terminated", err.getMessage)
+      case None     => IO(logger.error(s"$pipeline terminated: ${err.getMessage}"))
     }
   }
 }

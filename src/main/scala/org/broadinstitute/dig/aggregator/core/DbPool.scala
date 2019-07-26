@@ -41,6 +41,6 @@ object DbPool {
 
   /** Create a new connection pool from a MySQL configuration. */
   def fromMySQLConfig(config: MySQLConfig): DbPool = {
-    new DbPool(config.driver, config.connectionString, config.user, config.password)
+    new DbPool(config.driver, config.connectionString, config.username, config.password)
   }
 }

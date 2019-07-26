@@ -52,6 +52,10 @@ sbt "run --pipeline <pipeline>"
 
 _Again, remember `--reprocess` and `--yes` when applicable._
 
+## AWS Secrets
+
+The aggregator makes heavy use of AWS and AWS Secrets for connection settings. Please see [https://github.com/broadinstitute/dig-secrets][secrets] for details on setting up your environment to use AWS and accessing secrets.
+
 ## Configuration Loading
 
 The default configuration parameter is `config.json`, but can be overridden with `--config <file>` on the command line. This is a sample configuration file:
@@ -59,44 +63,25 @@ The default configuration parameter is `config.json`, but can be overridden with
 ```json
 {
     "aws": {
-        "key": "key",
-        "secret": "secret",
-        "region": "US_EAST_1",
         "s3": {
             "bucket": "s3-bucket-name"
         },
         "emr": {
-            "subnetId": "subnet-xxxx",
-            "sshKeyName": "AWS SSH key name",
+            "subnetId": "subnet-xxx",
+            "sshKeyName": "AWS SSH key used to connect to EMR instances",
             "securityGroupIds": [
-                "sg-xxxx"
+                "sg-xxx"
             ]
         }
     },
-    "mysql": {
-        "driver": "com.mysql.cj.jdbc.Driver",
-        "url": "xx.xx.rds.amazonaws.com:3306",
-        "schema": "db",
-        "user": "username",
-        "password": "password"
-    },
-    "neo4j": {
-        "url": "xx.xx.rds.amazonaws.com:7687",
-        "user": "neo4j",
-        "password": "neo4j"
-    },
-    "sendgrid": {
-      "key": "SG.xxx",
-      "from": "do-not-reply@broadinstitute.org",
-      "emails": [
-        "me@broadinstitute.org",
-        "someone@broadinstitute.org"
-      ]
-    }
+    "neo4jSecretId": "secret-id",
+    "mysqlSecretId":  "secret-id"
 }
 ```
 
-This is where all "private" configuration settings should be kept, and **not** committed to the repository.
+None of the settings stored are considered to be "secret", but the configuration file is unique to the group running the aggregator and so should not be committed to version control.
+
+The `"neo4jSecretId"` and `"mysqlSecretId"` properties are the AWS secret IDs used to access the host, port, and user credentials needed to connect to both the graph and runs databases.
 
 ## Packages
 
@@ -118,21 +103,11 @@ Each sub-package is a pipeline, which is broken up into its various processors.
 
 The `src/main/resources/pipeline` folder contains all the job scripts (each in the appropriate pipeline folder parallel to `org.broadinstitute.dig.aggregator.pipeline._`) used by the various processors. These scripts are uploaded to S3 so all nodes on the EMR cluster can load and execute them.
 
-## Processor Classes
+## Processor Class
 
-There are a few different type of processors that are implemented in each pipeline:
+Every processor has both resources that are uploaded to S3 (used for running jobs) and dependencies: the outputs of other processors used as inputs. Processors _must_ implement a few methods so that the aggregator knows how to run them and what to commit to the runs database once it has run successfully.
 
-### DatasetProcessor
-
-Once a dataset has been completely uploaded and committed to HDFS (S3), it can then be processed by a `DatasetProcessor`. Dataset processors look for any new datasets committed to a given topic and take the next step necessary to prepare it for future use. 
-
-A dataset processors (typically) is first processor in a pipeline to run as they have no dependencies other than a new dataset being uploaded.
-
-### RunProcessor
-
-A `RunProcessor` is a `Processor` that has other processors as dependencies. It waits until a dependency processor has new output, then uses that output as input for its own process. After a `DatasetProcessor` executes, run processors typically make up the rest of the process "graph" for a pipeline.
-
-## Aggregator Database
+## Runs Database
 
 Each processor knows how to save its current state and how to either pick up where it left off or check for new work to be processed.
 
@@ -145,6 +120,7 @@ Each processor knows how to save its current state and how to either pick up whe
 [hadoop]: https://hadoop.apache.org/
 [crud]: https://en.wikipedia.org/wiki/Create,_read,_update_and_delete
 [mr]: https://hadoop.apache.org/docs/r1.2.1/mapred_tutorial.html
+[secrets]: https://github.com/broadinstitute/dig-secrets
 [s3]: https://aws.amazon.com/s3/
 [emr]: https://aws.amazon.com/emr/
 [mysql]: https://www.mysql.com/
