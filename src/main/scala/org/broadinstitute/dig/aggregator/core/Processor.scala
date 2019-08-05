@@ -35,21 +35,58 @@ abstract class Processor(val name: Processor.Name, config: BaseConfig) extends L
   /** AWS client for uploading resources and running jobs. */
   protected val aws: AWS = new AWS(config.aws)
 
-  /** Process a set of run results. */
-  def processResults(results: Seq[Run.Result]): IO[_]
-
-  /** Given a set of work to do, return the Runs that should be written to
-    * the database once that work has completed. The output of this function
-    * should be a Map of Output name -> sequence of input run IDs that were
-    * used to generate the output.
+  /** Given an input, determine what output(s) it should belong to.
     *
-    * If all results passed to this function are NOT represented in the
-    * output map, then it is an error!
+    * Every input should be represented in at least one output, but can be
+    * present in multiple outputs. This method is used to build a map of
+    * output -> seq[input.UUID], which is what's written to the database.
     */
-  def getRunOutputs(work: Seq[Run.Result]): Map[String, Seq[UUID]]
+  def getOutputs(input: Run.Result): Processor.OutputList
+
+  /** Process a set of run results. */
+  def processOutputs(output: Seq[String]): IO[_]
+
+  /** Using all the outputs returned from `getOutputs`, build a map of
+    * output -> seq[input], which will be written to the database.
+    */
+  def buildOutputMap(inputs: Seq[Run.Result]): Map[String, Set[UUID]] = {
+    val inputToOutputs = inputs.map { input =>
+      input -> getOutputs(input)
+    }
+
+    // get the list of output -> input UUID pairings
+    val outputs = inputToOutputs.flatMap {
+      case (input, Processor.Outputs(seq)) => seq.map(_ -> input.uuid)
+      case _                               => Seq.empty
+    }
+
+    // group the inputs together by output name
+    val outputMap = outputs.groupBy(_._1).mapValues(_.map(_._2))
+
+    // find the unique list of inputs that should be in ALL outputs
+    val inputUUIDsInAllOutputs = inputToOutputs
+      .filter(_._2 == Processor.AllOutputs)
+      .map(_._1.uuid)
+      .distinct
+
+    // append any inputs that belong to ALL outputs
+    val finalMap = outputMap.mapValues { inputUUIDs =>
+      (inputUUIDs ++ inputUUIDsInAllOutputs).toSet
+    }
+
+    // get all UUIDs across all outputs
+    val allOutputInputUUIDs = finalMap.values.flatten.toSet
+
+    // validate that ALL inputs are represented in at least one output
+    inputs.map(_.uuid).foreach { uuid =>
+      require(allOutputInputUUIDs.contains(uuid))
+    }
+
+    finalMap
+  }
 
   /** Determines the set of things that need to be processed. */
-  def getWork(opts: Processor.Opts): IO[Seq[Run.Result]] = {
+  def getWork(opts: Processor.Opts): IO[Map[String, Set[UUID]]] = {
     for {
       results <- if (opts.reprocess) {
         Run.resultsOf(pool, dependencies)
@@ -57,28 +94,22 @@ abstract class Processor(val name: Processor.Name, config: BaseConfig) extends L
         Run.resultsOf(pool, dependencies, name)
       }
     } yield {
-      results
-        .filter(r => opts.onlyGlobs.exists(_.matches(r.output)))
-        .filterNot(r => opts.excludeGlobs.exists(_.matches(r.output)))
+      val outputMap = buildOutputMap(results)
+
+      // only keep outputs that match filters
+      outputMap
+        .filter { case (output, _) => opts.onlyGlobs.exists(_.matches(output)) }
+        .filterNot { case (output, _) => opts.excludeGlobs.exists(_.matches(output)) }
     }
   }
 
   /** Complete all work and write to the database what was done. */
-  def insertRuns(pool: DbPool, work: Seq[Run.Result]): IO[Seq[UUID]] = {
-    val runOutputs = getRunOutputs(work)
+  def insertRuns(pool: DbPool, outputs: Map[String, Set[UUID]]): IO[Seq[UUID]] = {
+    val insertRuns = for ((output, inputs) <- outputs.toList.sortBy(_._1)) yield {
+      val inputUUIDs = inputs.toList.distinct
 
-    // validate that ALL run inputs are represented in the outputs
-    val allOutputInputs = runOutputs.values.flatten.toSet
-    val allInputs       = work.map(_.uuid).toSet
-
-    // verify that allInputs are represented in allOutputInputs
-    allInputs.foreach { input =>
-      require(allOutputInputs contains input)
-    }
-
-    // build a list of all inserts, sorted by output
-    val insertRuns = for ((output, inputs) <- runOutputs.toList.sortBy(_._1)) yield {
-      Run.insert(pool, name, output, NonEmptyList.fromListUnsafe(inputs.toList))
+      // a run will be inserted for each unique input
+      Run.insert(pool, name, output, NonEmptyList.fromListUnsafe(inputUUIDs))
     }
 
     for {
@@ -102,9 +133,11 @@ abstract class Processor(val name: Processor.Name, config: BaseConfig) extends L
   def showWork(opts: Processor.Opts): IO[Unit] = {
     for (work <- getWork(opts)) yield {
       if (work.isEmpty) {
-        logger.info(s"Everything up to date.")
+        logger.info("Everything up to date.")
       } else {
-        work.foreach(i => logger.info(s"$i needs processed."))
+        work.keys.foreach { output =>
+          logger.info(s"Output $output will be built")
+        }
       }
     }
   }
@@ -116,7 +149,7 @@ abstract class Processor(val name: Processor.Name, config: BaseConfig) extends L
       _    <- uploadResources(aws)
 
       // if only inserting runs, skip processing
-      _ <- if (opts.insertRuns) IO.unit else processResults(work)
+      _ <- if (opts.insertRuns) IO.unit else processOutputs(work.keys.toSeq)
       _ <- insertRuns(pool, work)
     } yield ()
   }
@@ -126,8 +159,27 @@ abstract class Processor(val name: Processor.Name, config: BaseConfig) extends L
 object Processor extends LazyLogging {
   import scala.language.implicitConversions
 
+  /** Process outputs. */
+  sealed trait OutputList
+
+  /** This input should be part of all outputs produced by the processor. */
+  final case object AllOutputs extends OutputList
+
+  /** Special case for intake processors. */
+  final case object NoOutputs extends OutputList
+
+  /** A single processor Output. */
+  final case class Outputs(seq: Seq[String]) extends OutputList {
+    require(seq.nonEmpty)
+  }
+
   /** Command line flags processors know about. */
-  final case class Opts(reprocess: Boolean, insertRuns: Boolean, only: Option[String], exclude: Option[String]) {
+  final case class Opts(
+      reprocess: Boolean,
+      insertRuns: Boolean,
+      only: Option[String],
+      exclude: Option[String],
+  ) {
     import Glob.String2Glob
 
     /** Returns a glob for the only option. */

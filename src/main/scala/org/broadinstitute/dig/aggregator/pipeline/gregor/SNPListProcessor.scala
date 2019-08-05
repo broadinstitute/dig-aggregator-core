@@ -34,19 +34,16 @@ class SNPListProcessor(name: Processor.Name, config: BaseConfig) extends Process
     "pipeline/gregor/snplist.py"
   )
 
-  /** Every phenotype processed gets its own output.
+  /** The output of MetaAnalysis is the phenotype, which is also the output
+    * of this processor.
     */
-  override def getRunOutputs(work: Seq[Run.Result]): Map[String, Seq[UUID]] = {
-    val phenotypes = work.map(_.output).distinct
-
-    phenotypes.map { phenotype =>
-      phenotype -> work.filter(_.output == phenotype).map(_.uuid).distinct
-    }.toMap
+  override def getOutputs(input: Run.Result): Processor.OutputList = {
+    Processor.Outputs(Seq(input.output))
   }
 
   /** Find all the unique SNPs from all the output of the meta-analysis processor.
     */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val script = aws.uriOf("resources/pipeline/gregor/snplist.py")
 
     // cluster configuration used to process each phenotype
@@ -60,7 +57,7 @@ class SNPListProcessor(name: Processor.Name, config: BaseConfig) extends Process
     )
 
     // each phenotype gets its own snp list output
-    val phenotypes = results.map(_.output).distinct
+    val phenotypes = outputs
 
     // create a job per phenotype
     val jobs = phenotypes.map { phenotype =>

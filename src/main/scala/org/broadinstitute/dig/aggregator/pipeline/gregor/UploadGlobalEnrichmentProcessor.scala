@@ -22,24 +22,20 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
     */
   override val resources: Seq[String] = Nil
 
-  /** Each input is a phenotype, and the output is the analysis node.
+  /** Each phenotype is uploaded separately.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
-    val phenotypes = results.map(_.output).distinct
-
-    phenotypes.map { phenotype =>
-      s"GlobalEnrichment/$phenotype" -> results.filter(_.output == phenotype).map(_.uuid).distinct
-    }.toMap
+  override def getOutputs(input: Run.Result): Processor.OutputList = {
+    Processor.Outputs(Seq(input.output))
   }
 
   /** Take all the phenotype results from the dependencies and process them.
     */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val graph = new GraphDb(config.neo4j)
 
     // each phenotype is uploaded individually
-    val ios = for ((output, Seq(phenotype)) <- getRunOutputs(results)) yield {
-      val analysis = new Analysis(output, Provenance.thisBuild)
+    val ios = for (phenotype <- outputs) yield {
+      val analysis = new Analysis(s"GlobalEnrichment/$phenotype", Provenance.thisBuild)
       val parts    = s"out/gregor/summary/$phenotype/"
 
       for {

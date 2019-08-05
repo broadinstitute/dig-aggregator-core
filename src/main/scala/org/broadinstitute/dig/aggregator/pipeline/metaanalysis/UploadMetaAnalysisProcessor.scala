@@ -34,29 +34,23 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
     */
   override val resources: Seq[String] = Nil
 
-  /** Create the mapping of outputs -> inputs.
+  /** Determine the output(s) for each input.
+    *
+    * The input's output is the phenotype name, which is used to build the
+    * output of this processor.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
-    val phenotypes = results.map { run =>
-      run.output -> run.uuid
-    }
-
-    phenotypes
-      .groupBy(_._1)
-      .map {
-        case (phenotype, phenotypeInputPairs) =>
-          s"MetaAnalysis/$phenotype" -> phenotypeInputPairs.map(_._2).distinct
-      }
+  override def getOutputs(input: Run.Result): Processor.OutputList = {
+    Processor.Outputs(Seq(input.output))
   }
 
   /** Take all the phenotype results from the dependencies and process them.
     */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val graph = new GraphDb(config.neo4j)
 
     // upload the results of each phenotype
-    val ios = for ((output, Seq(phenotype)) <- getRunOutputs(results)) yield {
-      val analysis   = new Analysis(output, Provenance.thisBuild)
+    val ios = for (phenotype <- outputs) yield {
+      val analysis   = new Analysis(s"MetaAnalysis/$phenotype", Provenance.thisBuild)
       val bottomLine = s"out/metaanalysis/trans-ethnic/$phenotype/"
 
       for {

@@ -21,10 +21,10 @@ class SortRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Pro
     "pipeline/gregor/sortRegions.py"
   )
 
-  /** All datasets map to a single output.
+  /** All input datasets map to a single output.
     */
-  override def getRunOutputs(work: Seq[Run.Result]): Map[String, Seq[UUID]] = {
-    Map("regions/chromatin_state" -> work.map(_.uuid).distinct)
+  override def getOutputs(input: Run.Result): Processor.OutputList = {
+    Processor.Outputs(Seq("regions/chromatin_state"))
   }
 
   /** Take any new datasets and convert them from JSON-list to BED file
@@ -32,7 +32,7 @@ class SortRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Pro
     * are processed together by the Spark job, so what's in the results
     * input doesn't matter.
     */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val script = aws.uriOf("resources/pipeline/gregor/sortRegions.py")
 
     // cluster configuration used to process each phenotype

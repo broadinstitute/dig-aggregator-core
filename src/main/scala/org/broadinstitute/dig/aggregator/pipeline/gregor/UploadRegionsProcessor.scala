@@ -25,15 +25,15 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends P
     */
   private val analysisName: String = "ChromatinState/Regions"
 
-  /** Generate the run output for the input results.
+  /** All inputs are uploaded into a single output.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
-    Map(analysisName -> results.map(_.uuid).distinct)
+  override def getOutputs(input: Run.Result): Processor.OutputList = {
+    Processor.Outputs(Seq(analysisName))
   }
 
   /** Take all the phenotype results from the dependencies and process them.
     */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val graph    = new GraphDb(config.neo4j)
     val analysis = new Analysis(analysisName, Provenance.thisBuild)
     val s3path   = "out/gregor/overlapped-regions/"

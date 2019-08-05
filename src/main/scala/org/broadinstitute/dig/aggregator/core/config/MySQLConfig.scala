@@ -20,8 +20,8 @@ final case class MySQLConfig(
   /** Driver to use for the connection, by default assume MySQL.
     */
   val driver: String = engine match {
-    case "mysql" => "com.mysql.jdbc.Driver"
-    case _       => "com.mysql.jdbc.Driver"
+    case "mysql" => "com.mysql.cj.jdbc.Driver"
+    case _       => "com.mysql.cj.jdbc.Driver"
   }
 
   /** The connection string to use for JDBC.

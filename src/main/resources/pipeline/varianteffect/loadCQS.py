@@ -47,9 +47,9 @@ if __name__ == '__main__':
 
     # drop any that aren't "picked" to be the most severe
     transcript_consequences = transcript_consequences \
-      .filter(transcript_consequences.pick == 1)
+        .filter(transcript_consequences.pick == 1)
     regulatory_feature_consequences = regulatory_feature_consequences \
-      .filter(regulatory_feature_consequences.pick == 1)
+        .filter(regulatory_feature_consequences.pick == 1)
 
     # comma-separate array fields
     transcript_consequences = transcript_consequences \
