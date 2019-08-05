@@ -49,7 +49,7 @@ abstract class Processor(val name: Processor.Name, config: BaseConfig) extends L
   /** Using all the outputs returned from `getOutputs`, build a map of
     * output -> seq[input], which will be written to the database.
     */
-  def buildOutputMap(inputs: Seq[Run.Result]): Map[String, Set[UUID]] = {
+  def buildOutputMap(inputs: Seq[Run.Result], opts: Processor.Opts): Map[String, Set[UUID]] = {
     val inputToOutputs = inputs.map { input =>
       input -> getOutputs(input)
     }
@@ -83,23 +83,22 @@ abstract class Processor(val name: Processor.Name, config: BaseConfig) extends L
     }
 
     finalMap
+      .filter { case (output, _) => opts.onlyGlobs.exists(_.matches(output)) }
+      .filterNot { case (output, _) => opts.excludeGlobs.exists(_.matches(output)) }
   }
 
   /** Determines the set of things that need to be processed. */
   def getWork(opts: Processor.Opts): IO[Map[String, Set[UUID]]] = {
-    for {
-      results <- if (opts.reprocess) {
-        Run.resultsOf(pool, dependencies)
-      } else {
-        Run.resultsOf(pool, dependencies, name)
+    if (opts.reprocess) {
+      Run.resultsOf(pool, dependencies).map(buildOutputMap(_, opts))
+    } else {
+      Run.resultsOf(pool, dependencies, name).flatMap { results =>
+        if (results.map(getOutputs).contains(Processor.AllOutputs)) {
+          getWork(opts.copy(reprocess = true))
+        } else {
+          IO(buildOutputMap(results, opts))
+        }
       }
-    } yield {
-      val outputMap = buildOutputMap(results)
-
-      // only keep outputs that match filters
-      outputMap
-        .filter { case (output, _) => opts.onlyGlobs.exists(_.matches(output)) }
-        .filterNot { case (output, _) => opts.excludeGlobs.exists(_.matches(output)) }
     }
   }
 
