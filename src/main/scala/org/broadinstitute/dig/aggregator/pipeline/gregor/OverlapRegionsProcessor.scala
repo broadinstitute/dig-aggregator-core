@@ -22,16 +22,16 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
     "pipeline/gregor/overlapRegions.py"
   )
 
-  /** All datasets and VEP output map to a single output.
+  /** All the regions are processed into a single output.
     */
-  override def getRunOutputs(work: Seq[Run.Result]): Map[String, Seq[UUID]] = {
-    Map("overlapped-regions" -> work.map(_.uuid).distinct)
+  override def getOutputs(input: Run.Result): Processor.OutputList = {
+    Processor.Outputs(Seq("overlapped-regions"))
   }
 
   /** With a new variants list or new regions, need to reprocess and get a list
     * of all regions with the variants that they overlap.
     */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val script = aws.uriOf("resources/pipeline/gregor/overlapRegions.py")
 
     // cluster configuration used to process each phenotype

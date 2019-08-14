@@ -42,15 +42,15 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig) extends P
 
   /** Only a single output for VEP that uses ALL variants.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
-    Map("VEP/effects" -> results.map(_.uuid).distinct)
+  override def getOutputs(input: Run.Result): Processor.OutputList = {
+    Processor.Outputs(Seq("VEP/effects"))
   }
 
   /**
     * The results are ignored, as all the variants are refreshed and everything
     * needs to be run through VEP again.
     */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val clusterBootstrap = aws.uriOf("resources/pipeline/varianteffect/cluster-bootstrap.sh")
     val installScript    = aws.uriOf("resources/pipeline/varianteffect/installVEP.sh")
     val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.pl")

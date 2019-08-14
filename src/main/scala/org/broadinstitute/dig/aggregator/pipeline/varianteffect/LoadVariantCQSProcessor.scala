@@ -41,13 +41,13 @@ class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extends 
 
   /** Only a single output for VEP that uses ALL effects.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
-    Map("VEP/CQS" -> results.map(_.uuid).distinct)
+  override def getOutputs(input: Run.Result): Processor.OutputList = {
+    Processor.Outputs(Seq("VEP/CQS"))
   }
 
   /** All effect results are combined together, so the results list is ignored.
     */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val scriptUri = aws.uriOf("resources/pipeline/varianteffect/loadCQS.py")
     val sparkConf = ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
 

@@ -37,18 +37,18 @@ class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extend
     */
   override val resources: Seq[String] = Nil
 
-  /** Only a single output for VEP that uses ALL effects.
+  /** Only a single output for VEP that uses ALL consequences.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
-    Map("VEP" -> results.map(_.uuid).distinct)
+  override def getOutputs(input: Run.Result): Processor.OutputList = {
+    Processor.Outputs(Seq("VEP"))
   }
 
   /** Take all the phenotype results from the dependencies and process them.
     */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val graph = new GraphDb(config.neo4j)
 
-    val ios = for ((output, _) <- getRunOutputs(results)) yield {
+    val ios = for (output <- outputs) yield {
       val analysis = new Analysis(output, Provenance.thisBuild)
 
       // where the output is located

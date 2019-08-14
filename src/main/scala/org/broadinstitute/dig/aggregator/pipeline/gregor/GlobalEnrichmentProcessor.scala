@@ -27,35 +27,19 @@ class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extend
     "pipeline/gregor/runGREGOR.sh"
   )
 
-  /** Generate the run results for the chromatin state processor.
+  /** The outputs from the SNPListProcessor (phenotypes) are the outputs of this
+    * processor, but all the sorted regions are processed with each as well.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
-    val phenotypes = results
-      .filter(_.processor == GregorPipeline.snpListProcessor)
-      .map(_.output)
-      .distinct
-
-    // updated regions
-    val regionInputs = results
-      .filter(_.processor == GregorPipeline.sortRegionsProcessor)
-      .map(_.uuid)
-      .distinct
-
-    // the phenotypes are the output, input are phenotype + regions
-    phenotypes.map { phenotype =>
-      val phenotypeInputs = results
-        .filter(_.processor == GregorPipeline.snpListProcessor)
-        .filter(_.output == phenotype)
-        .map(_.uuid)
-        .distinct
-
-      phenotype -> (phenotypeInputs ++ regionInputs)
-    }.toMap
+  override def getOutputs(input: Run.Result): Processor.OutputList = {
+    input.processor match {
+      case GregorPipeline.sortRegionsProcessor => Processor.AllOutputs
+      case GregorPipeline.snpListProcessor     => Processor.Outputs(Seq(input.output))
+    }
   }
 
   /** Run GREGOR over the results of the SNP list and regions.
     */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
+  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val bootstrap = aws.uriOf("resources/pipeline/gregor/cluster-bootstrap.sh")
     val install   = aws.uriOf("resources/pipeline/gregor/installGREGOR.sh")
     val run       = aws.uriOf("resources/pipeline/gregor/runGREGOR.sh")
@@ -77,7 +61,7 @@ class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extend
     // TODO: if regions.size > 0 then phenotypes = all SNPListProcessor outputs!
 
     // get all the phenotypes that need processed
-    val phenotypes = getRunOutputs(results).keys
+    val phenotypes = outputs
 
     // map out ancestries to that of GREGOR/1000g
     val ancestries = List(

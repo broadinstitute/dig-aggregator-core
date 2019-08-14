@@ -34,6 +34,9 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   /** Exclude processing that matches a given name. */
   val exclude: ScallopOption[String] = opt("exclude")
 
+  /** Show the inputs used to process a given output. */
+  val showInputs: ScallopOption[Boolean] = opt("show-inputs")
+
   /** Email errors to the given email address. */
   val emailOnFailure: ScallopOption[String] = opt("email-on-failure")
 

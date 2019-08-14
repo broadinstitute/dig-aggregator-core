@@ -29,29 +29,17 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
     */
   override val resources: Seq[String] = Nil
 
-  /** Build the list of results to upload to the database.
+  /** The input phenotype is also the output.
     */
-  override def getRunOutputs(results: Seq[Run.Result]): Map[String, Seq[UUID]] = {
-    val phenotypes = results.map { run =>
-      run.output -> run.uuid
-    }
-
-    phenotypes
-      .groupBy(_._1)
-      .map {
-        case (phenotype, phenotypeInputPairs) =>
-          s"FrequencyAnalysis/$phenotype" -> phenotypeInputPairs.map(_._2).distinct
-      }
+  override def getOutputs(input: Run.Result): Processor.OutputList = {
+    Processor.Outputs(Seq(input.output))
   }
 
-  /** Take all the phenotype results from the dependencies and process them.
+  /** Take all the phenotype results from the dependencies and upload them.
     */
-  override def processResults(results: Seq[Run.Result]): IO[Unit] = {
-    val runMap = getRunOutputs(results)
-
-    // upload the results of each phenotype
-    val ios = for ((output, Seq(phenotype)) <- runMap) yield {
-      val analysis = new Analysis(output, Provenance.thisBuild)
+  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
+    val ios = for (phenotype <- outputs) yield {
+      val analysis = new Analysis(s"FrequencyAnalysis/$phenotype", Provenance.thisBuild)
       val graph    = new GraphDb(config.neo4j)
 
       // where the result files are to upload
