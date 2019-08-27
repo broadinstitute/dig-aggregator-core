@@ -1,13 +1,14 @@
 package org.broadinstitute.dig.aggregator.pipeline.gregor
 
-import cats.effect._
-import cats.implicits._
-
-import java.util.UUID
-
-import org.broadinstitute.dig.aggregator.core._
+import org.broadinstitute.dig.aggregator.core.Processor
+import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.emr._
+import org.broadinstitute.dig.aws.JobStep
+import org.broadinstitute.dig.aws.emr.BootstrapScript
+import org.broadinstitute.dig.aws.emr.Cluster
+import org.broadinstitute.dig.aws.emr.InstanceType
+
+import cats.effect.IO
 
 class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 

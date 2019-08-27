@@ -1,14 +1,16 @@
 package org.broadinstitute.dig.aggregator.pipeline.metaanalysis
 
-import cats.effect._
-import cats.implicits._
-
-import java.util.UUID
-
-import org.broadinstitute.dig.aggregator.core._
+import org.broadinstitute.dig.aggregator.core.Processor
+import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.emr._
 import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
+import org.broadinstitute.dig.aws.JobStep
+import org.broadinstitute.dig.aws.emr.ApplicationConfig
+import org.broadinstitute.dig.aws.emr.BootstrapScript
+import org.broadinstitute.dig.aws.emr.ClassificationProperties
+import org.broadinstitute.dig.aws.emr.Cluster
+
+import cats.effect.IO
 
 /** After all the variants for a particular phenotype have been processed and
   * partitioned, meta-analysis is run on them.

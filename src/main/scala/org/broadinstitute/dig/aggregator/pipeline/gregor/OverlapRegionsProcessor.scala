@@ -1,12 +1,14 @@
 package org.broadinstitute.dig.aggregator.pipeline.gregor
 
-import cats.effect._
-
-import java.util.UUID
-
-import org.broadinstitute.dig.aggregator.core._
+import org.broadinstitute.dig.aggregator.core.Processor
+import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.emr._
+import org.broadinstitute.dig.aws.JobStep
+import org.broadinstitute.dig.aws.emr.ApplicationConfig
+import org.broadinstitute.dig.aws.emr.ClassificationProperties
+import org.broadinstitute.dig.aws.emr.Cluster
+
+import cats.effect.IO
 
 class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
