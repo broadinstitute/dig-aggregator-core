@@ -6,6 +6,8 @@ import org.json4s.jackson.Serialization.read
 import org.json4s.{DefaultFormats, Formats}
 
 import scala.io.Source
+import org.broadinstitute.dig.aws.config.AWSConfig
+import org.broadinstitute.dig.aws.config.emr.EmrConfig
 
 /** Settings are loaded from a JSON configuration file. They detail settings that are
   * used to make connections to databases and spin up machine clusters for processing.
@@ -23,7 +25,7 @@ final case class Settings(aws: AWSConfig, mysqlSecretId: String, neo4jSecretId: 
 
 /** Companion object. */
 object Settings {
-  implicit val formats: Formats = DefaultFormats ++ emr.EmrConfig.customSerializers
+  implicit val formats: Formats = DefaultFormats ++ EmrConfig.customSerializers
 
   /** Load the settings file and parse it. */
   def load(file: File): Settings = {

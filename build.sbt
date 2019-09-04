@@ -1,5 +1,4 @@
 lazy val Versions = new {
-  val Aws              = "1.11.349"
   val Cats             = "1.5.0"
   val CatsEffect       = "1.1.0"
   val Doobie           = "0.6.0"
@@ -12,13 +11,14 @@ lazy val Versions = new {
   val LogbackColorizer = "1.0.1"
   val MySQL            = "8.0.11"
   val Neo4j            = "1.7.0"
-  val Scala            = "2.12.6"
+  val Scala            = "2.12.9"
   val ScalaLogging     = "3.7.2"
-  val ScalaTest        = "3.0.5"
-  val Scallop          = "3.1.2"
+  val ScalaTest        = "3.0.8"
+  val Scallop          = "3.3.0"
   val Sendgrid         = "4.2.1"
   val Shapeless        = "2.3.3"
   val Slf4J            = "1.7.25"
+  val DigAws           = "0.1-SNAPSHOT"
 }
 
 lazy val Orgs = new {
@@ -37,8 +37,6 @@ lazy val scalacOpts = Seq(
 
 lazy val mainDeps = Seq(
   "co.fs2"                         %% "fs2-core"            % Versions.Fs2,
-  "com.amazonaws"                  % "aws-java-sdk"         % Versions.Aws,
-  "com.chuusai"                    %% "shapeless"           % Versions.Shapeless,
   "com.sendgrid"                   % "sendgrid-java"        % Versions.Sendgrid,
   "com.typesafe.scala-logging"     %% "scala-logging"       % Versions.ScalaLogging,
   "ch.qos.logback"                 % "logback-classic"      % Versions.LogbackClassic,
@@ -52,7 +50,8 @@ lazy val mainDeps = Seq(
   "org.typelevel"                  %% "cats-core"           % Versions.Cats,
   "org.typelevel"                  %% "cats-effect"         % Versions.CatsEffect,
   "org.apache.hadoop"              % "hadoop-client"        % Versions.Hadoop,
-  "mysql"                          % "mysql-connector-java" % Versions.MySQL
+  "mysql"                          % "mysql-connector-java" % Versions.MySQL,
+  Orgs.DIG                         %% "dig-aws"             % Versions.DigAws
 )
 
 lazy val testDeps = Seq(

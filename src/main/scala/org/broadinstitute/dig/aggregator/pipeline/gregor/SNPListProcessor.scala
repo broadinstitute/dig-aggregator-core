@@ -1,13 +1,17 @@
 package org.broadinstitute.dig.aggregator.pipeline.gregor
 
-import cats.effect._
-
-import java.util.UUID
-
-import org.broadinstitute.dig.aggregator.core._
+import org.broadinstitute.dig.aggregator.core.Processor
+import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.core.emr._
-import org.broadinstitute.dig.aggregator.pipeline.metaanalysis._
+import org.broadinstitute.dig.aggregator.pipeline.metaanalysis.MetaAnalysisPipeline
+import org.broadinstitute.dig.aws.JobStep
+import org.broadinstitute.dig.aws.emr.ApplicationConfig
+import org.broadinstitute.dig.aws.emr.ClassificationProperties
+import org.broadinstitute.dig.aws.emr.Cluster
+import org.broadinstitute.dig.aws.emr.InstanceType
+
+import cats.effect.IO
+
 
 /** Gathers all the output variants from the trans-ethnic, meta-analysis results
   * and generates a unique list of SNPs for use with GREGOR.
