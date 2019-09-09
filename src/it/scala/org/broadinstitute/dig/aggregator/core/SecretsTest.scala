@@ -1,7 +1,7 @@
 package org.broadinstitute.dig.aggregator.core
 
 import org.scalatest.FunSuite
-import org.broadinstitute.dig.aggregator.core.config.Secrets
+import org.broadinstitute.dig.aws.config.Secrets
 
 /**
  * @author jmassung
