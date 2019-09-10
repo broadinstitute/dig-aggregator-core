@@ -1,7 +1,6 @@
 package org.broadinstitute.dig.aggregator.core
 
 import cats.effect._
-
 import scala.concurrent.ExecutionContext
 
 object Implicits {

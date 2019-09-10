@@ -3,7 +3,7 @@ package org.broadinstitute.dig.aggregator.core
 import cats.effect._
 import cats.implicits._
 
-import org.broadinstitute.dig.aggregator.core.config.Secrets
+import org.broadinstitute.dig.aws.config.Secrets
 
 /** Helper class for sending emails to everyone on a list. */
 object Email {

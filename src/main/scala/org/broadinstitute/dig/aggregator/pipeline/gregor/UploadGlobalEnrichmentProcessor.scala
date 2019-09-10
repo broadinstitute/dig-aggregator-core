@@ -3,8 +3,8 @@ package org.broadinstitute.dig.aggregator.pipeline.gregor
 import cats.effect._
 import cats.implicits._
 
-import java.net.{URL, URLDecoder}
-import java.util.UUID
+import java.net.URL
+import java.net.URLDecoder
 
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
