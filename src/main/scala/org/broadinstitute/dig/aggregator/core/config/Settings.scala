@@ -2,12 +2,15 @@ package org.broadinstitute.dig.aggregator.core.config
 
 import java.io.File
 
-import org.json4s.jackson.Serialization.read
-import org.json4s.{DefaultFormats, Formats}
-
 import scala.io.Source
+
 import org.broadinstitute.dig.aws.config.AWSConfig
+import org.broadinstitute.dig.aws.config.Secrets
 import org.broadinstitute.dig.aws.config.emr.EmrConfig
+import org.json4s.DefaultFormats
+import org.json4s.Formats
+import org.json4s.jackson.Serialization.read
+
 
 /** Settings are loaded from a JSON configuration file. They detail settings that are
   * used to make connections to databases and spin up machine clusters for processing.

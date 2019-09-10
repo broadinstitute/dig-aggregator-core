@@ -1,14 +1,18 @@
 package org.broadinstitute.dig.aggregator.pipeline.gregor
 
-import cats.effect._
-import cats.implicits._
+import java.net.URL
+import java.net.URLDecoder
 
-import java.net.{URL, URLDecoder}
-import java.util.UUID
-
-import org.broadinstitute.dig.aggregator.core.{AWS, Analysis, GraphDb, Processor, Provenance, Run}
+import org.broadinstitute.dig.aggregator.core.Analysis
+import org.broadinstitute.dig.aggregator.core.GraphDb
+import org.broadinstitute.dig.aggregator.core.Processor
+import org.broadinstitute.dig.aggregator.core.Provenance
+import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.neo4j.driver.v1.StatementResult
+
+import cats.effect._
+import cats.implicits._
 
 class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 

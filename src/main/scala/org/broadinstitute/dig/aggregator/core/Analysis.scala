@@ -1,13 +1,13 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats.effect._
-import cats.implicits._
+import org.broadinstitute.dig.aggregator.core.Utils.retry
+import org.broadinstitute.dig.aws.AWS
+import org.neo4j.driver.v1.StatementResult
 
 import com.typesafe.scalalogging.LazyLogging
 
-import org.broadinstitute.dig.aggregator.core.Utils._
-
-import org.neo4j.driver.v1.StatementResult
+import cats.effect.IO
+import cats.implicits._
 
 /** The representation of a processor's analysis that has been uploaded to the
   * graph database.
