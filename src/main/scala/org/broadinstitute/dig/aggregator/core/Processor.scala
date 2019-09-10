@@ -11,6 +11,7 @@ import doobie._
 import java.util.UUID
 
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
+import org.broadinstitute.dig.aws.AWS
 
 /** Each processor has a globally unique name and a run function. */
 abstract class Processor(val name: Processor.Name, config: BaseConfig) extends LazyLogging {

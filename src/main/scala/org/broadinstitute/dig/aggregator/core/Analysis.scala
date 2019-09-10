@@ -5,6 +5,7 @@ import cats.implicits._
 
 import com.typesafe.scalalogging.LazyLogging
 
+import org.broadinstitute.dig.aws.AWS
 import org.broadinstitute.dig.aggregator.core.Utils._
 
 import org.neo4j.driver.v1.StatementResult

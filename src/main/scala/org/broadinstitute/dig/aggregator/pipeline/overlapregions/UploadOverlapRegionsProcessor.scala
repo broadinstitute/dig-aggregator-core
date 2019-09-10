@@ -1,20 +1,20 @@
-package org.broadinstitute.dig.aggregator.pipeline.gregor
+package org.broadinstitute.dig.aggregator.pipeline.overlapregions
 
 import cats.effect._
-
-import java.util.UUID
-
-import org.broadinstitute.dig.aggregator.core.{Analysis, GraphDb, Processor, Provenance, Run}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-
+import org.broadinstitute.dig.aggregator.core._
+import org.broadinstitute.dig.aggregator.pipeline.gregor.GregorPipeline
+import org.broadinstitute.dig.aggregator.pipeline.metaanalysis.MetaAnalysisPipeline
 import org.neo4j.driver.v1.StatementResult
 
-class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
+class UploadOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
   /** All the processors this processor depends on.
     */
   override val dependencies: Seq[Processor.Name] = Seq(
-    GregorPipeline.overlapRegionsProcessor,
+    OverlapRegionsPipeline.overlapRegionsProcessor,
+    MetaAnalysisPipeline.uploadMetaAnalysisProcessor,
+    GregorPipeline.uploadAnnotatedRegionsProcessor,
   )
 
   /** All the job scripts that need to be uploaded to AWS.
@@ -23,7 +23,7 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends P
 
   /** Name of the analysis node when uploading results.
     */
-  private val analysisName: String = "ChromatinState/Regions"
+  private val analysisName: String = "OverlapRegions"
 
   /** All inputs are uploaded into a single output.
     */
@@ -36,7 +36,7 @@ class UploadRegionsProcessor(name: Processor.Name, config: BaseConfig) extends P
   override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val graph    = new GraphDb(config.neo4j)
     val analysis = new Analysis(analysisName, Provenance.thisBuild)
-    val s3path   = "out/gregor/overlapped-regions/"
+    val s3path   = "out/overlapregions/"
 
     val io = for {
       id <- analysis.create(graph)

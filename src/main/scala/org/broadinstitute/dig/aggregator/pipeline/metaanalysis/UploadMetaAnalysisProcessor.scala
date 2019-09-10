@@ -119,11 +119,6 @@ class UploadMetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) exte
                 |
                 |// create the relationship to the trait and variant
                 |CREATE (p)-[:HAS_META_ANALYSIS]->(n)<-[:HAS_META_ANALYSIS]-(v)
-                |
-                |// if a top result, mark it as such
-                |FOREACH(i IN (CASE toBoolean(r.top) WHEN true THEN [1] ELSE [] END) |
-                |  CREATE (v)-[:TOP_VARIANT]->(n)
-                |)
                 |""".stripMargin
 
     graph.run(q)

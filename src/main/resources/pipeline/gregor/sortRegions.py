@@ -22,8 +22,8 @@ if __name__ == '__main__':
     print('Python version: %s' % platform.python_version())
 
     # get the source and output directories
-    srcdir = '%s/chromatin_state/*/part-*' % s3dir
-    outdir = '%s/out/gregor/regions/chromatin_state' % s3dir
+    srcdir = '%s/annotations/*/*/part-*' % s3dir
+    outdir = '%s/out/gregor/regions' % s3dir
 
     # create a spark session
     spark = SparkSession.builder.appName('gregor').getOrCreate()
@@ -40,14 +40,16 @@ if __name__ == '__main__':
             col('chromosome').alias('chrom'),
             col('start').alias('chromStart'),
             col('end').alias('chromEnd'),
+            col('itemRgb'),
             regexp_replace(col('biosample'), ':', '_').alias('biosample'),
-            col('name'),
+            col('name').alias('annotation'),
+            col('method'),
         )
 
     # output the variants in BED format (TSV)
     df.write\
         .mode('overwrite') \
-        .partitionBy('biosample', 'name') \
+        .partitionBy('biosample', 'method', 'annotation') \
         .csv(outdir, sep='\t')
 
     # done

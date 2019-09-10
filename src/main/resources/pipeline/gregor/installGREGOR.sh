@@ -61,7 +61,7 @@ mkdir -p "${REGIONS_DIR}"
 touch "${BED_INDEX_FILE}"
 
 # find all the unique tissues from the part files
-TISSUES=($(hadoop fs -ls -C "${S3_DIR}/regions/chromatin_state/*/*/part-*" | xargs dirname | xargs dirname | xargs -I @ basename "@" | sed -r 's/^biosample=//' | sort | uniq))
+TISSUES=($(hadoop fs -ls -C "${S3_DIR}/regions/*/*/*/part-*" | xargs dirname | xargs dirname | xargs dirname | xargs -I @ basename "@" | sed -r 's/^biosample=//' | sort | uniq))
 
 # debug to STDOUT all the unique tissues
 echo "Unique bio-samples:"
@@ -69,17 +69,29 @@ echo "-------------------"
 echo "${TISSUES[@]}" | tr ' ' '\n'
 echo "-------------------"
 
-# for each tissue, get all the annotations for it, and join them into tissue+annotation bed files
+# for each tissue, get all the methods used
 for TISSUE in "${TISSUES[@]}"; do
-    ANNOTATIONS=($(hadoop fs -ls -C "${S3_DIR}/regions/chromatin_state/biosample=${TISSUE}/*/part-*" | xargs dirname | xargs -I @ basename "@" | sed -r 's/^name=([0-9]+_)?//' | sort | uniq))
+  METHODS=($(hadoop fs -ls -C "${S3_DIR}/regions/biosample=${TISSUE}/*/*/part-*" | xargs dirname | xargs dirname | xargs -I @ basename "@" | sed -r 's/^method=([0-9]+_)?//' | sort | uniq))
+
+  # for each method, get all the annotations
+  for METHOD in "${METHODS[@]}"; do
+    ANNOTATIONS=($(hadoop fs -ls -C "${S3_DIR}/regions/biosample=${TISSUE}/method=${METHOD}/*/part-*" | xargs dirname | xargs -I @ basename "@" | sed -r 's/^annotation=([0-9]+_)?//' | sort | uniq))
 
     # for each annotation, merge all the part files into a single BED
     for ANNOTATION in "${ANNOTATIONS[@]}"; do
-        # don't use .bed extension as we'll use the column value of the output for Neo4j
-        BED_FILE="${REGIONS_DIR}/${TISSUE}___${ANNOTATION}"
+        TMP_FILE=$(mktemp bed.XXXXXX)
 
-        # merge all the part files together into a single glob
-        hadoop fs -getmerge -skip-empty-file "${S3_DIR}/regions/chromatin_state/biosample=${TISSUE}/name=${ANNOTATION}/part-*" "${BED_FILE}"
+        # don't use .bed extension as we'll use the column value of the output for Neo4j
+        BED_FILE="${REGIONS_DIR}/${TISSUE}___${METHOD}___${ANNOTATION}"
+
+        # merge all the part files together into the temp file
+        hadoop fs -getmerge -skip-empty-file "${S3_DIR}/regions/biosample=${TISSUE}/method=${METHOD}/annotation=${ANNOTATION}/part-*" "${TMP_FILE}"
+
+        # only keep the first 3 columns (chrom, start, end)
+        cut --complement -f1,2,3 "${TMP_FILE}" > "${BED_FILE}"
+
+        # add the bed file to the index
         echo "${BED_FILE}" >> "${BED_INDEX_FILE}"
     done
+  done
 done

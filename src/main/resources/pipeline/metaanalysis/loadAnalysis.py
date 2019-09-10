@@ -288,27 +288,29 @@ def load_trans_ethnic_analysis(spark, phenotype):
             'n',
         )
 
-    # filter the top variants across the genome for this phenotype
-    top = variants \
-        .rdd \
-        .keyBy(lambda v: (v.chromosome, v.position // 20000)) \
-        .reduceByKey(lambda a, b: b if b.pValue < a.pValue else a) \
-        .map(lambda v: v[1]) \
-        .toDF() \
-        .select(
-            col('varId'),
-            lit(True).alias('top'),
-        )
+    # # filter the top variants across the genome for this phenotype
+    # top = variants \
+    #     .rdd \
+    #     .keyBy(lambda v: (v.chromosome, v.position // 20000)) \
+    #     .reduceByKey(lambda a, b: b if b.pValue < a.pValue else a) \
+    #     .map(lambda v: v[1]) \
+    #     .toDF() \
+    #     .select(
+    #         col('varId'),
+    #         lit(True).alias('top'),
+    #     )
+    #
+    # # for every variant, set a flag for whether or not it is a "top" variant
+    # variants = variants.join(top, 'varId', 'left_outer')
+    #
+    # # define the 'top' column as either being 'true' or 'false'
+    # top_col = when(variants.top.isNotNull(), variants.top).otherwise(lit(False))
 
-    # for every variant, set a flag for whether or not it is a "top" variant
-    variants = variants.join(top, 'varId', 'left_outer')
+    # # overwrite the results of the join operation
+    # variants = variants.withColumn('top', top_col)
 
-    # define the 'top' column as either being 'true' or 'false'
-    top_col = when(variants.top.isNotNull(), variants.top).otherwise(lit(False))
-
-    # overwrite the results of the join operation and save
-    variants.withColumn('top', top_col) \
-        .write \
+    # write the variants
+    variants.write \
         .mode('overwrite') \
         .csv(outdir, sep='\t', header=True)
 

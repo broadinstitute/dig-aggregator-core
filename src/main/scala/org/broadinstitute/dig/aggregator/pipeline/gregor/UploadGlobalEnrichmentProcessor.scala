@@ -6,7 +6,7 @@ import cats.implicits._
 import java.net.{URL, URLDecoder}
 import java.util.UUID
 
-import org.broadinstitute.dig.aggregator.core.{AWS, Analysis, GraphDb, Processor, Provenance, Run}
+import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.neo4j.driver.v1.StatementResult
 
@@ -74,7 +74,7 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |// NOTE: When Spark ran on on the tissues, to prevent odd characters, we
                 |//       replaced ':' with '_', and here we'll put it back.
                 |
-                |WITH q, r, p, a, replace(bed[0], '_', ':') AS tissue, bed[1] AS annotation
+                |WITH q, r, p, a, replace(bed[0], '_', ':') AS tissue, bed[1] AS method, bed[2] AS annotation
                 |
                 |// find the tissue
                 |MATCH (t:Tissue {name: tissue})
@@ -85,6 +85,7 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |// create the result node
                 |CREATE (n:GlobalEnrichment {
                 |  annotation: annotation,
+                |  method: method,
                 |  inBedIndexSNP: toFloat(r.InBed_Index_SNP),
                 |  expectedInBedIndexSNP: toFloat(r.ExpectNum_of_InBed_SNP),
                 |  pValue: toFloat(r.PValue)
