@@ -16,7 +16,7 @@ class SortRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Pro
 
   /** Dependencies.
     */
-  override val dependencies: Seq[Processor.Name] = Seq(IntakePipeline.chromatinState)
+  override val dependencies: Seq[Processor.Name] = Seq(IntakePipeline.annotations)
 
   /** All the job scripts that need to be uploaded to AWS.
     */
@@ -27,7 +27,7 @@ class SortRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Pro
   /** All input datasets map to a single output.
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
-    Processor.Outputs(Seq("regions/chromatin_state"))
+    Processor.Outputs(Seq("annotations/regions"))
   }
 
   /** Take any new datasets and convert them from JSON-list to BED file

@@ -1,10 +1,11 @@
 package org.broadinstitute.dig.aggregator.pipeline.overlapregions
 
 import cats.effect.IO
+
 import org.broadinstitute.dig.aggregator.core.{Processor, Run}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.pipeline.gregor.GregorPipeline
-import org.broadinstitute.dig.aggregator.pipeline.metaanalysis.MetaAnalysisPipeline
+import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
+import org.broadinstitute.dig.aggregator.pipeline.varianteffect.VariantEffectPipeline
 import org.broadinstitute.dig.aws._
 import org.broadinstitute.dig.aws.emr._
 
@@ -13,14 +14,14 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
   /** Dependency processors.
     */
   override val dependencies: Seq[Processor.Name] = Seq(
-    GregorPipeline.sortRegionsProcessor,
-    MetaAnalysisPipeline.metaAnalysisProcessor,
+    IntakePipeline.annotations,
+    VariantEffectPipeline.variantListProcessor,
   )
 
   /** All the job scripts that need to be uploaded to AWS.
     */
   override val resources: Seq[String] = Seq(
-    "pipeline/overlappedregions/overlapRegions.py",
+    "pipeline/overlapregions/overlapRegions.py",
   )
 
   /** All the regions are processed into a single output.
@@ -38,6 +39,9 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
     // cluster configuration used to process each phenotype
     val cluster = Cluster(
       name = name.toString,
+      masterInstanceType = InstanceType.c5_4xlarge,
+      slaveInstanceType = InstanceType.c5_2xlarge,
+      instances = 5,
       configurations = Seq(
         ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
       )

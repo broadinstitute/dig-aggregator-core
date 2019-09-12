@@ -8,6 +8,7 @@ from pyspark.sql.types import StructType, StringType, IntegerType, StructField
 from pyspark.sql.functions import broadcast, col, lit, concat_ws  # pylint: disable=E0611
 
 s3dir = 's3://dig-analysis-data'
+s3out = '%s/out/overlapregions' % s3dir
 
 # The size of each overlapped region, increasing this will result in fewer
 # database nodes and faster Spark processing, but result in slower queries.
@@ -25,12 +26,15 @@ regions_schema = StructType(
 )
 
 
-# only need the first 3 columns of the variant data
+# will only use chromosome, position, and varId
 variants_schema = StructType(
     [
-        StructField('varId', StringType(), nullable=False),
         StructField('chromosome', StringType(), nullable=False),
         StructField('position', IntegerType(), nullable=False),
+        StructField('end', IntegerType(), nullable=False),
+        StructField('allele', StringType(), nullable=False),
+        StructField('strand', StringType(), nullable=False),
+        StructField('varId', StringType(), nullable=False),
     ]
 )
 
@@ -39,11 +43,11 @@ def overlap_regions(chromosome):
     """
     Create overlapped regions for annotation regions.
     """
-    srcdir = '%s/out/gregor/regions/*/*/*/part-*' % s3dir
-    outdir = '%s/out/overlapregions/regions' % s3dir
+    srcdir = '%s/annotations/*/*/part-*' % s3dir
+    outdir = '%s/regions' % s3out
 
     # load all the source regions for the given chromosome and give them a unique ID
-    df = spark.read.csv(srcdir, header=False, sep='\t', schema=regions_schema) \
+    df = spark.read.json(srcdir) \
         .filter(col('chromosome') == chromosome) \
         .select(
             col('chromosome'),
@@ -72,29 +76,31 @@ def overlap_regions(chromosome):
 
             regions.append(Row(
                 name='%s:%d-%d' % (chromosome, start, end),
+                chromosome=chromosome,
                 start=start,
                 end=end,
             ))
 
         # create the overlapping regions frame
-        overlappedRegions = spark.createDataFrame(regions)
+        overlapped_regions = spark.createDataFrame(regions)
 
         # .. is the start within the overlapped region?
         # or is the end within the overlapped region?
         # or does it completely contain the overlapped region?
         cond = \
-            ((df.start >= overlappedRegions.start) & (df.start < overlappedRegions.end)) | \
-            ((df.end >= overlappedRegions.start) & (df.end < overlappedRegions.end)) | \
-            ((df.start <= overlappedRegions.start) & (df.end >= overlappedRegions.end))
+            ((df.start >= overlapped_regions.start) & (df.start < overlapped_regions.end)) | \
+            ((df.end >= overlapped_regions.start) & (df.end < overlapped_regions.end)) | \
+            ((df.start <= overlapped_regions.start) & (df.end >= overlapped_regions.end))
 
         # unique naming of regions: CHROMOSOME:START-END
         region_name = concat_ws('-', concat_ws(':', col('region.chromosome'), col('region.start')), col('region.end'))
 
         # join the regions with the overlapped regions
         df = df.alias('region') \
-            .join(broadcast(overlappedRegions).alias('overlapped'), cond, 'left_outer') \
+            .join(broadcast(overlapped_regions).alias('overlapped'), cond, 'left_outer') \
             .select(
                 col('overlapped.name').alias('name'),
+                col('overlapped.chromosome').alias('chromosome'),
                 col('overlapped.start').alias('start'),
                 col('overlapped.end').alias('end'),
                 region_name.alias('region'),
@@ -110,11 +116,11 @@ def overlap_variants(chromosome):
     """
     Create overlapped regions for variants.
     """
-    srcdir = '%s/out/metaanalysis/trans-ethnic/*/part-*' % s3dir
-    outdir = '%s/out/overlapregions/variants' % s3dir
+    srcdir = '%s/out/varianteffect/variants/part-*' % s3dir
+    outdir = '%s/variants' % s3out
 
     # load all the source variants
-    df = spark.read.csv(srcdir, header=True, sep='\t', schema=variants_schema) \
+    df = spark.read.csv(srcdir, header=False, sep='\t', schema=variants_schema) \
         .filter(col('chromosome') == chromosome) \
         .select(
             col('varId'),
@@ -143,21 +149,23 @@ def overlap_variants(chromosome):
 
             regions.append(Row(
                 name='%s:%d-%d' % (chromosome, start, end),
+                chromosome=chromosome,
                 start=start,
                 end=end,
             ))
 
         # create the overlapping regions frame
-        overlappedRegions = spark.createDataFrame(regions)
+        overlapped_regions = spark.createDataFrame(regions)
 
         # .. is the position within the overlapped region?
-        cond = (df.position >= overlappedRegions.start) & (df.end < overlappedRegions.end)
+        cond = (df.position >= overlapped_regions.start) & (df.position < overlapped_regions.end)
 
         # join the regions with the overlapped regions
         df = df.alias('variant') \
-            .join(broadcast(overlappedRegions).alias('overlapped'), cond, 'left_outer') \
+            .join(broadcast(overlapped_regions).alias('overlapped'), cond, 'left_outer') \
             .select(
                 col('overlapped.name').alias('name'),
+                col('overlapped.chromosome').alias('chromosome'),
                 col('overlapped.start').alias('start'),
                 col('overlapped.end').alias('end'),
                 col('variant.varId').alias('varId'),
@@ -167,6 +175,7 @@ def overlap_variants(chromosome):
     df.write \
         .mode('overwrite') \
         .csv('%s/chromosome=%s' % (outdir, chromosome), sep='\t', header=True)
+
 
 # entry point
 if __name__ == '__main__':

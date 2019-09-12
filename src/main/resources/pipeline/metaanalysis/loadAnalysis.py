@@ -18,7 +18,7 @@ from pyspark.sql.functions import col, isnan, lit, when  # pylint: disable=E0611
 s3_path = 's3://dig-analysis-data/out/metaanalysis'
 
 # where local analysis happens
-localdir = '/mnt/efs/metaanalysis'
+localdir = '/mnt/var/metal'
 
 # this is the schema written out by the variant partition process
 variants_schema = StructType(
@@ -187,7 +187,7 @@ def test_path(path):
     return len(find_parts(path)) > 0
 
 
-def load_ancestry_specific_analysis(spark, phenotype):
+def load_ancestry_specific_analysis(phenotype):
     """
     Load the METAL results for each ancestry into a single DataFrame.
     """
@@ -258,7 +258,7 @@ def load_ancestry_specific_analysis(spark, phenotype):
             .csv(outdir, sep='\t', header=True)
 
 
-def load_trans_ethnic_analysis(spark, phenotype):
+def load_trans_ethnic_analysis(phenotype):
     """
     The output from each ancestry-specific analysis is pulled together and
     processed with OVERLAP OFF. Once done, the results are uploaded back to
@@ -321,7 +321,7 @@ if __name__ == '__main__':
     Arguments: [--ancestry-specific | --trans-ethnic] <phenotype>
 
     Either --ancestry-specific or --trans-ethnic is required to be passed on
-    the command line, but they are also mutually exclusive.
+    the command line, but they are mutually exclusive.
     """
     print('python version=%s' % platform.python_version())
     print('user=%s' % os.getenv('USER'))
@@ -342,9 +342,9 @@ if __name__ == '__main__':
 
     # either run the trans-ethnic analysis or ancestry-specific analysis
     if args.ancestry_specific:
-        load_ancestry_specific_analysis(spark, args.phenotype)
+        load_ancestry_specific_analysis(args.phenotype)
     else:
-        load_trans_ethnic_analysis(spark, args.phenotype)
+        load_trans_ethnic_analysis(args.phenotype)
 
     # done
     spark.stop()

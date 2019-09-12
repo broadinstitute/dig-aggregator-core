@@ -4,7 +4,7 @@ import cats.effect._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.pipeline.gregor.GregorPipeline
-import org.broadinstitute.dig.aggregator.pipeline.metaanalysis.MetaAnalysisPipeline
+import org.broadinstitute.dig.aggregator.pipeline.varianteffect.VariantEffectPipeline
 import org.neo4j.driver.v1.StatementResult
 
 class UploadOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
@@ -13,7 +13,9 @@ class UploadOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) ex
     */
   override val dependencies: Seq[Processor.Name] = Seq(
     OverlapRegionsPipeline.overlapRegionsProcessor,
-    MetaAnalysisPipeline.uploadMetaAnalysisProcessor,
+    // Being dependent on other uploads guarantees that the nodes that will
+    // be linked to will exist when this data is uploaded.
+    VariantEffectPipeline.uploadVariantCQSProcessor,
     GregorPipeline.uploadAnnotatedRegionsProcessor,
   )
 

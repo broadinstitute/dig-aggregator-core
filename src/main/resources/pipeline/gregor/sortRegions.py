@@ -11,8 +11,10 @@ s3dir = 's3://dig-analysis-data'
 # BED files need to be sorted by chrom/start, this orders the chromosomes
 chrom_sort_index = list(map(lambda c: str(c+1), range(22))) + ['X', 'Y']
 
+
 def chrom_index(c):
     return chrom_sort_index.index(c)
+
 
 # entry point
 if __name__ == '__main__':

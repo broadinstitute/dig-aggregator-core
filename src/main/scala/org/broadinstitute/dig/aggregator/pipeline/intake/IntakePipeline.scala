@@ -45,6 +45,8 @@ object IntakePipeline extends Pipeline {
   }
 
   /** The various intake processors. */
-  val variants: Name       = register("HDFS:variants", createDummyProcessor)
-  val chromatinState: Name = register("HDFS:chromatin_state", createDummyProcessor)
+  val variants: Name        = register("HDFS:variants", createDummyProcessor)
+  val annotations: Name     = register("HDFS:annotations", createDummyProcessor)
+  val genes: Name           = register("HDFS:genes", createDummyProcessor)
+  val thousandGenomes: Name = register("HDFS:1kg", createDummyProcessor)
 }
