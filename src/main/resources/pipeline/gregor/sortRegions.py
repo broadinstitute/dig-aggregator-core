@@ -39,20 +39,25 @@ if __name__ == '__main__':
         .withColumn('chromIndex', chrom_index_udf('chromosome')) \
         .sort('chromIndex', 'start', ascending=True) \
         .select(
-            col('chromosome').alias('chrom'),
-            col('start').alias('chromStart'),
-            col('end').alias('chromEnd'),
+            col('chromosome'),
+            col('start'),
+            col('end'),
             col('itemRgb'),
             regexp_replace(col('biosample'), ':', '_').alias('biosample'),
             col('name').alias('annotation'),
             col('method'),
         )
 
-    # output the variants in BED format (TSV)
-    df.write\
+    # output the regions partitioned
+    df.write \
         .mode('overwrite') \
         .partitionBy('biosample', 'method', 'annotation') \
-        .csv(outdir, sep='\t')
+        .csv('%s/sorted' % outdir, sep='\t')
+
+    # output the regions un-partitioned for loading into the graph
+    df.write \
+        .mode('overwrite') \
+        .csv('%s/unsorted' % outdir, sep='\t', header=True)
 
     # done
     spark.stop()

@@ -61,7 +61,7 @@ mkdir -p "${REGIONS_DIR}"
 touch "${BED_INDEX_FILE}"
 
 # find all the unique triplet directories of tissue/method/annotation
-S3_PATHS=($(hadoop fs -ls -C "${S3_DIR}/regions/*/*/*/part-*" | xargs dirname | sort | uniq))
+S3_PATHS=($(hadoop fs -ls -C "${S3_DIR}/regions/sorted/*/*/*/part-*" | xargs dirname | sort | uniq))
 
 echo "Unique paths:"
 echo "-------------"
