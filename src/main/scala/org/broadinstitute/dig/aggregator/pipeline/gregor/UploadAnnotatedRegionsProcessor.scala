@@ -48,37 +48,33 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig) 
   /** Create all the region nodes.
     */
   def uploadRegions(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
-    val pattern = raw".+/biosample(?:=|%3[dD])([^/]+)/method(?:=|%3[dD])([^/]+)/annotation(?:=|%3[dD])([^/]+)/.*".r
+    //val pattern = raw".+/biosample(?:=|%3[dD])([^/]+)/method(?:=|%3[dD])([^/]+)/annotation(?:=|%3[dD])([^/]+)/.*".r
 
     // parse the part file to get extra components
-    val (tissue, annotation) = part match {
-      case pattern(biosample, _, name) => (biosample, name)
-    }
+    //val tissue = part match {
+    //  case pattern(bioSample, _, _) => bioSample
+    //}
 
     // build the query
     val q = s"""|USING PERIODIC COMMIT 10000
-                |LOAD CSV WITH HEADERS FROM '$part' AS r
+                |LOAD CSV FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
-                |// lookup the tissue and overlapped region
-                |MATCH (t:Tissue {name: $tissue})
+                |// join columns to make region name
+                |WITH q, r, r[0] + ':' + r[1] + '-' + r[2] AS name
                 |
                 |// create the region node
-                |CREATE (n:Region {
-                |  name: r.name,
-                |  chromosome: r.chromosome,
-                |  start: toInteger(r.start),
-                |  end: toInteger(r.end),
-                |  annotation: $annotation,
-                |  rgb: r.itemRgb
-                |})
+                |MERGE (n:Region {name: name})
+                |ON CREATE SET
+                |  n.chromosome=r[0],
+                |  n.start=toInteger(r[1]),
+                |  n.end=toInteger(r[2])
                 |
                 |// create the required relationships
                 |CREATE (q)-[:PRODUCED]->(n)
-                |CREATE (t)-[:HAS_REGION]->(n)
                 |""".stripMargin
 
     graph.run(q)
