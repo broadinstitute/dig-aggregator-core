@@ -27,7 +27,7 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
   /** All the regions are processed into a single output.
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
-    Processor.Outputs(Seq("overlapped-regions"))
+    Processor.Outputs(Seq("overlap-regions"))
   }
 
   /** With a new variants list or new regions, need to reprocess and get a list

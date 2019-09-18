@@ -53,29 +53,27 @@ class UploadOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) ex
     io.guarantee(graph.shutdown())
   }
 
-  /** Link overlapped regions to regions.
+  /** Link overlapped regions to annotated regions.
     */
   def uploadOverlappedRegions(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 10000
                 |LOAD CSV WITH HEADERS FROM '$part' AS row
                 |FIELDTERMINATOR '\t'
                 |
-                |// lookup the analysis node
+                |// lookup the analysis node and annotated region
                 |MATCH (q:Analysis) WHERE ID(q)=$id
-                |
-                |// lookup the region being overlapped
-                |MATCH (r:Region {name: row.region})
+                |MATCH (r:AnnotatedRegion {name: row.region})
                 |
                 |// create the region node
-                |MERGE (n:OverlappedRegion {name: row.name})
+                |MERGE (n:OverlapRegion {name: row.name})
                 |ON CREATE SET
                 |  n.chromosome=row.chromosome,
                 |  n.start=toInteger(row.start),
                 |  n.end=toInteger(row.end)
                 |
                 |// create the required relationships
-                |CREATE (q)-[:PRODUCED]->(n)
-                |CREATE (n)-[:OVERLAPS_REGION]->(r)
+                |MERGE (q)-[:PRODUCED]->(n)
+                |MERGE (n)-[:OVERLAPS_ANNOTATED_REGION]->(r)
                 |""".stripMargin
 
     graph.run(q)
@@ -88,22 +86,20 @@ class UploadOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) ex
                 |LOAD CSV WITH HEADERS FROM '$part' AS row
                 |FIELDTERMINATOR '\t'
                 |
-                |// lookup the analysis node
+                |// lookup the analysis node and variant
                 |MATCH (q:Analysis) WHERE ID(q)=$id
-                |
-                |// lookup the region being overlapped
                 |MATCH (v:Variant {name: row.varId})
                 |
                 |// create the region node
-                |MERGE (n:OverlappedRegion {name: row.name})
+                |MERGE (n:OverlapRegion {name: row.name})
                 |ON CREATE SET
                 |  n.chromosome=row.chromosome,
                 |  n.start=toInteger(row.start),
                 |  n.end=toInteger(row.end)
                 |
                 |// create the required relationships
-                |CREATE (q)-[:PRODUCED]->(n)
-                |CREATE (n)-[:OVERLAPS_VARIANT]->(v)
+                |MERGE (q)-[:PRODUCED]->(n)
+                |MERGE (n)-[:OVERLAPS_VARIANT]->(v)
                 |""".stripMargin
 
     graph.run(q)

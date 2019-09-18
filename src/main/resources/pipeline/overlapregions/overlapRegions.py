@@ -10,8 +10,13 @@ from pyspark.sql.functions import broadcast, col, lit, concat_ws  # pylint: disa
 s3dir = 's3://dig-analysis-data'
 s3out = '%s/out/overlapregions' % s3dir
 
-# The size of each overlapped region, increasing this will result in fewer
-# database nodes and faster Spark processing, but result in slower queries.
+# The size of each overlap region. Increasing this will result in fewer
+# database nodes and faster Spark processing, but result in slower queries
+# as there will be more relationships made.
+#
+# However, the smaller the size is, the more overlap regions will be
+# created, meaning the initial lookup for them will be slower. 100 kb
+# seems to be a pretty good size.
 
 overlappedRegionSize = 100000
 
@@ -104,7 +109,8 @@ def overlap_regions(chromosome):
                 col('overlapped.start').alias('start'),
                 col('overlapped.end').alias('end'),
                 region_name.alias('region'),
-            )
+            ) \
+            .distinct()
 
     # output the regions to be loaded into Neo4j
     df.write \
@@ -169,7 +175,8 @@ def overlap_variants(chromosome):
                 col('overlapped.start').alias('start'),
                 col('overlapped.end').alias('end'),
                 col('variant.varId').alias('varId'),
-            )
+            ) \
+            .distinct()
 
     # output the regions to be loaded into Neo4j
     df.write \

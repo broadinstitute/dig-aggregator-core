@@ -7,12 +7,10 @@ import org.neo4j.driver.v1.StatementResult
 
 class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
-  /** All the processors this processor depends on. Run after uploading the
-    * global enrichment nodes so they can be linked to.
+  /** All the processors this processor depends on.
     */
   override val dependencies: Seq[Processor.Name] = Seq(
     GregorPipeline.sortRegionsProcessor,
-    GregorPipeline.uploadGlobalEnrichmentProcessor,
   )
 
   /** All the job scripts that need to be uploaded to AWS.
@@ -54,32 +52,30 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig) 
                 |LOAD CSV WITH HEADERS FROM '$part' AS r
                 |FIELDTERMINATOR '\t'
                 |
-                |// lookup the analysis node
+                |// extract the tissue
+                |WITH r, replace(r.biosample, '_', ':') AS tissue
+                |
+                |// lookup the analysis node and tissue
                 |MATCH (q:Analysis) WHERE ID(q)=$id
+                |MATCH (t:Tissue {name: tissue})
                 |
                 |// join columns to make region name
-                |WITH q, r, r.chromosome + ':' + r.start + '-' + r.end AS name
+                |WITH q, t, r, r.chromosome + ':' + r.start + '-' + r.end AS name
                 |
-                |// create the region node
-                |MERGE (n:Region {name: name})
-                |ON CREATE SET
-                |  n.chromosome=r.chromosome,
-                |  n.start=toInteger(r.start),
-                |  n.end=toInteger(r.end)
+                |// create the annotated region node
+                |CREATE (n:AnnotatedRegion {
+                |  name: name,
+                |  chromosome: r.chromosome,
+                |  start: toInteger(r.start),
+                |  end: toInteger(r.end),
+                |  method: r.method,
+                |  annotation: r.annotation,
+                |  rgb: r.itemRgb
+                |})
                 |
                 |// create the required relationships
                 |MERGE (q)-[:PRODUCED]->(n)
-                |WITH r, n, replace(r.biosample, '_', ':') AS t
-                |
-                |// find global enrichment nodes to link
-                |OPTIONAL MATCH (:Tissue {name: t})-[:HAS_GLOBAL_ENRICHMENT]->(g:GlobalEnrichment)
-                |WHERE g.annotation=r.annotation AND g.method=r.method
-                |
-                |// join them into a list
-                |WITH r, n, collect(g) AS gs
-                |
-                |// connect to all the enrichment nodes
-                |FOREACH(g IN gs | CREATE (n)-[:HAS_GLOBAL_ENRICHMENT {rgb: r.itemIgb}]->(g))
+                |MERGE (t)-[:HAS_ANNOTATED_REGION]->(n)
                 |""".stripMargin
 
     graph.run(q)

@@ -16,13 +16,19 @@ T2DKP_ANCESTRY=$4
 # where GREGOR is installed locally
 GREGOR_ROOT=/mnt/var/gregor
 
+# root location in S3
+S3_DIR="s3://dig-analysis-data/out/gregor"
+
 # various files and directories for the configuration
 CONFIG_FILE="${GREGOR_ROOT}/config.txt"
 SNP_FILE="${GREGOR_ROOT}/snplist.txt"
 BED_INDEX_FILE="${GREGOR_ROOT}/bed.file.index"
 REF_DIR="${GREGOR_ROOT}/ref"
 OUT_DIR="${GREGOR_ROOT}/out"
-S3_DIR="s3://dig-analysis-data/out/gregor"
+SUMMARY_DIR="${S3_DIR}/summary/${PHENOTYPE}/${T2DKP_ANCESTRY}"
+
+# delete whatever data was previously created
+aws s3 rm "${SUMMARY_DIR}/" --recursive
 
 # clear any existing output previously generated
 if [[ -d "${OUT_DIR}" ]]; then
@@ -74,4 +80,4 @@ if [[ -e "${OUT_DIR}/GREGOR.log" ]]; then
 fi
 
 # upload output back to S3
-aws s3 cp "${OUT_DIR}/StatisticSummaryFile.txt" "${S3_DIR}/summary/${PHENOTYPE}/${T2DKP_ANCESTRY}/statistics.txt"
+aws s3 cp "${OUT_DIR}/StatisticSummaryFile.txt" "${SUMMARY_DIR}/statistics.txt"
