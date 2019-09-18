@@ -42,10 +42,12 @@ if __name__ == '__main__':
             col('chromosome'),
             col('start'),
             col('end'),
-            col('itemRgb'),
+
+            # fix the name for Spark (needs undone during upload)
             regexp_replace(col('biosample'), ':', '_').alias('biosample'),
             col('name').alias('annotation'),
             col('method'),
+            col('itemRgb'),
         )
 
     # output the regions partitioned

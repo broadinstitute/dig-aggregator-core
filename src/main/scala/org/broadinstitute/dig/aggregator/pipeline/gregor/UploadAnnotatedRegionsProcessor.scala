@@ -57,26 +57,29 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig) 
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |
-                |// lookup all the global enrichment nodes to link
-                |OPTIONAL MATCH (:Tissue {name: r.biosample})-[:HAS_GLOBAL_ENRICHMENT]->(g:GlobalEnrichment)
-                |WHERE g.annotation=r.annotation AND g.method=r.method
-                |
                 |// join columns to make region name
-                |WITH q, collect(g) AS gs, r, r.chromosome + ':' + r.start + '-' + r.end AS name
+                |WITH q, r, r.chromosome + ':' + r.start + '-' + r.end AS name
                 |
                 |// create the region node
                 |MERGE (n:Region {name: name})
                 |ON CREATE SET
                 |  n.chromosome=r.chromosome,
                 |  n.start=toInteger(r.start),
-                |  n.end=toInteger(r.end),
-                |  n.rgb=r.itemRgb
+                |  n.end=toInteger(r.end)
                 |
                 |// create the required relationships
-                |CREATE (q)-[:PRODUCED]->(n)
+                |MERGE (q)-[:PRODUCED]->(n)
+                |WITH r, n, replace(r.biosample, '_', ':') AS t
+                |
+                |// find global enrichment nodes to link
+                |OPTIONAL MATCH (:Tissue {name: t})-[:HAS_GLOBAL_ENRICHMENT]->(g:GlobalEnrichment)
+                |WHERE g.annotation=r.annotation AND g.method=r.method
+                |
+                |// join them into a list
+                |WITH r, n, collect(g) AS gs
                 |
                 |// connect to all the enrichment nodes
-                |FOREACH(g IN gs | CREATE (n)-[:HAS_GLOBAL_ENRICHMENT]->(g))
+                |FOREACH(g IN gs | CREATE (n)-[:HAS_GLOBAL_ENRICHMENT {rgb: r.itemIgb}]->(g))
                 |""".stripMargin
 
     graph.run(q)
