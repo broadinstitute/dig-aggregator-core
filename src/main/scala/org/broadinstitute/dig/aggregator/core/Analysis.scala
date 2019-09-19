@@ -85,7 +85,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
     * delete the analysis node as it assumes it is being updated.
     */
   def delete(graph: GraphDb): IO[Unit] = {
-    val batchSize = 10000
+    val batchSize = 1000
 
     // first delete all the results
     val deleteResults =
