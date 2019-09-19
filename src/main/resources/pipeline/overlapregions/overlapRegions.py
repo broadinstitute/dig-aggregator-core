@@ -15,20 +15,10 @@ s3out = '%s/out/overlapregions' % s3dir
 # as there will be more relationships made.
 #
 # However, the smaller the size is, the more overlap regions will be
-# created, meaning the initial lookup for them will be slower. 50 kb
+# created, meaning the initial lookup for them will be slower. 100 kb
 # seems to be a pretty good size.
 
-overlappedRegionSize = 50000
-
-
-# only need the first 3 columns of the region data
-regions_schema = StructType(
-    [
-        StructField('chromosome', StringType(), nullable=False),
-        StructField('start', IntegerType(), nullable=False),
-        StructField('end', IntegerType(), nullable=False),
-    ]
-)
+overlappedRegionSize = 100000
 
 
 # will only use chromosome, position, and varId
@@ -44,7 +34,7 @@ variants_schema = StructType(
 )
 
 
-def overlap_regions(chromosome):
+def overlap_annotated_regions(chromosome):
     """
     Create overlapped regions for annotation regions.
     """
@@ -111,7 +101,7 @@ def overlap_regions(chromosome):
                 region_name.alias('region'),
             ) \
             .distinct() \
-            .coalesce(20)
+            .coalesce(10)
 
     # output the regions to be loaded into Neo4j
     df.write \
@@ -178,7 +168,7 @@ def overlap_variants(chromosome):
                 col('variant.varId').alias('varId'),
             ) \
             .distinct() \
-            .coalesce(20)
+            .coalesce(10)
 
     # output the regions to be loaded into Neo4j
     df.write \
@@ -211,7 +201,7 @@ if __name__ == '__main__':
     if args.variants:
         overlap_variants(args.chromosome)
     else:
-        overlap_regions(args.chromosome)
+        overlap_annotated_regions(args.chromosome)
 
     # done
     spark.stop()

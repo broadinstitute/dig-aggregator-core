@@ -38,6 +38,7 @@ class UploadOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) ex
   override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val graph    = new GraphDb(config.neo4j)
     val analysis = new Analysis(analysisName, Provenance.thisBuild)
+    val unique   = "out/overlapregions/unique/"
     val regions  = "out/overlapregions/regions/"
     val variants = "out/overlapregions/variants/"
 
@@ -45,35 +46,56 @@ class UploadOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) ex
       id <- analysis.create(graph)
 
       // find and upload all the sorted region part files
-      _ <- analysis.uploadParts(aws, graph, id, regions)(uploadOverlappedRegions)
-      _ <- analysis.uploadParts(aws, graph, id, variants)(uploadOverlappedVariants)
+      _ <- IO(logger.info("Uploading unique OverlapRegion nodes..."))
+      _ <- analysis.uploadParts(aws, graph, id, unique)(uploadUniqueOverlapRegions)
+      _ <- IO(logger.info("Uploading OverlapRegion relationships to AnnotatedRegions..."))
+      _ <- analysis.uploadParts(aws, graph, id, regions)(uploadAnnotatedRegionRelationships)
+      _ <- IO(logger.info("Uploading OverlapRegion relationships to Variants..."))
+      _ <- analysis.uploadParts(aws, graph, id, variants)(uploadVariantRelationships)
     } yield ()
 
     // ensure that the graph connection is closed
     io.guarantee(graph.shutdown())
   }
 
-  /** Link overlapped regions to annotated regions.
+  /** Create all the overlap region nodes.
     */
-  def uploadOverlappedRegions(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
+  def uploadUniqueOverlapRegions(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 10000
                 |LOAD CSV WITH HEADERS FROM '$part' AS row
                 |FIELDTERMINATOR '\t'
                 |
-                |// lookup the analysis node and annotated region
+                |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
+                |
+                |// create the OverlapRegion node
+                |CREATE (n:OverlapRegion {
+                |  name: row.name,
+                |  chromosome: row.chromosome,
+                |  start: toInteger(row.start),
+                |  end: toInteger(row.end)
+                |})
+                |
+                |// create relationship to analysis
+                |CREATE (q)-[:PRODUCED]->(n)
+                |""".stripMargin
+
+    graph.run(q)
+  }
+
+  /** Actually create the relationships to regions and variants.
+    */
+  def uploadAnnotatedRegionRelationships(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
+    val q = s"""|USING PERIODIC COMMIT 10000
+                |LOAD CSV WITH HEADERS FROM '$part' AS row
+                |FIELDTERMINATOR '\t'
+                |
+                |// lookup the overlap node and annotated region
+                |MATCH (n:OverlapRegion {name: row.name})
                 |MATCH (r:AnnotatedRegion {name: row.region})
                 |
-                |// create the region node
-                |MERGE (n:OverlapRegion {name: row.name})
-                |ON CREATE SET
-                |  n.chromosome=row.chromosome,
-                |  n.start=toInteger(row.start),
-                |  n.end=toInteger(row.end)
-                |
                 |// create the required relationships
-                |MERGE (q)-[:PRODUCED]->(n)
-                |MERGE (n)-[:OVERLAPS_ANNOTATED_REGION]->(r)
+                |CREATE (n)-[:OVERLAPS_ANNOTATED_REGION]->(r)
                 |""".stripMargin
 
     graph.run(q)
@@ -81,25 +103,17 @@ class UploadOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) ex
 
   /** Link overlapped regions to variants.
     */
-  def uploadOverlappedVariants(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
+  def uploadVariantRelationships(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 10000
                 |LOAD CSV WITH HEADERS FROM '$part' AS row
                 |FIELDTERMINATOR '\t'
                 |
-                |// lookup the analysis node and variant
-                |MATCH (q:Analysis) WHERE ID(q)=$id
+                |// lookup the analysis node and annotated region
+                |MATCH (n:OverlapRegion {name: row.name})
                 |MATCH (v:Variant {name: row.varId})
                 |
-                |// create the region node
-                |MERGE (n:OverlapRegion {name: row.name})
-                |ON CREATE SET
-                |  n.chromosome=row.chromosome,
-                |  n.start=toInteger(row.start),
-                |  n.end=toInteger(row.end)
-                |
                 |// create the required relationships
-                |MERGE (q)-[:PRODUCED]->(n)
-                |MERGE (n)-[:OVERLAPS_VARIANT]->(v)
+                |CREATE (n)-[:OVERLAPS_VARIANT]->(v)
                 |""".stripMargin
 
     graph.run(q)
