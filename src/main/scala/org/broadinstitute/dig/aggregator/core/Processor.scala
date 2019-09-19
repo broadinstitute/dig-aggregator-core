@@ -144,14 +144,19 @@ abstract class Processor(val name: Processor.Name, config: BaseConfig) extends L
 
   /** Run this processor. */
   def run(opts: Processor.Opts): IO[Unit] = {
-    for {
-      work <- getWork(opts)
-      _    <- uploadResources(aws)
+    getWork(opts).flatMap { work =>
+      if (work.isEmpty) {
+        IO(logger.info("Everything up to date."))
+      } else {
+        for {
+          _ <- uploadResources(aws)
 
-      // if only inserting runs, skip processing
-      _ <- if (opts.insertRuns) IO.unit else processOutputs(work.keys.toSeq)
-      _ <- insertRuns(pool, work)
-    } yield ()
+          // if only inserting runs, skip processing
+          _ <- if (opts.insertRuns) IO.unit else processOutputs(work.keys.toSeq)
+          _ <- insertRuns(pool, work)
+        } yield ()
+      }
+    }
   }
 }
 

@@ -15,10 +15,10 @@ s3out = '%s/out/overlapregions' % s3dir
 # as there will be more relationships made.
 #
 # However, the smaller the size is, the more overlap regions will be
-# created, meaning the initial lookup for them will be slower. 100 kb
+# created, meaning the initial lookup for them will be slower. 50 kb
 # seems to be a pretty good size.
 
-overlappedRegionSize = 100000
+overlappedRegionSize = 50000
 
 
 # only need the first 3 columns of the region data
@@ -110,7 +110,8 @@ def overlap_regions(chromosome):
                 col('overlapped.end').alias('end'),
                 region_name.alias('region'),
             ) \
-            .distinct()
+            .distinct() \
+            .coalesce(20)
 
     # output the regions to be loaded into Neo4j
     df.write \
@@ -176,7 +177,8 @@ def overlap_variants(chromosome):
                 col('overlapped.end').alias('end'),
                 col('variant.varId').alias('varId'),
             ) \
-            .distinct()
+            .distinct() \
+            .coalesce(20)
 
     # output the regions to be loaded into Neo4j
     df.write \
