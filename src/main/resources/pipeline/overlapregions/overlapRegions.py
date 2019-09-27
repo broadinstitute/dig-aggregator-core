@@ -38,7 +38,7 @@ def overlap_regions(chromosome, src, output):
     """
     Create overlapped regions for annotation regions.
     """
-    srcdir = '%s/%' % (s3dir, src)
+    srcdir = '%s/%s' % (s3dir, src)
     outdir = '%s/overlapped/%s' % (s3out, output)
 
     # load all the source regions for the given chromosome and give them a unique ID
