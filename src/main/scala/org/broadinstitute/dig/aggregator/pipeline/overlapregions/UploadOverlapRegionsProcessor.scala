@@ -13,12 +13,7 @@ class UploadOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) ex
   /** All the processors this processor depends on.
     */
   override val dependencies: Seq[Processor.Name] = Seq(
-    OverlapRegionsPipeline.overlapRegionsProcessor,
-    // Being dependent on other uploads guarantees that the nodes that will
-    // be linked to will exist when this data is uploaded.
-    VariantEffectPipeline.uploadVariantCQSProcessor,
-    GregorPipeline.uploadAnnotatedRegionsProcessor,
-    //GenePredictionsPipeline.uploadGenePredictionsProcessor,
+    OverlapRegionsPipeline.uniqueOverlapRegionsProcessor,
   )
 
   /** All the job scripts that need to be uploaded to AWS.

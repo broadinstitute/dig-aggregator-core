@@ -23,7 +23,6 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
     */
   override val resources: Seq[String] = Seq(
     "pipeline/overlapregions/overlapRegions.py",
-    "pipeline/overlapregions/uniqueRegions.py",
   )
 
   /** All the regions are processed into a single output.
@@ -41,7 +40,6 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
     */
   override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val script = aws.uriOf("resources/pipeline/overlapregions/overlapRegions.py")
-    val unique = aws.uriOf("resources/pipeline/overlapregions/uniqueRegions.py")
 
     // cluster configuration used to process each phenotype
     val cluster = Cluster(
@@ -73,12 +71,6 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
     val clusteredJobs = aws.clusterJobs(cluster, jobs)
 
     // wait for all the jobs to complete
-    for {
-      _ <- aws.waitForJobs(clusteredJobs)
-
-      // finally, spin up one last job to get all unique regions
-      job <- aws.runJob(cluster, JobStep.PySpark(unique))
-      _   <- aws.waitForJob(job)
-    } yield ()
+    aws.waitForJobs(clusteredJobs)
   }
 }

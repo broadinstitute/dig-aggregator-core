@@ -23,7 +23,7 @@ if __name__ == '__main__':
     outdir = '%s/out/overlapregions/unique' % s3dir
 
     # load the annotated regions output, but only keep the overlapregion data
-    df = spark.read.csv('%s/*/part-*' % srcdir, header=True, sep='\t').select(
+    df = spark.read.csv('%s/*/*/part-*' % srcdir, header=True, sep='\t').select(
         col('name'),
         col('chromosome'),
         col('start'),
