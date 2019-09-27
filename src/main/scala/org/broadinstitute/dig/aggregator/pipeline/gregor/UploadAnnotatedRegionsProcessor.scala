@@ -70,7 +70,8 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig) 
                 |  end: toInteger(r.end),
                 |  method: r.method,
                 |  annotation: r.annotation,
-                |  rgb: r.itemRgb
+                |  rgb: r.itemRgb,
+                |  score: toFloat(r.score)
                 |})
                 |
                 |// create the required relationships

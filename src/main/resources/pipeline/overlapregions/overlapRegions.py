@@ -34,12 +34,12 @@ variants_schema = StructType(
 )
 
 
-def overlap_annotated_regions(chromosome):
+def overlap_regions(chromosome, src, output):
     """
     Create overlapped regions for annotation regions.
     """
-    srcdir = '%s/annotations/*/*/part-*' % s3dir
-    outdir = '%s/regions' % s3out
+    srcdir = '%s/%' % (s3dir, src)
+    outdir = '%s/overlapped/%s' % (s3out, output)
 
     # load all the source regions for the given chromosome and give them a unique ID
     df = spark.read.json(srcdir) \
@@ -85,7 +85,7 @@ def overlap_annotated_regions(chromosome):
         cond = \
             ((df.start >= overlapped_regions.start) & (df.start < overlapped_regions.end)) | \
             ((df.end >= overlapped_regions.start) & (df.end < overlapped_regions.end)) | \
-            ((df.start <= overlapped_regions.start) & (df.end >= overlapped_regions.end))
+            ((df.start < overlapped_regions.start) & (df.end >= overlapped_regions.end))
 
         # unique naming of regions: CHROMOSOME:START-END
         region_name = concat_ws('-', concat_ws(':', col('region.chromosome'), col('region.start')), col('region.end'))
@@ -109,12 +109,26 @@ def overlap_annotated_regions(chromosome):
         .csv('%s/chromosome=%s' % (outdir, chromosome), sep='\t', header=True)
 
 
+def overlap_annotated_regions(chromosome):
+    """
+    Create overlapped regions for annotation regions.
+    """
+    overlap_regions(chromosome, 'annotated_regions/*/*/part-*', 'annotated_regions')
+
+
+def overlap_gene_predictions(chromosome):
+    """
+    Create overlapped regions for annotation regions.
+    """
+    overlap_regions(chromosome, 'gene_predictions/*/part-*', 'gene_predictions')
+
+
 def overlap_variants(chromosome):
     """
     Create overlapped regions for variants.
     """
     srcdir = '%s/out/varianteffect/variants/part-*' % s3dir
-    outdir = '%s/variants' % s3out
+    outdir = '%s/overlapped/variants' % s3out
 
     # load all the source variants
     df = spark.read.csv(srcdir, header=False, sep='\t', schema=variants_schema) \
@@ -179,13 +193,14 @@ def overlap_variants(chromosome):
 # entry point
 if __name__ == '__main__':
     """
-    Arguments: [--variants | --regions] chromosome
+    Arguments: [--variants | --annotated-regions | --gene-predictions] chromosome
     """
     print('Python version: %s' % platform.python_version())
 
     opts = argparse.ArgumentParser()
     opts.add_argument('--variants', action='store_true', default=False)
-    opts.add_argument('--regions', action='store_true', default=False)
+    opts.add_argument('--annotated-regions', action='store_true', default=False)
+    opts.add_argument('--gene-predictions', action='store_true', default=False)
     opts.add_argument('chromosome')
 
     # parse command line arguments
@@ -200,8 +215,10 @@ if __name__ == '__main__':
     # run the process
     if args.variants:
         overlap_variants(args.chromosome)
-    else:
+    if args.annotated_regions:
         overlap_annotated_regions(args.chromosome)
+    if args.gene_predictions:
+        overlap_gene_predictions(args.chromosome)
 
     # done
     spark.stop()

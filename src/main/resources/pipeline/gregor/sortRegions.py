@@ -24,7 +24,7 @@ if __name__ == '__main__':
     print('Python version: %s' % platform.python_version())
 
     # get the source and output directories
-    srcdir = '%s/annotations/*/*/part-*' % s3dir
+    srcdir = '%s/annotated_regions/*/*/part-*' % s3dir
     outdir = '%s/out/gregor/regions' % s3dir
 
     # create a spark session
@@ -48,6 +48,7 @@ if __name__ == '__main__':
             col('name').alias('annotation'),
             col('method'),
             col('itemRgb'),
+            col('score'),
         )
 
     # output the regions partitioned

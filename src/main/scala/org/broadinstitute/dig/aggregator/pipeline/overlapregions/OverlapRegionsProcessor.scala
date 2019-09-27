@@ -14,7 +14,8 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
   /** Dependency processors.
     */
   override val dependencies: Seq[Processor.Name] = Seq(
-    IntakePipeline.annotations,
+    IntakePipeline.annotatedRegions,
+    IntakePipeline.genePredictions,
     VariantEffectPipeline.variantListProcessor,
   )
 
@@ -52,8 +53,15 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
     // chromosomes to map
     val chrs = (1 to 22).map(_.toString) ++ Seq("X", "Y", "XY", "M")
 
+    // the various types to overlap
+    val joins = Seq(
+      "--variants",
+      "--annotated-regions",
+      "--gene-predictions",
+    )
+
     // create a job for variants and regions per chromosome
-    val jobs = for (chr <- chrs; join <- Seq("--variants", "--regions")) yield {
+    val jobs = for (chr <- chrs; join <- joins) yield {
       Seq(JobStep.PySpark(script, join, chr))
     }
 

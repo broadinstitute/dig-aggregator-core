@@ -12,7 +12,6 @@ import org.broadinstitute.dig.aws.emr.InstanceType
 
 import cats.effect.IO
 
-
 /** After all the variants for a particular phenotype have been uploaded, the
   * frequency processor runs a Spark job that will calculate the average EAF
   * and MAF for each variant across all datasets - partitioned by ancestry -
