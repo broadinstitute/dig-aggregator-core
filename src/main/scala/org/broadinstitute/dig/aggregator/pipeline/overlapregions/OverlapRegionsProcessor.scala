@@ -29,7 +29,11 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
   /** All the regions are processed into a single output.
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
-    Processor.Outputs(Seq("overlap-regions"))
+    input.processor match {
+      case IntakePipeline.annotatedRegions            => Processor.Outputs(Seq("overlapregions/annotated_regions"))
+      case IntakePipeline.genePredictions             => Processor.Outputs(Seq("overlapregions/gene_predictions"))
+      case VariantEffectPipeline.variantListProcessor => Processor.Outputs(Seq("overlapregions/variants"))
+    }
   }
 
   /** With a new variants list or new regions, need to reprocess and get a list
@@ -54,11 +58,11 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
     val chrs = (1 to 22).map(_.toString) ++ Seq("X", "Y", "XY", "M")
 
     // the various types to overlap
-    val joins = Seq(
-      "--variants",
-      "--annotated-regions",
-      "--gene-predictions",
-    )
+    val joins = outputs.map {
+      case "overlapregions/annotated_regions" => "--annotated-regions"
+      case "overlapregions/gene_predictions"  => "--gene-predictions"
+      case "overlapregions/variants"          => "--variants"
+    }
 
     // create a job for variants and regions per chromosome
     val jobs = for (chr <- chrs; join <- joins) yield {
