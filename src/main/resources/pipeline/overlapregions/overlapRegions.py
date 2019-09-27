@@ -206,9 +206,6 @@ if __name__ == '__main__':
     # parse command line arguments
     args = opts.parse_args()
 
-    # --variants or --regions must be provided, but not both!
-    assert args.variants != args.regions
-
     # create a spark session
     spark = SparkSession.builder.appName('overlapRegions').getOrCreate()
 
