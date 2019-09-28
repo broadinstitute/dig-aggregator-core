@@ -3,9 +3,6 @@ package org.broadinstitute.dig.aggregator.pipeline.overlapregions
 import cats.effect._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core._
-import org.broadinstitute.dig.aggregator.pipeline.genepredictions.GenePredictionsPipeline
-import org.broadinstitute.dig.aggregator.pipeline.gregor.GregorPipeline
-import org.broadinstitute.dig.aggregator.pipeline.varianteffect.VariantEffectPipeline
 import org.neo4j.driver.v1.StatementResult
 
 class UploadOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {

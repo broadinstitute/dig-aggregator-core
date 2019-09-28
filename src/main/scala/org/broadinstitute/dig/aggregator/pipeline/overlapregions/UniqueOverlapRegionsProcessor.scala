@@ -4,8 +4,6 @@ import cats.effect.IO
 
 import org.broadinstitute.dig.aggregator.core.{Processor, Run}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
-import org.broadinstitute.dig.aggregator.pipeline.varianteffect.VariantEffectPipeline
 import org.broadinstitute.dig.aws._
 import org.broadinstitute.dig.aws.emr._
 
