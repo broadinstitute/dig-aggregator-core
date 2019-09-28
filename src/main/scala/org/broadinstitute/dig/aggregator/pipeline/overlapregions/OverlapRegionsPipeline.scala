@@ -15,4 +15,6 @@ object OverlapRegionsPipeline extends Pipeline {
   val uniqueOverlapRegionsProcessor: Name =
     register("UniqueOverlapRegionsProcessor", new UniqueOverlapRegionsProcessor(_, _))
   val uploadRegionsProcessor: Name = register("UploadOverlapRegionsProcessor", new UploadOverlapRegionsProcessor(_, _))
+  val createRelationshipsProcessor: Name =
+    register("CreateOverlapRegionRelationshipsProcessor", new CreateOverlapRegionRelationshipsProcessor(_, _))
 }
