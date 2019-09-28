@@ -45,7 +45,7 @@ class UploadGenePredictionsProcessor(name: Processor.Name, config: BaseConfig) e
                 |
                 |// lookup the analysis node and the gene
                 |MATCH (q:Analysis) WHERE ID(q)=$id
-                |MATCH (g:Gene {name: r.predictedTargetGene})
+                |MATCH (g:Gene {ensemblId: r.predictedTargetGene})
                 |
                 |// create the region name
                 |WITH q, g, r, (r.chromosome + ':' + r.start + '-' + r.end) AS name
