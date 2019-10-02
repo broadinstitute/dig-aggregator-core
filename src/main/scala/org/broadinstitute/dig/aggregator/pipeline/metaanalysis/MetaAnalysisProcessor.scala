@@ -9,6 +9,7 @@ import org.broadinstitute.dig.aws.emr.ApplicationConfig
 import org.broadinstitute.dig.aws.emr.BootstrapScript
 import org.broadinstitute.dig.aws.emr.ClassificationProperties
 import org.broadinstitute.dig.aws.emr.Cluster
+import org.broadinstitute.dig.aws.emr.InstanceType
 
 import cats.effect.IO
 
@@ -70,6 +71,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Pr
     // cluster definition to run jobs
     val cluster = Cluster(
       name = name.toString,
+      masterInstanceType = InstanceType.c5_9xlarge,
       instances = 1,
       masterVolumeSizeInGB = 800,
       bootstrapScripts = Seq(new BootstrapScript(bootstrapUri)),
