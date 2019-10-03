@@ -78,7 +78,7 @@ def metaanalysis_schema(samplesize=True, overlap=False):
 
 def read_samplesize_analysis(spark, path, overlap):
     """
-    Read the output of METAL when run with OVERLAP ON and SCHEMA SAMPLESIZE.
+    Read the output of METAL when run with OVERLAP ON and SCHEME SAMPLESIZE.
     """
 
     def transform(row):
@@ -276,8 +276,7 @@ def load_trans_ethnic_analysis(phenotype):
     srcdir = '%s/trans-ethnic/%s' % (s3_staging, phenotype)
     outdir = '%s/trans-ethnic/%s' % (s3_path, phenotype)
 
-    # if the source directory doesn't exist there's nothing to load
-    if not os.path.exists(srcdir):
+    if not hadoop_test(srcdir):
         return
 
     # load the analyses - note that zScore is present for trans-ethnic!
