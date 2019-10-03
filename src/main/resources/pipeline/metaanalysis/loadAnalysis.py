@@ -200,7 +200,7 @@ def load_ancestry_specific_analysis(phenotype):
     ancestries = set()
 
     # discover all the ancestries
-    for tbl in hadoop_ls('%s/*/*/METAANALYSIS1.tbl'):
+    for tbl in hadoop_ls('%s/*/*/METAANALYSIS1.tbl' % srcdir):
         ancestry = re.search(r'/ancestry=([^/]+)/', tbl).group(1)
         ancestries.add(ancestry)
 
