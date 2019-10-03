@@ -71,8 +71,9 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Pr
     // cluster definition to run jobs
     val cluster = Cluster(
       name = name.toString,
-      masterInstanceType = InstanceType.c5_9xlarge,
-      instances = 1,
+      masterInstanceType = InstanceType.c5_4xlarge,
+      slaveInstanceType = InstanceType.c5_2xlarge,
+      instances = 4,
       masterVolumeSizeInGB = 800,
       bootstrapScripts = Seq(new BootstrapScript(bootstrapUri)),
       configurations = Seq(sparkConf)

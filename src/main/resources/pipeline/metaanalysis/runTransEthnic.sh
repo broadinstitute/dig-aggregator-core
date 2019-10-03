@@ -50,3 +50,10 @@ INPUT_FILES=($(find "${OUTDIR}" -name "variants.csv" | xargs realpath))
 # run METAL across all ancestries with OVERLAP OFF
 bash "${RUN_METAL}" "SAMPLESIZE" "OFF" "${ANALYSIS_DIR}" "${INPUT_FILES[@]}"
 bash "${RUN_METAL}" "STDERR" "OFF" "${ANALYSIS_DIR}" "${INPUT_FILES[@]}"
+
+# nuke any previously existing staging data
+aws s3 rm "${S3_PATH}/staging/metaanalysis/trans-ethnic/${PHENOTYPE}/" --recursive
+
+# upload the resuts to S3
+aws s3 cp "${ANALYSIS_DIR}/scheme=SAMPLESIZE/" "${S3_PATH}/staging/trans-ethnic/${PHENOTYPE}/scheme=SAMPLESIZE/" --recursive
+aws s3 cp "${ANALYSIS_DIR}/scheme=STDERR/" "${S3_PATH}/staging/trans-ethnic/${PHENOTYPE}/scheme=STDERR/" --recursive
