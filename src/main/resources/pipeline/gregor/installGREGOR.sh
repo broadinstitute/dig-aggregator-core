@@ -60,26 +60,32 @@ tar zxf GREGOR.v1.4.0.tar.gz
 mkdir -p "${REGIONS_DIR}"
 touch "${BED_INDEX_FILE}"
 
-# find all the unique tissues from the part files
-TISSUES=($(hadoop fs -ls -C "${S3_DIR}/regions/chromatin_state/*/*/part-*" | xargs dirname | xargs dirname | xargs -I @ basename "@" | sed -r 's/^biosample=//' | sort | uniq))
+# find all the unique triplet directories of tissue/method/annotation
+S3_PATHS=($(hadoop fs -ls -C "${S3_DIR}/regions/sorted/*/*/*/part-*" | xargs dirname | sort | uniq))
 
-# debug to STDOUT all the unique tissues
-echo "Unique bio-samples:"
-echo "-------------------"
-echo "${TISSUES[@]}" | tr ' ' '\n'
-echo "-------------------"
+echo "Unique paths:"
+echo "-------------"
+echo "${PATHS[@]}" | tr ' ' '\n'
+echo "-------------"
 
-# for each tissue, get all the annotations for it, and join them into tissue+annotation bed files
-for TISSUE in "${TISSUES[@]}"; do
-    ANNOTATIONS=($(hadoop fs -ls -C "${S3_DIR}/regions/chromatin_state/biosample=${TISSUE}/*/part-*" | xargs dirname | xargs -I @ basename "@" | sed -r 's/^name=([0-9]+_)?//' | sort | uniq))
+# for each path, parse and fetch
+for S3_PATH in "${S3_PATHS[@]}"; do
+  BIOSAMPLE=$(dirname "${S3_PATH}" | xargs dirname | xargs basename | awk -F "=" '{print $2}')
+  METHOD=$(dirname "${S3_PATH}" | xargs basename | awk -F "=" '{print $2}')
+  ANNOTATION=$(basename "${S3_PATH}" | awk -F "=" '{print $2}')
 
-    # for each annotation, merge all the part files into a single BED
-    for ANNOTATION in "${ANNOTATIONS[@]}"; do
-        # don't use .bed extension as we'll use the column value of the output for Neo4j
-        BED_FILE="${REGIONS_DIR}/${TISSUE}___${ANNOTATION}"
+  # create a temporary file to merge into
+  TMP_FILE=$(mktemp bed.XXXXXX)
 
-        # merge all the part files together into a single glob
-        hadoop fs -getmerge -skip-empty-file "${S3_DIR}/regions/chromatin_state/biosample=${TISSUE}/name=${ANNOTATION}/part-*" "${BED_FILE}"
-        echo "${BED_FILE}" >> "${BED_INDEX_FILE}"
-    done
+  # merge all the part files together into the temp file
+  hadoop fs -getmerge -skip-empty-file "${S3_PATH}/part-*" "${TMP_FILE}"
+
+  # don't use .bed extension as we'll use the column value of the output for Neo4j
+  BED_FILE="${REGIONS_DIR}/${BIOSAMPLE}___${METHOD}___${ANNOTATION}"
+
+  # only keep the first 3 columns (chrom, start, end)
+  cut -f1,2,3 "${TMP_FILE}" > "${BED_FILE}"
+
+  # add the bed file to the index
+  echo "${BED_FILE}" >> "${BED_INDEX_FILE}"
 done

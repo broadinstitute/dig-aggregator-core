@@ -16,9 +16,10 @@ from pyspark.sql.functions import col, isnan, lit, when  # pylint: disable=E0611
 
 # where in S3 meta-analysis data is
 s3_path = 's3://dig-analysis-data/out/metaanalysis'
+s3_staging = '%s/staging' % s3_path
 
 # where local analysis happens
-localdir = '/mnt/efs/metaanalysis'
+localdir = '/mnt/var/metal'
 
 # this is the schema written out by the variant partition process
 variants_schema = StructType(
@@ -77,7 +78,7 @@ def metaanalysis_schema(samplesize=True, overlap=False):
 
 def read_samplesize_analysis(spark, path, overlap):
     """
-    Read the output of METAL when run with OVERLAP ON and SCHEMA SAMPLESIZE.
+    Read the output of METAL when run with OVERLAP ON and SCHEME SAMPLESIZE.
     """
 
     def transform(row):
@@ -156,8 +157,8 @@ def load_analysis(spark, path, overlap=False):
     """
     Load the SAMPLESIZE and STDERR analysis and join them together.
     """
-    samplesize_outfile = 'file://%s/scheme=SAMPLESIZE/METAANALYSIS1.tbl' % path
-    stderr_outfile = 'file://%s/scheme=STDERR/METAANALYSIS1.tbl' % path
+    samplesize_outfile = '%s/scheme=SAMPLESIZE/METAANALYSIS1.tbl' % path
+    stderr_outfile = '%s/scheme=STDERR/METAANALYSIS1.tbl' % path
 
     # load both files into data frames
     samplesize_analysis = read_samplesize_analysis(spark, samplesize_outfile, overlap)
@@ -167,7 +168,7 @@ def load_analysis(spark, path, overlap=False):
     return samplesize_analysis.join(stderr_analysis, 'varId')
 
 
-def find_parts(path):
+def hadoop_ls(path):
     """
     Run `hadoop fs -ls -C` to find all the files that match a particular path.
     """
@@ -180,26 +181,34 @@ def find_parts(path):
         return []
 
 
-def test_path(path):
+def hadoop_test(path):
     """
     Run `hadoop fs -test -s` to see if any files exist matching the pathspec.
     """
-    return len(find_parts(path)) > 0
+    return len(hadoop_ls(path)) > 0
 
 
-def load_ancestry_specific_analysis(spark, phenotype):
+def load_ancestry_specific_analysis(phenotype):
     """
     Load the METAL results for each ancestry into a single DataFrame.
     """
-    srcdir = '%s/ancestry-specific/%s' % (localdir, phenotype)
+    srcdir = '%s/ancestry-specific/%s' % (s3_staging, phenotype)
     outdir = '%s/ancestry-specific/%s' % (s3_path, phenotype)
 
     # the final dataframe for each ancestry
     df = []
+    ancestries = set()
 
-    # find all the _analysis directories
-    for path in glob.glob('%s/*/_analysis' % srcdir):
-        ancestry = re.search(r'/ancestry=([^/]+)/_analysis', path).group(1)
+    # discover all the ancestries
+    for tbl in hadoop_ls('%s/*/*/METAANALYSIS1.tbl' % srcdir):
+        ancestry = re.search(r'/ancestry=([^/]+)/', tbl).group(1)
+        ancestries.add(ancestry)
+
+    # for each ancestry, load the analysis
+    for ancestry in ancestries:
+        print('Loading ancestry %s...', ancestry)
+
+        path = '%s/ancestry=%s' % (srcdir, ancestry)
 
         # NOTE: The columns from the analysis and rare variants need to be
         #       in the same order before unioning the sets together. To
@@ -220,7 +229,7 @@ def load_ancestry_specific_analysis(spark, phenotype):
         rare_path = '%s/variants/%s/*/ancestry=%s/rare=true' % (s3_path, phenotype, ancestry)
 
         # are there rare variants to merge with the analysis?
-        if test_path(rare_path):
+        if hadoop_test(rare_path):
             print('Merging rare variants...')
 
             # load the rare variants across all datasets
@@ -258,17 +267,16 @@ def load_ancestry_specific_analysis(spark, phenotype):
             .csv(outdir, sep='\t', header=True)
 
 
-def load_trans_ethnic_analysis(spark, phenotype):
+def load_trans_ethnic_analysis(phenotype):
     """
     The output from each ancestry-specific analysis is pulled together and
     processed with OVERLAP OFF. Once done, the results are uploaded back to
     HDFS (S3) where they can be kept and uploaded to a database.
     """
-    srcdir = '%s/trans-ethnic/%s/_analysis' % (localdir, phenotype)
+    srcdir = '%s/trans-ethnic/%s' % (s3_staging, phenotype)
     outdir = '%s/trans-ethnic/%s' % (s3_path, phenotype)
 
-    # if the source directory doesn't exist there's nothing to load
-    if not os.path.exists(srcdir):
+    if not hadoop_test(srcdir):
         return
 
     # load the analyses - note that zScore is present for trans-ethnic!
@@ -288,7 +296,7 @@ def load_trans_ethnic_analysis(spark, phenotype):
             'n',
         )
 
-    # filter the top variants across the genome for this phenotype
+    # identify the top variants across the genome for this phenotype
     top = variants \
         .rdd \
         .keyBy(lambda v: (v.chromosome, v.position // 20000)) \
@@ -306,9 +314,11 @@ def load_trans_ethnic_analysis(spark, phenotype):
     # define the 'top' column as either being 'true' or 'false'
     top_col = when(variants.top.isNotNull(), variants.top).otherwise(lit(False))
 
-    # overwrite the results of the join operation and save
-    variants.withColumn('top', top_col) \
-        .write \
+    # overwrite the results of the join operation
+    variants = variants.withColumn('top', top_col)
+
+    # write the variants
+    variants.write \
         .mode('overwrite') \
         .csv(outdir, sep='\t', header=True)
 
@@ -319,7 +329,7 @@ if __name__ == '__main__':
     Arguments: [--ancestry-specific | --trans-ethnic] <phenotype>
 
     Either --ancestry-specific or --trans-ethnic is required to be passed on
-    the command line, but they are also mutually exclusive.
+    the command line, but they are mutually exclusive.
     """
     print('python version=%s' % platform.python_version())
     print('user=%s' % os.getenv('USER'))
@@ -340,9 +350,9 @@ if __name__ == '__main__':
 
     # either run the trans-ethnic analysis or ancestry-specific analysis
     if args.ancestry_specific:
-        load_ancestry_specific_analysis(spark, args.phenotype)
+        load_ancestry_specific_analysis(args.phenotype)
     else:
-        load_trans_ethnic_analysis(spark, args.phenotype)
+        load_trans_ethnic_analysis(args.phenotype)
 
     # done
     spark.stop()

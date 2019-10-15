@@ -1,13 +1,10 @@
 package org.broadinstitute.dig.aggregator.core
 
+import cats.effect._
 import scala.concurrent.ExecutionContext
 
-import cats.effect.ContextShift
-import cats.effect.IO
-import cats.effect.Timer
-
-
 object Implicits {
+  import org.broadinstitute.dig.aws.Implicits._
 
   /** Needed for IO.sleep. */
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)

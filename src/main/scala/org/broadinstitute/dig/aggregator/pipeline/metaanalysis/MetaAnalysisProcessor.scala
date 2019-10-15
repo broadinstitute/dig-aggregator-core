@@ -9,6 +9,7 @@ import org.broadinstitute.dig.aws.emr.ApplicationConfig
 import org.broadinstitute.dig.aws.emr.BootstrapScript
 import org.broadinstitute.dig.aws.emr.ClassificationProperties
 import org.broadinstitute.dig.aws.emr.Cluster
+import org.broadinstitute.dig.aws.emr.InstanceType
 
 import cats.effect.IO
 
@@ -44,7 +45,9 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Pr
   override val resources: Seq[String] = Seq(
     "pipeline/metaanalysis/cluster-bootstrap.sh",
     "pipeline/metaanalysis/partitionVariants.py",
-    "pipeline/metaanalysis/runAnalysis.py",
+    "pipeline/metaanalysis/runMETAL.sh",
+    "pipeline/metaanalysis/runAncestrySpecific.sh",
+    "pipeline/metaanalysis/runTransEthnic.sh",
     "pipeline/metaanalysis/loadAnalysis.py",
     "scripts/getmerge-strip-headers.sh"
   )
@@ -68,6 +71,10 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Pr
     // cluster definition to run jobs
     val cluster = Cluster(
       name = name.toString,
+      masterInstanceType = InstanceType.c5_4xlarge,
+      slaveInstanceType = InstanceType.c5_2xlarge,
+      instances = 4,
+      masterVolumeSizeInGB = 800,
       bootstrapScripts = Seq(new BootstrapScript(bootstrapUri)),
       configurations = Seq(sparkConf)
     )
@@ -86,17 +93,19 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Pr
   /** Create a cluster and process a single phenotype.
     */
   private def processPhenotype(phenotype: String): Seq[JobStep] = {
-    val partitionUri = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
-    val runUri       = aws.uriOf("resources/pipeline/metaanalysis/runAnalysis.py")
-    val loadUri      = aws.uriOf("resources/pipeline/metaanalysis/loadAnalysis.py")
+    val partition        = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
+    val ancestrySpecific = aws.uriOf("resources/pipeline/metaanalysis/runAncestrySpecific.sh")
+    val transEthnic      = aws.uriOf("resources/pipeline/metaanalysis/runTransEthnic.sh")
+    val loadAnalysis     = aws.uriOf("resources/pipeline/metaanalysis/loadAnalysis.py")
 
-    // first run+load ancestry-specific and then trans-ethnic
     Seq(
-      JobStep.PySpark(partitionUri, phenotype),
-      JobStep.Script(runUri, "--ancestry-specific", phenotype),
-      JobStep.PySpark(loadUri, "--ancestry-specific", phenotype),
-      JobStep.Script(runUri, "--trans-ethnic", phenotype),
-      JobStep.PySpark(loadUri, "--trans-ethnic", phenotype)
+      JobStep.PySpark(partition, phenotype),
+      // ancestry-specific analysis first and load it back
+      JobStep.Script(ancestrySpecific, phenotype),
+      JobStep.PySpark(loadAnalysis, "--ancestry-specific", phenotype),
+      // trans-ethnic next using ancestry-specific results
+      JobStep.Script(transEthnic, phenotype),
+      JobStep.PySpark(loadAnalysis, "--trans-ethnic", phenotype),
     )
   }
 }

@@ -1,13 +1,14 @@
 package org.broadinstitute.dig.aggregator.core
 
-import org.broadinstitute.dig.aggregator.core.Utils.retry
-import org.broadinstitute.dig.aws.AWS
-import org.neo4j.driver.v1.StatementResult
+import cats.effect.IO
+import cats.implicits._
 
 import com.typesafe.scalalogging.LazyLogging
 
-import cats.effect.IO
-import cats.implicits._
+import org.broadinstitute.dig.aws.AWS
+import org.broadinstitute.dig.aggregator.core.Utils.retry
+
+import org.neo4j.driver.v1.StatementResult
 
 /** The representation of a processor's analysis that has been uploaded to the
   * graph database.
@@ -84,7 +85,7 @@ final class Analysis(val name: String, val provenance: Provenance) extends LazyL
     * delete the analysis node as it assumes it is being updated.
     */
   def delete(graph: GraphDb): IO[Unit] = {
-    val batchSize = 10000
+    val batchSize = 1000
 
     // first delete all the results
     val deleteResults =

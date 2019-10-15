@@ -1,13 +1,13 @@
 #!/bin/bash -xe
 
-# install utils required for mounting EFS
-sudo yum install -y amazon-efs-utils
+METAL_ROOT=/mnt/var/metal
 
-# mount EFS for large local processes (e.g. METAL)
-sudo mkdir -p /mnt/efs
-sudo chown hadoop:hadoop /mnt/efs
-sudo chmod 777 /mnt/efs
-sudo mount -t efs fs-06254a4d:/ /mnt/efs
+# create a gregor directory in /mnt/var to copy data locally
+mkdir -p "${METAL_ROOT}"
+chmod 775 "${METAL_ROOT}"
+
+# install to the metal directory
+cd "${METAL_ROOT}"
 
 # make sure a bin folder exists for the hadoop user
 mkdir -p /home/hadoop/bin
@@ -23,3 +23,7 @@ ln -s /home/hadoop/metal/build/metal/metal /home/hadoop/bin/metal
 # copy the getmerge-strip-headers shell script from S3
 aws s3 cp "s3://dig-analysis-data/resources/scripts/getmerge-strip-headers.sh" /home/hadoop/bin
 chmod +x /home/hadoop/bin/getmerge-strip-headers.sh
+
+# copy the runMETAL script from S3
+aws s3 cp "s3://dig-analysis-data/resources/pipeline/metaanalysis/runMETAL.sh" /home/hadoop/bin
+chmod +x /home/hadoop/bin/runMETAL.sh

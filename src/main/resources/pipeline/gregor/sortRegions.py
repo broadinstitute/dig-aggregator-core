@@ -11,8 +11,10 @@ s3dir = 's3://dig-analysis-data'
 # BED files need to be sorted by chrom/start, this orders the chromosomes
 chrom_sort_index = list(map(lambda c: str(c+1), range(22))) + ['X', 'Y']
 
+
 def chrom_index(c):
     return chrom_sort_index.index(c)
+
 
 # entry point
 if __name__ == '__main__':
@@ -22,8 +24,8 @@ if __name__ == '__main__':
     print('Python version: %s' % platform.python_version())
 
     # get the source and output directories
-    srcdir = '%s/chromatin_state/*/part-*' % s3dir
-    outdir = '%s/out/gregor/regions/chromatin_state' % s3dir
+    srcdir = '%s/annotated_regions/*/*/part-*' % s3dir
+    outdir = '%s/out/gregor/regions' % s3dir
 
     # create a spark session
     spark = SparkSession.builder.appName('gregor').getOrCreate()
@@ -37,18 +39,28 @@ if __name__ == '__main__':
         .withColumn('chromIndex', chrom_index_udf('chromosome')) \
         .sort('chromIndex', 'start', ascending=True) \
         .select(
-            col('chromosome').alias('chrom'),
-            col('start').alias('chromStart'),
-            col('end').alias('chromEnd'),
+            col('chromosome'),
+            col('start'),
+            col('end'),
+
+            # fix the name for Spark (needs undone during upload)
             regexp_replace(col('biosample'), ':', '_').alias('biosample'),
-            col('name'),
+            col('name').alias('annotation'),
+            col('method'),
+            col('itemRgb'),
+            col('score'),
         )
 
-    # output the variants in BED format (TSV)
-    df.write\
+    # output the regions partitioned
+    df.write \
         .mode('overwrite') \
-        .partitionBy('biosample', 'name') \
-        .csv(outdir, sep='\t')
+        .partitionBy('biosample', 'method', 'annotation') \
+        .csv('%s/sorted' % outdir, sep='\t')
+
+    # output the regions un-partitioned for loading into the graph
+    df.write \
+        .mode('overwrite') \
+        .csv('%s/unsorted' % outdir, sep='\t', header=True)
 
     # done
     spark.stop()

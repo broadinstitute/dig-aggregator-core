@@ -1,7 +1,7 @@
 #!/bin/bash
 if [[ ! $# -eq 2 ]]; then
   echo "Usage: merge.sh <hdfs-glob> <local-file>"
-  exit -1
+  exit 1
 fi
 
 # extract parameters

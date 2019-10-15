@@ -2,7 +2,9 @@ package org.broadinstitute.dig.aggregator.pipeline
 
 import cats.effect._
 import cats.implicits._
+
 import com.typesafe.scalalogging.LazyLogging
+
 import org.broadinstitute.dig.aggregator.core.{Implicits, Processor}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 
@@ -100,6 +102,8 @@ object Pipeline {
     "FrequencyAnalysisPipeline" -> frequencyanalysis.FrequencyAnalysisPipeline,
     "VariantEffectPipeline"     -> varianteffect.VariantEffectPipeline,
     "GregorPipeline"            -> gregor.GregorPipeline,
+    "OverlapRegionsPipeline"    -> overlapregions.OverlapRegionsPipeline,
+    "GenePredictionsPipeline"   -> genepredictions.GenePredictionsPipeline,
   )
 
   /** Lookup a registered pipeline.
