@@ -31,13 +31,13 @@ if __name__ == '__main__':
 
     # load all the variants, only keep the variant IDs
     variants = spark.read.csv(vdir, header=False, sep='\t') \
-        .select(col('_6').alias('varId'))
+        .select(col('_c5').alias('varId'))
 
     # join variants and TFs (limit TFs to variants we have)
     df = variants.alias('variants') \
         .join(tfs.alias('tfs'), 'varId') \
         .select(
-            col('tfs.varId').alias('varId'),
+            col('variants.varId').alias('varId'),
             col('tfs.positionWeightMatrix').alias('positionWeightMatrix'),
             col('tfs.delta').alias('delta'),
             col('tfs.position').alias('position'),

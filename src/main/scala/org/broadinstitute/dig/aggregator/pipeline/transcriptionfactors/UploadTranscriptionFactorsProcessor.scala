@@ -26,24 +26,21 @@ class UploadTranscriptionFactorsProcessor(name: Processor.Name, config: BaseConf
     Processor.Outputs(Seq("TranscriptionFactors"))
   }
 
-  /** Take all the phenotype results from the dependencies and process them.
+  /** There is only ever a single output.
     */
   override def processOutputs(outputs: Seq[String]): IO[Unit] = {
-    val graph = new GraphDb(config.neo4j)
+    val graph    = new GraphDb(config.neo4j)
+    val analysis = new Analysis(s"TranscriptionFactors", Provenance.thisBuild)
+    val parts    = s"out/transcriptionfactors/"
 
-    val ios = for (output <- outputs) yield {
-      val analysis = new Analysis(s"TranscriptionFactors/${output}", Provenance.thisBuild)
-      val parts    = s"out/transcription_factors/${output}/"
-
-      for {
-        id <- analysis.create(graph)
-        _  <- IO(logger.info(s"Uploading transcription factors for variants of ${output}..."))
-        _  <- analysis.uploadParts(aws, graph, id, parts)(uploadParts)
-      } yield ()
-    }
+    val io = for {
+      id <- analysis.create(graph)
+      _  <- IO(logger.info(s"Uploading transcription factors..."))
+      _  <- analysis.uploadParts(aws, graph, id, parts)(uploadParts)
+    } yield ()
 
     // process each phenotype serially
-    ios.toList.sequence.as(()).guarantee(graph.shutdown())
+    io.guarantee(graph.shutdown())
   }
 
   /** Create all the overlap region nodes.
@@ -55,16 +52,16 @@ class UploadTranscriptionFactorsProcessor(name: Processor.Name, config: BaseConf
                 |
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
-                |MATCH (v:Variant {name: r.varId})
+                |MATCH (v:Variant {name: row.varId})
                 |
                 |// create the OverlapRegion node
                 |CREATE (n:TranscriptionFactor {
-                |  positionWeightMatrix: r.positionWeightMatrix,
-                |  delta: toFloat(r.delta),
-                |  position: toInteger(r.position),
-                |  strand: r.strand,
-                |  refScore: toFloat(r.refScore),
-                |  altScore: toFloat(r.altScore)
+                |  positionWeightMatrix: row.positionWeightMatrix,
+                |  delta: toFloat(row.delta),
+                |  position: toInteger(row.position),
+                |  strand: row.strand,
+                |  refScore: toFloat(row.refScore),
+                |  altScore: toFloat(row.altScore)
                 |})
                 |
                 |// create relationship to analysis
