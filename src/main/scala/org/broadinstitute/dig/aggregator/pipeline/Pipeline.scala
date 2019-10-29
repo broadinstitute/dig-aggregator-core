@@ -98,12 +98,13 @@ object Pipeline {
   /** The global list of all pipelines.
     */
   def pipelines(): Map[String, Pipeline] = Map(
-    "MetaAnalysisPipeline"      -> metaanalysis.MetaAnalysisPipeline,
-    "FrequencyAnalysisPipeline" -> frequencyanalysis.FrequencyAnalysisPipeline,
-    "VariantEffectPipeline"     -> varianteffect.VariantEffectPipeline,
-    "GregorPipeline"            -> gregor.GregorPipeline,
-    "OverlapRegionsPipeline"    -> overlapregions.OverlapRegionsPipeline,
-    "GenePredictionsPipeline"   -> genepredictions.GenePredictionsPipeline,
+    "MetaAnalysisPipeline"         -> metaanalysis.MetaAnalysisPipeline,
+    "FrequencyAnalysisPipeline"    -> frequencyanalysis.FrequencyAnalysisPipeline,
+    "VariantEffectPipeline"        -> varianteffect.VariantEffectPipeline,
+    "GregorPipeline"               -> gregor.GregorPipeline,
+    "OverlapRegionsPipeline"       -> overlapregions.OverlapRegionsPipeline,
+    "GenePredictionsPipeline"      -> genepredictions.GenePredictionsPipeline,
+    "TranscriptionFactorsPipeline" -> transcriptionfactors.TranscriptionFactorsPipeline,
   )
 
   /** Lookup a registered pipeline.
