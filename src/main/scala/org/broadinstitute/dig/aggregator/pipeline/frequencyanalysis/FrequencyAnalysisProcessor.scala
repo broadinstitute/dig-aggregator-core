@@ -19,11 +19,11 @@ import cats.effect.IO
   *
   * Input HDFS data:
   *
-  *  s3://dig-analysis-data/variants/<dataset>/<phenotype>/part-*
+  *  s3://dig-analysis-data/variants/<*>/<*>/part-*
   *
   * Output HDFS results:
   *
-  *  s3://dig-analysis-data/out/frequencyanalysis/<phenotype>/part-*
+  *  s3://dig-analysis-data/out/frequencyanalysis/<ancestry>/part-*
   */
 class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
 
@@ -37,17 +37,14 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig) exten
     "pipeline/frequencyanalysis/frequencyAnalysis.py"
   )
 
-  /** Determine the output(s) for each input.
-    *
-    * The inputs are the dataset names. The outputs are the phenotype represented
-    * within that dataset.
+  /** Unique ancestries to process.
+    */
+  private val ancestries = Seq("AA", "AF", "EA", "EU", "HS", "SA", "Mixed")
+
+  /** Each ancestry gets its own output.
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
-    val pattern = raw"([^/]+)/(.*)".r
-
-    input.output match {
-      case pattern(_, phenotype) => Processor.Outputs(Seq(phenotype))
-    }
+    Processor.Outputs(ancestries)
   }
 
   /** For each phenotype output, process all the datasets for it.
@@ -58,23 +55,22 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig) exten
     // cluster configuration used to process each phenotype
     val cluster = Cluster(
       name = name.toString,
-      instances = 4,
-      masterInstanceType = InstanceType.m5_2xlarge,
-      slaveInstanceType = InstanceType.m5_2xlarge,
+      instances = 3,
+      masterInstanceType = InstanceType.c5_9xlarge,
+      slaveInstanceType = InstanceType.c5_9xlarge,
+      masterVolumeSizeInGB = 500,
+      slaveVolumeSizeInGB = 500,
       configurations = Seq(
         ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
       )
     )
 
-    // create the jobs to process each phenotype in parallel
-    val jobs = outputs.toList.map { phenotype =>
-      Seq(JobStep.PySpark(script, phenotype))
+    val jobs = outputs.map { ancestry =>
+      Seq(JobStep.PySpark(script, ancestry))
     }
 
-    // distribute the jobs among multiple clusters
     val clusteredJobs = aws.clusterJobs(cluster, jobs)
 
-    // run all the jobs then update the database
     aws.waitForJobs(clusteredJobs)
   }
 }
