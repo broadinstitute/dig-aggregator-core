@@ -103,7 +103,6 @@ object Pipeline {
     "VariantEffectPipeline"        -> varianteffect.VariantEffectPipeline,
     "GregorPipeline"               -> gregor.GregorPipeline,
     "OverlapRegionsPipeline"       -> overlapregions.OverlapRegionsPipeline,
-    "GenePredictionsPipeline"      -> genepredictions.GenePredictionsPipeline,
     "TranscriptionFactorsPipeline" -> transcriptionfactors.TranscriptionFactorsPipeline,
   )
 

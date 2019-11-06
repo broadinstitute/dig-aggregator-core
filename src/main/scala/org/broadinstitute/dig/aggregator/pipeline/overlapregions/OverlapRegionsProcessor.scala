@@ -15,7 +15,6 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
     */
   override val dependencies: Seq[Processor.Name] = Seq(
     IntakePipeline.annotatedRegions,
-    IntakePipeline.genePredictions,
     VariantEffectPipeline.variantListProcessor,
   )
 
@@ -30,7 +29,6 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
   override def getOutputs(input: Run.Result): Processor.OutputList = {
     input.processor match {
       case IntakePipeline.annotatedRegions            => Processor.Outputs(Seq("overlapregions/annotated_regions"))
-      case IntakePipeline.genePredictions             => Processor.Outputs(Seq("overlapregions/gene_predictions"))
       case VariantEffectPipeline.variantListProcessor => Processor.Outputs(Seq("overlapregions/variants"))
     }
   }
@@ -58,7 +56,6 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends 
     // the various types to overlap
     val joins = outputs.map {
       case "overlapregions/annotated_regions" => "--annotated-regions"
-      case "overlapregions/gene_predictions"  => "--gene-predictions"
       case "overlapregions/variants"          => "--variants"
     }
 

@@ -97,23 +97,18 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig)
                 |
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
-                |
-                |// skip if the phenotype, ancestry, or variant don't exist
-                |MATCH (a:Ancestry {name: r.ancestry})
                 |MATCH (v:Variant {name: r.varId})
                 |
                 |// create the frequency node
                 |CREATE (n:Frequency {
+                |  ancestry: r.ancestry,
                 |  eaf: toFloat(r.eaf),
                 |  maf: toFloat(r.maf)
                 |})
                 |
-                |// create the relationship to the analysis node
+                |// create the relationship to the analysis node and variant
                 |CREATE (q)-[:PRODUCED]->(n)
-                |
-                |// create the relationship between the ancestry and variant
                 |CREATE (v)-[:HAS_FREQUENCY]->(n)
-                |CREATE (a)-[:HAS_FREQUENCY]->(n)
                 |""".stripMargin
 
     graph.run(q)

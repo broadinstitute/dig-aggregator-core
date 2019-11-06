@@ -66,15 +66,14 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |// lookup the analysis node, phenotype, and ancestry
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |MATCH (p:Phenotype {name: '$phenotype'})
-                |MATCH (a:Ancestry {name: '$ancestry'})
                 |
                 |// split the "bed file" into tissue and annotation
-                |WITH q, r, p, a, split(r.Bed_File, '___') AS bed
+                |WITH q, r, p, split(r.Bed_File, '___') AS bed
                 |
                 |// NOTE: When Spark ran on on the tissues, to prevent odd characters, we
                 |//       replaced ':' with '_', and here we'll put it back.
                 |
-                |WITH q, r, p, a, replace(bed[0], '_', ':') AS tissue, bed[1] AS method, bed[2] AS annotation
+                |WITH q, r, p, replace(bed[0], '_', ':') AS tissue, bed[1] AS method, bed[2] AS annotation
                 |
                 |// find the tissue
                 |MATCH (t:Tissue {name: tissue})
@@ -84,6 +83,7 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |
                 |// create the result node
                 |CREATE (n:GlobalEnrichment {
+                |  ancestry: '$ancestry',
                 |  annotation: annotation,
                 |  method: method,
                 |  inBedIndexSNP: toFloat(r.InBed_Index_SNP),
@@ -94,7 +94,6 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |// create the relationships
                 |CREATE (q)-[:PRODUCED]->(n)
                 |CREATE (p)-[:HAS_GLOBAL_ENRICHMENT]->(n)
-                |CREATE (a)-[:HAS_GLOBAL_ENRICHMENT]->(n)
                 |CREATE (t)-[:HAS_GLOBAL_ENRICHMENT]->(n)
                 |""".stripMargin
 
