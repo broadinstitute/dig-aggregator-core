@@ -12,6 +12,7 @@ import org.broadinstitute.dig.aws.emr.Cluster
 import org.broadinstitute.dig.aws.emr.InstanceType
 
 import cats.effect.IO
+import org.broadinstitute.dig.aggregator.core.DbPool
 
 /** After all the variants for a particular phenotype have been processed and
   * partitioned, meta-analysis is run on them.
@@ -34,7 +35,7 @@ import cats.effect.IO
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
+class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
   /** Processor inputs.
     */

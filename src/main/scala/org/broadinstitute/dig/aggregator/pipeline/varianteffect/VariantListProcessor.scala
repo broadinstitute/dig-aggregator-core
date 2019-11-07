@@ -10,6 +10,7 @@ import org.broadinstitute.dig.aws.emr.ClassificationProperties
 import org.broadinstitute.dig.aws.emr.Cluster
 
 import cats.effect.IO
+import org.broadinstitute.dig.aggregator.core.DbPool
 
 /** Finds all the variants in a dataset across all phenotypes and writes them
   * out to a set of files that can have VEP run over in parallel.
@@ -18,7 +19,7 @@ import cats.effect.IO
   *
   *  s3://dig-analysis-data/out/varianteffect/variants/<dataset>
   */
-class VariantListProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
+class VariantListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
   /** Intake dependencies.
     */

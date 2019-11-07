@@ -14,8 +14,14 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aws.AWS
 
 /** Each processor has a globally unique name and a run function. */
-abstract class Processor(val name: Processor.Name, config: BaseConfig) extends LazyLogging {
+abstract class Processor(
+    val name: Processor.Name, 
+    config: BaseConfig, 
+    /** Database transactor for loading state, etc. */
+    protected val pool: DbPool) extends LazyLogging {
 
+  //def this(name: Processor.Name, config: BaseConfig) = this(name, config, DbPool.fromMySQLConfig(config.mysql))
+  
   /** The collection of resources this processor needs to have uploaded
     * before the processor can run.
     *
@@ -29,9 +35,6 @@ abstract class Processor(val name: Processor.Name, config: BaseConfig) extends L
     * depend on one (or more) of the processors in the IntakePipeline.
     */
   val dependencies: Seq[Processor.Name]
-
-  /** Database transactor for loading state, etc. */
-  protected val pool: DbPool = DbPool.fromMySQLConfig(config.mysql)
 
   /** AWS client for uploading resources and running jobs. */
   protected val aws: AWS = new AWS(config.aws)
@@ -222,7 +225,7 @@ object Processor extends LazyLogging {
   }
 
   /** Every processor is constructed with a type-safe name and configuration. */
-  type Constructor = (Processor.Name, BaseConfig) => Processor
+  type Constructor = (Processor.Name, BaseConfig, DbPool) => Processor
 
   /** A mapping of all the registered processor names. */
   private var names: Map[Processor.Name, Constructor] = Map()
@@ -239,17 +242,17 @@ object Processor extends LazyLogging {
   }
 
   /** Version of apply() that takes the actual process name. */
-  def apply(name: Name): BaseConfig => Option[Processor] = {
+  def apply(name: Name): (BaseConfig, DbPool) => Option[Processor] = {
     val ctor = names.get(name)
 
     // lambda that will create this processor with a configuration
-    { config: BaseConfig =>
-      ctor.map(_(name, config))
+    { (config: BaseConfig, dbPool: DbPool) =>
+      ctor.map(_(name, config, dbPool))
     }
   }
 
   /** Create a processor given its name and a configuration. */
-  def apply(name: String): BaseConfig => Option[Processor] = {
+  def apply(name: String): (BaseConfig, DbPool) => Option[Processor] = {
     apply(new Name(name))
   }
 }

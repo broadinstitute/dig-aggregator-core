@@ -11,6 +11,7 @@ import org.broadinstitute.dig.aws.emr.Cluster
 import org.broadinstitute.dig.aws.emr.InstanceType
 
 import cats.effect.IO
+import org.broadinstitute.dig.aggregator.core.DbPool
 
 /** After all the variants for a particular phenotype have been uploaded, the
   * frequency processor runs a Spark job that will calculate the average EAF
@@ -25,7 +26,7 @@ import cats.effect.IO
   *
   *  s3://dig-analysis-data/out/frequencyanalysis/<phenotype>/part-*
   */
-class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
+class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
   /** Source data to consume.
     */

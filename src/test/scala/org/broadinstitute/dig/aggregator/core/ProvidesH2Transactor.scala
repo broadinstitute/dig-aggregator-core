@@ -15,6 +15,6 @@ trait ProvidesH2Transactor {
     import Implicits.contextShift
 
     //Note mode=MySQL. This allows MySQL-dialect queries to be run against H2.
-    new DbPool("org.h2.Driver", s"jdbc:h2:mem:$dbName;DB_CLOSE_DELAY=-1;mode=MySQL", "", "")
+    new DbPool.JdbcDbPool("org.h2.Driver", s"jdbc:h2:mem:$dbName;DB_CLOSE_DELAY=-1;mode=MySQL", "", "")
   }
 }

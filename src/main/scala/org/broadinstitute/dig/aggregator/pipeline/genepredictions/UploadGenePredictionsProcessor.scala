@@ -4,8 +4,9 @@ import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core.{Analysis, GraphDb, Processor, Provenance, Run}
 import org.neo4j.driver.v1.StatementResult
+import org.broadinstitute.dig.aggregator.core.DbPool
 
-class UploadGenePredictionsProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
+class UploadGenePredictionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
   /** All the processors this processor depends on.
     */

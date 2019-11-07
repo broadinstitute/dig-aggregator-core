@@ -7,6 +7,7 @@ import com.typesafe.scalalogging.LazyLogging
 
 import org.broadinstitute.dig.aggregator.core.{Implicits, Processor}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
+import org.broadinstitute.dig.aggregator.core.DbPool
 
 /** A pipeline is an object that keeps runtime knowledge of all its processors.
   */
@@ -31,8 +32,8 @@ trait Pipeline extends LazyLogging {
     * will only show a single level of work, and not later work that may need
     * to happen downstream.
     */
-  def showWork(config: BaseConfig, opts: Processor.Opts): IO[Unit] = {
-    val allProcessors = processors.map(Processor(_)(config).get)
+  def showWork(config: BaseConfig, pool: DbPool, opts: Processor.Opts): IO[Unit] = {
+    val allProcessors = processors.map(Processor(_)(config, pool).get)
 
     // get the set of processors that have known work
     val knownWork = Pipeline.getKnownWork(allProcessors, opts)
@@ -55,8 +56,8 @@ trait Pipeline extends LazyLogging {
     * complete, this is done again. This continues until all processors are
     * done doing their work and have nothing left to do.
     */
-  def run(config: BaseConfig, opts: Processor.Opts): IO[Unit] = {
-    val allProcessors = processors.map(Processor(_)(config).get)
+  def run(config: BaseConfig, pool: DbPool, opts: Processor.Opts): IO[Unit] = {
+    val allProcessors = processors.map(Processor(_)(config, pool).get)
 
     // recursive helper function
     def runProcessors(opts: Processor.Opts): IO[Unit] = {

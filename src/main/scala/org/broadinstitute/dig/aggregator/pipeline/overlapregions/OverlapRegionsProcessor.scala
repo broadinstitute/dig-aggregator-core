@@ -8,8 +8,9 @@ import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
 import org.broadinstitute.dig.aggregator.pipeline.varianteffect.VariantEffectPipeline
 import org.broadinstitute.dig.aws._
 import org.broadinstitute.dig.aws.emr._
+import org.broadinstitute.dig.aggregator.core.DbPool
 
-class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
+class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
   /** Dependency processors.
     */
