@@ -19,6 +19,7 @@ lazy val Versions = new {
   val Shapeless        = "2.3.3"
   val Slf4J            = "1.7.25"
   val DigAws           = "0.1-SNAPSHOT"
+  val LoamStream       = "1.4-SNAPSHOT"
 }
 
 lazy val Orgs = new {
@@ -51,7 +52,8 @@ lazy val mainDeps = Seq(
   "org.typelevel"                  %% "cats-effect"         % Versions.CatsEffect,
   "org.apache.hadoop"              % "hadoop-client"        % Versions.Hadoop,
   "mysql"                          % "mysql-connector-java" % Versions.MySQL,
-  Orgs.DIG                         %% "dig-aws"             % Versions.DigAws
+  Orgs.DIG                         %% "dig-aws"             % Versions.DigAws,
+  Orgs.DIG                         %% "loamstream"          % Versions.LoamStream
 )
 
 lazy val testDeps = Seq(
