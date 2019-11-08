@@ -82,7 +82,8 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig) 
                 |
                 |// method is optional
                 |FOREACH(i IN (CASE r.method WHEN null THEN [] WHEN 'NA' THEN [] ELSE [1] END) |
-                |  MERGE (n)-[:HAS_METHOD]->(m:Method {name: r.method})
+                |  MERGE (m:Method {name: r.method})
+                |  CREATE (n)-[:HAS_METHOD]->(m)
                 |)
                 |""".stripMargin
 
