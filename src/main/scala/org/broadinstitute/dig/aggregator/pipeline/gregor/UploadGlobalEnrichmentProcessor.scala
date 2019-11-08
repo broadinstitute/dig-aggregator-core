@@ -82,7 +82,7 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |WHERE NOT toFloat(r.PValue) IS NULL
                 |
                 |// create annotation node
-                |MERGE (a:Annotation {name: r.annotation})
+                |MERGE (a:Annotation {name: annotation})
                 |
                 |// create the result node
                 |CREATE (n:GlobalEnrichment {
@@ -100,7 +100,7 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |
                 |// method is optional
                 |FOREACH(i IN (CASE r.method WHEN null THEN [] WHEN 'NA' THEN [] ELSE [1] END) |
-                |  MERGE (m:Method {name: r.method})
+                |  MERGE (m:Method {name: method})
                 |  CREATE (n)-[:HAS_METHOD]->(m)
                 |)
                 |""".stripMargin
