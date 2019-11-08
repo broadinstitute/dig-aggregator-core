@@ -63,7 +63,7 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig) 
                 |WITH q, t, r, r.chromosome + ':' + r.start + '-' + r.end AS name
                 |
                 |// ensure the annotation node exists
-                |MERGE (a:Annotation {name: a.annotation})
+                |MERGE (a:Annotation {name: r.annotation})
                 |
                 |// create the annotated region node
                 |CREATE (n:AnnotatedRegion {
@@ -81,7 +81,7 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig) 
                 |CREATE (n)-[:HAS_ANNOTATION]->(a)
                 |
                 |// method is optional
-                |FOREACH(i IN (CASE r.method WHEN null THEN [] ELSE [1] END) |
+                |FOREACH(i IN (CASE r.method WHEN null THEN [] WHEN 'NA' THEN [] ELSE [1] END) |
                 |  MERGE (n)-[:HAS_METHOD]->(m:Method {name: r.method})
                 |)
                 |""".stripMargin
