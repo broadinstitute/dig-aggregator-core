@@ -62,21 +62,25 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig) 
                 |// join columns to make region name
                 |WITH q, t, r, r.chromosome + ':' + r.start + '-' + r.end AS name
                 |
+                |// create the method and annotation nodes
+                |MERGE (m:Method {name: r.method})
+                |MERGE (a:Annotation {name: a.annotation})
+                |
                 |// create the annotated region node
                 |CREATE (n:AnnotatedRegion {
                 |  name: name,
                 |  chromosome: r.chromosome,
                 |  start: toInteger(r.start),
                 |  end: toInteger(r.end),
-                |  method: r.method,
-                |  annotation: r.annotation,
                 |  rgb: r.itemRgb,
                 |  score: toFloat(r.score)
                 |})
                 |
                 |// create the required relationships
-                |MERGE (q)-[:PRODUCED]->(n)
-                |MERGE (t)-[:HAS_ANNOTATED_REGION]->(n)
+                |CREATE (q)-[:PRODUCED]->(n)
+                |CREATE (n)-[:HAS_TISSUE]->(t)
+                |CREATE (n)-[:HAS_ANNOTATION]->(a)
+                |CREATE (n)-[:HAS_METHOD]->(m)
                 |""".stripMargin
 
     graph.run(q)

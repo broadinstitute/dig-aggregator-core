@@ -81,11 +81,13 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |// skip any enrichment with no p-value
                 |WHERE NOT toFloat(r.PValue) IS NULL
                 |
+                |// create annotation and method nodes
+                |MERGE (m:Method {name: r.method})
+                |MERGE (a:Annotation {name: a.annotation})
+                |
                 |// create the result node
                 |CREATE (n:GlobalEnrichment {
                 |  ancestry: '$ancestry',
-                |  annotation: annotation,
-                |  method: method,
                 |  inBedIndexSNP: toFloat(r.InBed_Index_SNP),
                 |  expectedInBedIndexSNP: toFloat(r.ExpectNum_of_InBed_SNP),
                 |  pValue: toFloat(r.PValue)
@@ -94,7 +96,9 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |// create the relationships
                 |CREATE (q)-[:PRODUCED]->(n)
                 |CREATE (p)-[:HAS_GLOBAL_ENRICHMENT]->(n)
-                |CREATE (t)-[:HAS_GLOBAL_ENRICHMENT]->(n)
+                |CREATE (n)-[:HAS_TISSUE]->(t)
+                |CREATE (n)-[:HAS_ANNOTATION]->(a)
+                |CREATE (n)-[:HAS_METHOD]->(m)
                 |""".stripMargin
 
     graph.run(q)

@@ -31,7 +31,7 @@ class CreateOverlapRegionRelationshipsProcessor(name: Processor.Name, config: Ba
   /** All the processors this processor depends on.
     */
   override val dependencies: Seq[Processor.Name] = Seq(
-    OverlapRegionsPipeline.uploadRegionsProcessor,
+    OverlapRegionsPipeline.uploadOverlapRegionsProcessor,
   )
 
   /** All the job scripts that need to be uploaded to AWS.
@@ -46,7 +46,6 @@ class CreateOverlapRegionRelationshipsProcessor(name: Processor.Name, config: Ba
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
     val relationships = Seq(
-      "OverlapRegions/GenePredictions",
       "OverlapRegions/AnnotatedRegions",
       "OverlapRegions/Variants",
     )
@@ -61,13 +60,10 @@ class CreateOverlapRegionRelationshipsProcessor(name: Processor.Name, config: Ba
 
     // source locations for the relationships
     val annotatedRegions = "out/overlapregions/overlapped/annotated_regions/"
-    val genePredictions  = "out/overlapregions/overlapped/gene_predictions/"
     val variants         = "out/overlapregions/overlapped/variants/"
 
     // descriptions of the work to do
     val ios: Seq[IO[Unit]] = outputs.map {
-      case output @ "OverlapRegions/GenePredictions" =>
-        processOutput(graph, output, "OVERLAPS_GENE_PREDICTION", genePredictions, createGenePredictionRelationships)
       case output @ "OverlapRegions/AnnotatedRegions" =>
         processOutput(graph, output, "OVERLAPS_ANNOTATED_REGION", annotatedRegions, createAnnotatedRegionRelationships)
       case output @ "OverlapRegions/Variants" =>
@@ -127,24 +123,6 @@ class CreateOverlapRegionRelationshipsProcessor(name: Processor.Name, config: Ba
                 |
                 |// create the required relationships
                 |CREATE (n)-[:OVERLAPS_ANNOTATED_REGION]->(r)
-                |""".stripMargin
-
-    graph.run(q)
-  }
-
-  /** Create the relationships to gene predictions.
-    */
-  def createGenePredictionRelationships(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
-    val q = s"""|USING PERIODIC COMMIT 10000
-                |LOAD CSV WITH HEADERS FROM '$part' AS row
-                |FIELDTERMINATOR '\t'
-                |
-                |// lookup the overlap node and annotated region
-                |MATCH (n:OverlapRegion {name: row.name})
-                |MATCH (r:GenePrediction {name: row.region})
-                |
-                |// create the required relationships
-                |CREATE (n)-[:OVERLAPS_GENE_PREDICTION]->(r)
                 |""".stripMargin
 
     graph.run(q)
