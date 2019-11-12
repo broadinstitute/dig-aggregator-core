@@ -81,7 +81,8 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |// skip any enrichment with no p-value
                 |WHERE NOT toFloat(r.PValue) IS NULL
                 |
-                |// create annotation node
+                |// ensure the method annotation node exists
+                |MERGE (m:Method {name: method})
                 |MERGE (a:Annotation {name: annotation})
                 |
                 |// create the result node
@@ -97,12 +98,7 @@ class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) 
                 |CREATE (p)-[:HAS_GLOBAL_ENRICHMENT]->(n)
                 |CREATE (n)-[:HAS_TISSUE]->(t)
                 |CREATE (n)-[:HAS_ANNOTATION]->(a)
-                |
-                |// method is optional
-                |FOREACH(i IN (CASE r.method WHEN null THEN [] WHEN 'NA' THEN [] ELSE [1] END) |
-                |  MERGE (m:Method {name: method})
-                |  CREATE (n)-[:HAS_METHOD]->(m)
-                |)
+                |CREATE (n)-[:HAS_METHOD]->(m)
                 |""".stripMargin
 
     graph.run(q)
