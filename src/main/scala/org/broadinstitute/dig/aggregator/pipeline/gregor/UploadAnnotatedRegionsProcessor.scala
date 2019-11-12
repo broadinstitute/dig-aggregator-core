@@ -5,7 +5,8 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core._
 import org.neo4j.driver.v1.StatementResult
 
-class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** All the processors this processor depends on.
     */
@@ -72,6 +73,9 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig, 
                 |  chromosome: r.chromosome,
                 |  start: toInteger(r.start),
                 |  end: toInteger(r.end),
+                |  targetStart: toInteger(r.targetStart),
+                |  targetEnd: toInteger(r.targetEnd),
+                |  transcriptionStartSite: toInteger(r.transcriptionStartSite),
                 |  rgb: r.itemRgb,
                 |  score: toFloat(r.score)
                 |})
@@ -81,6 +85,12 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig, 
                 |CREATE (n)-[:HAS_TISSUE]->(t)
                 |CREATE (n)-[:HAS_ANNOTATION]->(a)
                 |CREATE (n)-[:HAS_METHOD]->(m)
+                |
+                |// target gene is optional
+                |FOREACH(i IN (CASE r.predictedTargetGene WHEN null THEN [] ELSE [1] END) |
+                |  MATCH (g:Gene {name: r.predictedTargetGene})
+                |  CREATE (n)-[:HAS_TARGET_GENE]->(g)
+                |)
                 |""".stripMargin
 
     graph.run(q)
