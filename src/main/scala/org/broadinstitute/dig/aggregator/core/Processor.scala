@@ -19,8 +19,6 @@ abstract class Processor(
     config: BaseConfig, 
     /** Database transactor for loading state, etc. */
     protected val pool: DbPool) extends LazyLogging {
-
-  //def this(name: Processor.Name, config: BaseConfig) = this(name, config, DbPool.fromMySQLConfig(config.mysql))
   
   /** The collection of resources this processor needs to have uploaded
     * before the processor can run.
