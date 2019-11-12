@@ -9,6 +9,7 @@ import org.broadinstitute.dig.aws.emr.ClassificationProperties
 import org.broadinstitute.dig.aws.emr.Cluster
 
 import cats.effect.IO
+import org.broadinstitute.dig.aggregator.core.DbPool
 
 /** After all the variants across all datasets have had VEP run on them in the
   * previous step, the results must be joined together. This is done by loading
@@ -27,7 +28,7 @@ import cats.effect.IO
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
+class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
   /** All the processors this processor depends on.
     */

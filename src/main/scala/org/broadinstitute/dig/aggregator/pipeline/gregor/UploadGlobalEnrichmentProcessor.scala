@@ -10,7 +10,7 @@ import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.neo4j.driver.v1.StatementResult
 
-class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
+class UploadGlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
   /** All the processors this processor depends on.
     */

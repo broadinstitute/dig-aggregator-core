@@ -66,11 +66,15 @@ object Main extends IOApp with LazyLogging {
     if (opts.reprocess() && opts.yes()) warning else IO.pure(true)
   }
 
+  private def makeDefaultDbPool(opts: Opts): DbPool = DbPool.fromMySQLConfig(opts.config.mysql)
+  
   /** Run an entire pipeline until all the processors in it have no work left.
     */
   private def runPipeline(name: String, opts: Opts): IO[Unit] = {
+    def pool = makeDefaultDbPool(opts)
+    
     Pipeline(name) match {
-      case Some(p) => (if (opts.yes()) p.run _ else p.showWork _)(opts.config, opts.processorOpts)
+      case Some(p) => (if (opts.yes()) p.run _ else p.showWork _)(opts.config, pool, opts.processorOpts)
       case _       => IO.raiseError(new Exception(s"Unknown pipeline '$name'"))
     }
   }
@@ -78,7 +82,9 @@ object Main extends IOApp with LazyLogging {
   /** Runs a single processor by name.
     */
   private def runProcessor(name: String, opts: Opts): IO[Unit] = {
-    Processor(name)(opts.config) match {
+    val pool = makeDefaultDbPool(opts)
+    
+    Processor(name)(opts.config, pool) match {
       case Some(p) => (if (opts.yes()) p.run _ else p.showWork _)(opts.processorOpts)
       case _       => IO.raiseError(new Exception(s"Unknown processor '$name'"))
     }
@@ -96,9 +102,9 @@ object Main extends IOApp with LazyLogging {
   /** Verify all the runs for a given processor.
     */
   private def verifyProcessor(name: String, opts: Opts): IO[Unit] = {
-    val pool = DbPool.fromMySQLConfig(opts.config.mysql)
+    val pool = makeDefaultDbPool(opts)
 
-    Processor(name)(opts.config) match {
+    Processor(name)(opts.config, pool) match {
       case None => IO.raiseError(new Exception(s"Unknown processor '$name'"))
       case Some(p) =>
         for {

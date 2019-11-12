@@ -11,8 +11,8 @@ object TestProcessor {
 
   /** Creates a new instance of a dummy processor.
     */
-  def makeProcessor(processorName: Name, c: config.BaseConfig): Processor = {
-    new Processor(processorName, c) {
+  def makeProcessor(processorName: Name, c: config.BaseConfig, pool: DbPool): Processor = {
+    new Processor(processorName, c, pool) {
 
       /** No dependencies to upload. */
       override val dependencies: Seq[Processor.Name] = Seq.empty

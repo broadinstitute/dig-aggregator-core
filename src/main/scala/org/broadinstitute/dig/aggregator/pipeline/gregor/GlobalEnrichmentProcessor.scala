@@ -9,8 +9,9 @@ import org.broadinstitute.dig.aws.emr.Cluster
 import org.broadinstitute.dig.aws.emr.InstanceType
 
 import cats.effect.IO
+import org.broadinstitute.dig.aggregator.core.DbPool
 
-class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
+class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
   /** All the processors this processor depends on.
     */

@@ -7,6 +7,7 @@ import org.broadinstitute.dig.aggregator.core.{Analysis, GraphDb, Processor, Pro
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 
 import org.neo4j.driver.v1.StatementResult
+import org.broadinstitute.dig.aggregator.core.DbPool
 
 /** This processor exists and is very different from the others. Technically it is
   * after the UploadOverlapRegionsProcessor, but it exists solely to create the
@@ -25,8 +26,8 @@ import org.neo4j.driver.v1.StatementResult
   * is a separate output so that the CLI can be given the `--only` flag to limit the
   * work that needs to be done by this processor.
   */
-class CreateOverlapRegionRelationshipsProcessor(name: Processor.Name, config: BaseConfig)
-    extends Processor(name, config) {
+class CreateOverlapRegionRelationshipsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** All the processors this processor depends on.
     */

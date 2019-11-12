@@ -7,6 +7,7 @@ import java.util.UUID
 import org.broadinstitute.dig.aggregator.core.{Processor, Run}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.pipeline.Pipeline
+import org.broadinstitute.dig.aggregator.core.DbPool
 
 /** All processors for the meta-analysis pipeline.
   */
@@ -21,8 +22,8 @@ object IntakePipeline extends Pipeline {
     * The actual Intake code is in https://github.com/broadinstitute/dig-aggregator-intake
     * which is a Python project.
     */
-  private def createDummyProcessor(processorName: Name, config: BaseConfig): Processor = {
-    new Processor(processorName, config) {
+  private def createDummyProcessor(processorName: Name, config: BaseConfig, pool: DbPool): Processor = {
+    new Processor(processorName, config, pool) {
 
       /** No dependencies. */
       override val dependencies: Seq[Name] = Seq.empty
