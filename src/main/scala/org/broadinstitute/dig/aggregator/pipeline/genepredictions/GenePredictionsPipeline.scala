@@ -11,7 +11,7 @@ object GenePredictionsPipeline extends Pipeline {
 
   /** Register all processors.
     */
-  val genePredictionsProcessor: Name = register("GenePredictionsProcessor", new GenePredictionsProcessor(_, _))
+  val genePredictionsProcessor: Name = register("GenePredictionsProcessor", new GenePredictionsProcessor(_, _, _))
   val uploadGenePredictionsProcessor: Name =
-    register("UploadGenePredictionsProcessor", new UploadGenePredictionsProcessor(_, _))
+    register("UploadGenePredictionsProcessor", new UploadGenePredictionsProcessor(_, _, _))
 }

@@ -6,8 +6,9 @@ import org.broadinstitute.dig.aggregator.core.{Processor, Run}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aws._
 import org.broadinstitute.dig.aws.emr._
+import org.broadinstitute.dig.aggregator.core.DbPool
 
-class UniqueOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
+class UniqueOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
   /** Dependency processors.
     */

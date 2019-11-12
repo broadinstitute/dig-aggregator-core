@@ -11,6 +11,6 @@ object MetaAnalysisPipeline extends Pipeline {
 
   /** Register all intake processors.
     */
-  val metaAnalysisProcessor: Name       = register("MetaAnalysisProcessor", new MetaAnalysisProcessor(_, _))
-  val uploadMetaAnalysisProcessor: Name = register("UploadMetaAnalysisProcessor", new UploadMetaAnalysisProcessor(_, _))
+  val metaAnalysisProcessor: Name       = register("MetaAnalysisProcessor", new MetaAnalysisProcessor(_, _, _))
+  val uploadMetaAnalysisProcessor: Name = register("UploadMetaAnalysisProcessor", new UploadMetaAnalysisProcessor(_, _, _))
 }

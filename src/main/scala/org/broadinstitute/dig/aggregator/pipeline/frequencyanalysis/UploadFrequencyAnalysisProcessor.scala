@@ -17,7 +17,7 @@ import org.neo4j.driver.v1.StatementResult
   *
   *  s3://dig-analysis-data/out/frequencyanalysis/<phenotype>/part-*
   */
-class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
+class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
   /** All the processors this processor depends on.
     */

@@ -6,6 +6,7 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{ApplicationConfig, ClassificationProperties, Cluster, InstanceType}
+import org.broadinstitute.dig.aggregator.core.DbPool
 
 /** Gene Prediction regions are joined with the uploaded gene list for the
   * proper assembly and then written out to be uploaded.
@@ -19,7 +20,7 @@ import org.broadinstitute.dig.aws.emr.{ApplicationConfig, ClassificationProperti
   *
   *  s3://dig-analysis-data/out/genepredictions/<dataset>part-*
   */
-class GenePredictionsProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
+class GenePredictionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
   /** Source data to consume.
     */

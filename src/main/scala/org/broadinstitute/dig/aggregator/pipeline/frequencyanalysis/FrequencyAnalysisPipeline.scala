@@ -14,7 +14,7 @@ object FrequencyAnalysisPipeline extends Pipeline {
   /**
     * Register all intake processors.
     */
-  val frequencyProcessor: Name = register("FrequencyAnalysisProcessor", new FrequencyAnalysisProcessor(_, _))
+  val frequencyProcessor: Name = register("FrequencyAnalysisProcessor", new FrequencyAnalysisProcessor(_, _, _))
   val uploadFrequencyProcessor: Name =
-    register("UploadFrequencyAnalysisProcessor", new UploadFrequencyAnalysisProcessor(_, _))
+    register("UploadFrequencyAnalysisProcessor", new UploadFrequencyAnalysisProcessor(_, _, _))
 }

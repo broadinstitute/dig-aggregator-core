@@ -25,7 +25,7 @@ import org.neo4j.driver.v1.StatementResult
   *
   *  s3://dig-analysis-data/out/varianteffects/effects/transcript_consequences
   */
-class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig) extends Processor(name, config) {
+class UploadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
   /** All the processors this processor depends on.
     */
