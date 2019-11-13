@@ -60,8 +60,11 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig, 
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |MATCH (t:Tissue {name: tissue})
                 |
+                |// some regions associate with a gene
+                |OPTIONAL MATCH (g:Gene {name: r.predictedTargetGene})
+                |
                 |// join columns to make region name
-                |WITH q, t, r, r.chromosome + ':' + r.start + '-' + r.end AS name
+                |WITH q, t, g, r, r.chromosome + ':' + r.start + '-' + r.end AS name
                 |
                 |// ensure the method annotation node exists
                 |MERGE (m:Method {name: r.method})
@@ -86,9 +89,8 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig, 
                 |CREATE (n)-[:HAS_ANNOTATION]->(a)
                 |CREATE (n)-[:HAS_METHOD]->(m)
                 |
-                |// target gene is optional
-                |FOREACH(i IN (CASE r.predictedTargetGene WHEN null THEN [] ELSE [1] END) |
-                |  MATCH (g:Gene {name: r.predictedTargetGene})
+                |// target gene is optional, if there, link to it
+                |FOREACH(i IN (CASE g WHEN null THEN [] ELSE [1] END) |
                 |  CREATE (n)-[:HAS_TARGET_GENE]->(g)
                 |)
                 |""".stripMargin
