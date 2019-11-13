@@ -15,7 +15,7 @@ import org.neo4j.driver.v1.StatementResult
   *
   * The source tables are read from:
   *
-  *  s3://dig-analysis-data/out/frequencyanalysis/<phenotype>/part-*
+  *  s3://dig-analysis-data/out/frequencyanalysis/<ancestry>/part-*
   */
 class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
@@ -38,18 +38,18 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig,
   /** Take all the phenotype results from the dependencies and upload them.
     */
   override def processOutputs(outputs: Seq[String]): IO[Unit] = {
-    val ios = for (phenotype <- outputs) yield {
-      val analysis = new Analysis(s"FrequencyAnalysis/$phenotype", Provenance.thisBuild)
+    val ios = for (ancestry <- outputs) yield {
+      val analysis = new Analysis(s"FrequencyAnalysis/$ancestry", Provenance.thisBuild)
       val graph    = new GraphDb(config.neo4j)
 
       // where the result files are to upload
-      val bottomLine = s"out/frequencyanalysis/$phenotype/"
+      val parts = s"out/frequencyanalysis/$ancestry/"
 
       val io = for {
         id <- analysis.create(graph)
 
         // find and upload all the bottom-line result part files
-        _ <- analysis.uploadParts(aws, graph, id, bottomLine)(uploadResults)
+        _ <- analysis.uploadParts(aws, graph, id, parts)(uploadResults)
       } yield ()
 
       // ensure the connection to the database is closed
@@ -60,8 +60,7 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig,
     ios.toList.sequence.as(())
   }
 
-  /**
-    * Given a part file, upload it and create all the bottom-line nodes.
+  /** Given a part file, upload it and create all the bottom-line nodes.
     */
   def uploadResults(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     for {
@@ -70,8 +69,7 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig,
     } yield results
   }
 
-  /**
-    * Ensure the variants for each result exist.
+  /** Ensure the variants for each result exist.
     */
   def mergeVariants(graph: GraphDb, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 50000
@@ -90,8 +88,7 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig,
     graph.run(q)
   }
 
-  /**
-    * Create all the result nodes and relationships.
+  /** Create all the result nodes and relationships.
     */
   def createResults(graph: GraphDb, id: Long, part: String): IO[StatementResult] = {
     val q = s"""|USING PERIODIC COMMIT 50000
@@ -100,25 +97,18 @@ class UploadFrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig,
                 |
                 |// lookup the analysis node
                 |MATCH (q:Analysis) WHERE ID(q)=$id
-                |
-                |// skip if the phenotype, ancestry, or variant don't exist
-                |MATCH (p:Phenotype {name: r.phenotype})
-                |MATCH (a:Ancestry {name: r.ancestry})
                 |MATCH (v:Variant {name: r.varId})
                 |
-                |// create the frequency result node
+                |// create the frequency node
                 |CREATE (n:Frequency {
+                |  ancestry: r.ancestry,
                 |  eaf: toFloat(r.eaf),
                 |  maf: toFloat(r.maf)
                 |})
                 |
-                |// create the relationship to the analysis node
+                |// create the relationship to the analysis node and variant
                 |CREATE (q)-[:PRODUCED]->(n)
-                |
-                |// create the relationship to the trait, ancestry, and variant
-                |CREATE (p)-[:HAS_FREQUENCY]->(n)
                 |CREATE (v)-[:HAS_FREQUENCY]->(n)
-                |CREATE (a)-[:HAS_FREQUENCY]->(n)
                 |""".stripMargin
 
     graph.run(q)

@@ -14,10 +14,10 @@ export PATH=$PATH:$HOME/perl5/perlbrew/bin
 perlbrew install-cpanm
 
 # install required perl modules
-cpanm --sudo Archive::Zip
-cpanm --sudo DBD::mysql
-cpanm --sudo DBI
-cpanm --sudo JSON
-cpanm --sudo PerlIO::gzip
-cpanm --sudo Try::Tiny
-cpanm --sudo autodie
+cpanm --sudo --force Archive::Zip
+cpanm --sudo --force DBD::mysql
+cpanm --sudo --force DBI
+cpanm --sudo --force JSON
+cpanm --sudo --force PerlIO::gzip
+cpanm --sudo --force Try::Tiny
+cpanm --sudo --force autodie

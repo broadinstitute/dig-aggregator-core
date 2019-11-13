@@ -47,6 +47,12 @@ if __name__ == '__main__':
             regexp_replace(col('biosample'), ':', '_').alias('biosample'),
             col('name').alias('annotation'),
             col('method'),
+
+            # custom columns for each region (not all regions have all columns)
+            col('predictedTargetGene'),
+            col('targetStart'),
+            col('targetEnd'),
+            col('transcriptionStartSite'),
             col('itemRgb'),
             col('score'),
         )

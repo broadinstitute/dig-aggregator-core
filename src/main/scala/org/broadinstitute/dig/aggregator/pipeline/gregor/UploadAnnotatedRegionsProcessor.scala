@@ -5,7 +5,8 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.core._
 import org.neo4j.driver.v1.StatementResult
 
-class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** All the processors this processor depends on.
     */
@@ -59,8 +60,15 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig, 
                 |MATCH (q:Analysis) WHERE ID(q)=$id
                 |MATCH (t:Tissue {name: tissue})
                 |
+                |// some regions associate with a gene
+                |OPTIONAL MATCH (g:Gene {name: r.predictedTargetGene})
+                |
                 |// join columns to make region name
-                |WITH q, t, r, r.chromosome + ':' + r.start + '-' + r.end AS name
+                |WITH q, t, g, r, r.chromosome + ':' + r.start + '-' + r.end AS name
+                |
+                |// ensure the method annotation node exists
+                |MERGE (m:Method {name: r.method})
+                |MERGE (a:Annotation {name: r.annotation})
                 |
                 |// create the annotated region node
                 |CREATE (n:AnnotatedRegion {
@@ -68,15 +76,23 @@ class UploadAnnotatedRegionsProcessor(name: Processor.Name, config: BaseConfig, 
                 |  chromosome: r.chromosome,
                 |  start: toInteger(r.start),
                 |  end: toInteger(r.end),
-                |  method: r.method,
-                |  annotation: r.annotation,
+                |  targetStart: toInteger(r.targetStart),
+                |  targetEnd: toInteger(r.targetEnd),
+                |  transcriptionStartSite: toInteger(r.transcriptionStartSite),
                 |  rgb: r.itemRgb,
                 |  score: toFloat(r.score)
                 |})
                 |
                 |// create the required relationships
-                |MERGE (q)-[:PRODUCED]->(n)
-                |MERGE (t)-[:HAS_ANNOTATED_REGION]->(n)
+                |CREATE (q)-[:PRODUCED]->(n)
+                |CREATE (n)-[:HAS_TISSUE]->(t)
+                |CREATE (n)-[:HAS_ANNOTATION]->(a)
+                |CREATE (n)-[:HAS_METHOD]->(m)
+                |
+                |// target gene is optional, if there, link to it
+                |FOREACH(i IN (CASE g WHEN null THEN [] ELSE [1] END) |
+                |  CREATE (n)-[:HAS_TARGET_GENE]->(g)
+                |)
                 |""".stripMargin
 
     graph.run(q)

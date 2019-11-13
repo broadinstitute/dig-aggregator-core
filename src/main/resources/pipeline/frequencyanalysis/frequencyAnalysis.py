@@ -5,7 +5,7 @@ import functools
 import platform
 
 from pyspark.sql import SparkSession, Row
-from pyspark.sql.functions import col, isnan, lit, when  # pylint: disable=E0611
+from pyspark.sql.functions import col, isnan, lit  # pylint: disable=E0611
 
 s3dir = 's3://dig-analysis-data'
 
@@ -48,8 +48,8 @@ def calc_freq(df, ancestry):
             .keyBy(lambda v: v.varId) \
             .aggregateByKey(
                 (0, 0),
-                lambda a,b: (a[0] + b.maf, a[1] + 1),
-                lambda a,b: (a[0] + b[0], a[1] + b[1])
+                lambda a, b: (a[0] + b.maf, a[1] + 1),
+                lambda a, b: (a[0] + b[0], a[1] + b[1])
             ) \
             .map(lambda v: Row(varId=v[0], maf=v[1][0] / v[1][1])) \
             .toDF()
@@ -76,47 +76,26 @@ def calc_freq(df, ancestry):
 # entry point
 if __name__ == '__main__':
     """
-    @param phenotype e.g. `T2D`
+    Arguments: ancestry
     """
     print('Python version: %s' % platform.python_version())
 
+    # parse arguments
     opts = argparse.ArgumentParser()
-    opts.add_argument('phenotype')
-
-    # parse the command line parameters
+    opts.add_argument('ancestry', help='Ancestry')
     args = opts.parse_args()
 
     # get the source and output directories
-    srcdir = '%s/variants/*/%s' % (s3dir, args.phenotype)
-    outdir = '%s/out/frequencyanalysis/%s' % (s3dir, args.phenotype)
+    srcdir = '%s/variants/*/*' % s3dir
+    outdir = '%s/out/frequencyanalysis' % s3dir
 
     # create a spark session
     spark = SparkSession.builder.appName('frequencyanalysis').getOrCreate()
 
-    # slurp all the variant batches
-    df = spark.read.json('%s/part-*' % srcdir)
-
-    # remove any variants with no (or mixed) ancestry
-    df = df.filter(df.ancestry.isNotNull() & (df.ancestry != 'Mixed'))
-
-    # get a list of all the distinct ancestries
-    ancestries = df.select(df.ancestry) \
-        .distinct() \
-        .collect()
-
-    # for each ancestry, calculate average EAF and MAF per variant
-    ancestry_dfs = [calc_freq(df, row[0]) for row in ancestries]
-
-    # join all the ancestries together into a single dataframe and write them
-    if len(ancestry_dfs) > 0:
-        all_freqs = functools.reduce(lambda a, b: a.union(b), ancestry_dfs)
-
-        # write out all the frequencies
-        all_freqs \
-            .withColumn('phenotype', lit(args.phenotype)) \
-            .write \
-            .mode('overwrite') \
-            .csv(outdir, sep='\t', header=True)
+    # load variants from all datasets
+    calc_freq(spark.read.json('%s/part-*' % srcdir), args.ancestry).write \
+        .mode('overwrite') \
+        .csv('%s/%s' % (outdir, args.ancestry), sep='\t', header=True)
 
     # done
     spark.stop()
