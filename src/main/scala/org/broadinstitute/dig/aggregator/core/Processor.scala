@@ -14,12 +14,12 @@ import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aws.AWS
 
 /** Each processor has a globally unique name and a run function. */
-abstract class Processor(
-    val name: Processor.Name, 
-    config: BaseConfig, 
-    /** Database transactor for loading state, etc. */
-    protected val pool: DbPool) extends LazyLogging {
-  
+abstract class Processor(val name: Processor.Name,
+                         config: BaseConfig,
+                         /** Database transactor for loading state, etc. */
+                         protected val pool: DbPool)
+    extends LazyLogging {
+
   /** The collection of resources this processor needs to have uploaded
     * before the processor can run.
     *
@@ -154,7 +154,7 @@ abstract class Processor(
 
           // if only inserting runs, skip processing
           _ <- if (opts.insertRuns) IO.unit else processOutputs(work.keys.toSeq)
-          _ <- insertRuns(pool, work)
+          _ <- if (opts.noInsertRuns) IO.unit else insertRuns(pool, work)
         } yield ()
       }
     }
@@ -183,6 +183,7 @@ object Processor extends LazyLogging {
   final case class Opts(
       reprocess: Boolean,
       insertRuns: Boolean,
+      noInsertRuns: Boolean,
       only: Option[String],
       exclude: Option[String],
   ) {

@@ -5,10 +5,7 @@ import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.ApplicationConfig
-import org.broadinstitute.dig.aws.emr.ClassificationProperties
-import org.broadinstitute.dig.aws.emr.Cluster
-
+import org.broadinstitute.dig.aws.emr.{ApplicationConfig, ClassificationProperties, Cluster, InstanceType}
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
@@ -19,7 +16,8 @@ import org.broadinstitute.dig.aggregator.core.DbPool
   *
   *  s3://dig-analysis-data/out/varianteffect/variants/<dataset>
   */
-class VariantListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class VariantListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** Intake dependencies.
     */
@@ -51,6 +49,10 @@ class VariantListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPoo
     val cluster = Cluster(
       name = name.toString,
       instances = 5,
+      masterInstanceType = InstanceType.c5_4xlarge,
+      slaveInstanceType = InstanceType.c5_2xlarge,
+      masterVolumeSizeInGB = 400,
+      slaveVolumeSizeInGB = 400,
       configurations = Seq(sparkConf)
     )
 

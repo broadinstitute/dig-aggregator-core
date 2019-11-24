@@ -99,6 +99,7 @@ object Pipeline {
   /** The global list of all pipelines.
     */
   def pipelines(): Map[String, Pipeline] = Map(
+    "BioIndexPipeline"             -> bioindex.BioIndexPipeline,
     "MetaAnalysisPipeline"         -> metaanalysis.MetaAnalysisPipeline,
     "FrequencyAnalysisPipeline"    -> frequencyanalysis.FrequencyAnalysisPipeline,
     "VariantEffectPipeline"        -> varianteffect.VariantEffectPipeline,
