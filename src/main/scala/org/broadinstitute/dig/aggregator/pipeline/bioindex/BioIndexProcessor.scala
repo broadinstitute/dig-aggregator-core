@@ -52,9 +52,9 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
     // cluster configuration used to process each phenotype
     val cluster = Cluster(
       name = name.toString,
-      instances = 4,
-      masterInstanceType = InstanceType.r5_4xlarge,
-      slaveInstanceType = InstanceType.r5_4xlarge,
+      instances = 3,
+      masterInstanceType = InstanceType.r5_2xlarge,
+      slaveInstanceType = InstanceType.r5_2xlarge,
       masterVolumeSizeInGB = 500,
       slaveVolumeSizeInGB = 500,
       configurations = Seq(
