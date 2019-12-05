@@ -34,7 +34,7 @@ if __name__ == '__main__':
     df.distinct() \
         .write \
         .mode('overwrite') \
-        .csv('%s/unique' % s3dir, header=True, sep='\t')
+        .csv(outdir, header=True, sep='\t')
 
     # done
     spark.stop()

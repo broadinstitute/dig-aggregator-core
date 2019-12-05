@@ -36,7 +36,7 @@ summary_schema = StructType(
     ]
 )
 
-# regexp for extracing biosample, method, and annotation
+# regexp for extracting biosample, method, and annotation
 bed_re = r'([A-Z]+_\d+)___([^_]+)___(.*)'
 summary_re = r'/gregor/summary/([^/]+)/([^/]+)/statistics.txt'
 
