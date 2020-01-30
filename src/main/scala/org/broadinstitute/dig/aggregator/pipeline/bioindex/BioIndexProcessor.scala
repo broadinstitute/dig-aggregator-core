@@ -30,15 +30,16 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
   /** All the job scripts that need to be uploaded to AWS.
     */
   override val resources: Seq[String] = Seq(
-    "pipeline/bioindex/variants.py",
+    "pipeline/bioindex/associations.py",
     "pipeline/bioindex/regions.py",
+    "pipeline/bioindex/manhattan.py",
   )
 
   /** Each ancestry gets its own output.
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
     input.processor match {
-      case MetaAnalysisPipeline.metaAnalysisProcessor => Processor.Outputs(Seq("variants"))
+      case MetaAnalysisPipeline.metaAnalysisProcessor => Processor.Outputs(Seq("associations", "manhattan"))
       case GregorPipeline.globalEnrichmentProcessor   => Processor.Outputs(Seq("regions"))
     }
   }
@@ -46,8 +47,9 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
   /** For each phenotype output, process all the datasets for it.
     */
   override def processOutputs(outputs: Seq[String]): IO[Unit] = {
-    val variantsScript = aws.uriOf("resources/pipeline/bioindex/variants.py")
-    val regionsScript  = aws.uriOf("resources/pipeline/bioindex/regions.py")
+    val associationsScript = aws.uriOf("resources/pipeline/bioindex/associations.py")
+    val regionsScript      = aws.uriOf("resources/pipeline/bioindex/regions.py")
+    val manhattanScript    = aws.uriOf("resources/pipeline/bioindex/manhattan.py")
 
     // cluster configuration used to process each phenotype
     val cluster = Cluster(
@@ -64,8 +66,9 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
 
     // run the jobs
     val jobs = outputs.map {
-      case "variants" => Seq(JobStep.PySpark(variantsScript))
-      case "regions"  => Seq(JobStep.PySpark(regionsScript))
+      case "associations" => Seq(JobStep.PySpark(associationsScript))
+      case "regions"      => Seq(JobStep.PySpark(regionsScript))
+      case "manhattan"    => Seq(JobStep.PySpark(manhattanScript))
     }
 
     // distribute across clusters

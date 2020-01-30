@@ -42,7 +42,7 @@ summary_re = r'/gregor/summary/([^/]+)/([^/]+)/statistics.txt'
 
 
 if __name__ == '__main__':
-    spark = SparkSession.builder.appName('MetaAnalysis').getOrCreate()
+    spark = SparkSession.builder.appName('bioindex').getOrCreate()
 
     # load all regions, fix biosample, sort, and write
     spark.read.csv(src_regions, sep='\t', header=True, schema=regions_schema) \

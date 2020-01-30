@@ -279,6 +279,7 @@ def load_trans_ethnic_analysis(phenotype):
     # load the analyses - note that zScore is present for trans-ethnic!
     variants = load_analysis(spark, srcdir, overlap=False) \
         .withColumn('phenotype', lit(phenotype)) \
+        .filter(col('pValue') > 0.0) \
         .select(
             'varId',
             'chromosome',
@@ -296,7 +297,7 @@ def load_trans_ethnic_analysis(phenotype):
     # identify the top variants across the genome for this phenotype
     top = variants \
         .rdd \
-        .keyBy(lambda v: (v.chromosome, v.position // 1000)) \
+        .keyBy(lambda v: (v.chromosome, v.position // 5000)) \
         .reduceByKey(lambda a, b: b if b.pValue < a.pValue else a) \
         .map(lambda v: v[1]) \
         .toDF() \

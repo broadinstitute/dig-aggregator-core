@@ -6,6 +6,9 @@ from pyspark.sql.functions import col
 srcdir = 's3://dig-analysis-data/out/metaanalysis/trans-ethnic/*/part-*'
 outdir = 's3://dig-bio-index/variants'
 
+# output directory of top-variants by phenotype
+by_phenotype_outdir = 's3://dig-bio-index/phenotype/variants'
+
 # this is the schema written out by the variant partition process
 variants_schema = StructType(
     [
@@ -26,11 +29,11 @@ variants_schema = StructType(
 
 
 if __name__ == '__main__':
-    spark = SparkSession.builder.appName('MetaAnalysis').getOrCreate()
+    spark = SparkSession.builder.appName('bioindex').getOrCreate()
 
-    # load the trans-ethnic meta-analysis
+    # load the trans-ethnic, meta-analysis, top variants and write them sorted
     spark.read.csv(srcdir, sep='\t', header=True, schema=variants_schema) \
-        .filter(col('top')) \
+        .filter(col('top') | col('pValue') < 0.05) \
         .orderBy(['chromosome', 'position']) \
         .write \
         .mode('overwrite') \
