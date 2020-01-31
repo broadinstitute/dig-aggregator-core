@@ -21,7 +21,12 @@ rm -rf "${OUTDIR}"
 mkdir -p "${OUTDIR}"
 
 # get all the part files for this phenotype
-PARTS=($(hadoop fs -ls -C "${SRCDIR}/*/*/*/part-*"))
+PARTS=($(hadoop fs -ls -C "${SRCDIR}/*/*/*/part-*")) || PARTS=()
+
+# bugger out if there are no parts files
+if [[ "${#PARTS[@]}" -eq 0 ]]; then
+  exit 0
+fi
 
 # get all the unique ancestries
 ANCESTRIES=($(printf '%s\n' "${PARTS[@]}" | xargs dirname | xargs dirname | awk -F "=" '{print $NF}' | sort | uniq))
