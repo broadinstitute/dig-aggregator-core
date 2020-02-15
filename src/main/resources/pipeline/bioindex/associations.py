@@ -1,13 +1,9 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, BooleanType, DoubleType, IntegerType
-from pyspark.sql.functions import col
 
 # load and output directory
 srcdir = 's3://dig-analysis-data/out/metaanalysis/trans-ethnic/*/part-*'
-outdir = 's3://dig-bio-index/variants'
-
-# output directory of top-variants by phenotype
-by_phenotype_outdir = 's3://dig-bio-index/phenotype/variants'
+outdir = 's3://dig-bio-index/associations'
 
 # this is the schema written out by the variant partition process
 variants_schema = StructType(
@@ -32,12 +28,22 @@ if __name__ == '__main__':
     spark = SparkSession.builder.appName('bioindex').getOrCreate()
 
     # load the trans-ethnic, meta-analysis, top variants and write them sorted
-    spark.read.csv(srcdir, sep='\t', header=True, schema=variants_schema) \
-        .filter(col('top') | col('pValue') < 0.05) \
+    df = spark.read.csv(srcdir, sep='\t', header=True, schema=variants_schema)
+    top = df.filter(df.top)
+
+    # all associations indexed by locus
+    df.drop(df.top) \
         .orderBy(['chromosome', 'position']) \
         .write \
         .mode('overwrite') \
-        .json(outdir)
+        .json('%s/locus' % outdir)
+
+    # top associations indexed by locus
+    top.drop(top.top) \
+        .orderBy(['chromosome', 'position']) \
+        .write \
+        .mode('overwrite') \
+        .json('%s/top' % outdir)
 
     # done
     spark.stop()

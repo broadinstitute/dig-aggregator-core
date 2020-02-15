@@ -3,10 +3,9 @@ from pyspark.sql.types import StructType, StructField, StringType, BooleanType, 
 from pyspark.sql.functions import col, rank
 from pyspark.sql.window import Window
 
-
 # load and output directory
 srcdir = 's3://dig-analysis-data/out/metaanalysis/trans-ethnic/*/part-*'
-outdir = 's3://dig-bio-index/manhattan'
+outdir = 's3://dig-bio-index/associations'
 
 # this is the schema written out by the variant partition process
 variants_schema = StructType(
@@ -30,21 +29,18 @@ variants_schema = StructType(
 if __name__ == '__main__':
     spark = SparkSession.builder.appName('bioindex').getOrCreate()
 
-    # load the trans-ethnic meta-analysis
-    df = spark.read.csv(srcdir, sep='\t', header=True, schema=variants_schema) \
-        .filter(col('top'))
+    # load the trans-ethnic, meta-analysis, top variants and write them sorted
+    df = spark.read.csv(srcdir, sep='\t', header=True, schema=variants_schema)
 
-    # create a window into the data, key by phenotype, ranked by p-value
+    # find the most significant associations - genome wide - by p-value
     w = Window.partitionBy(df.phenotype).orderBy(df.pValue)
+    by_phenotype = df.select('*', rank().over(w).alias('rank')) \
+        .filter(col('rank') <= 10000) \
+        .drop(col('rank')) \
+        .orderBy(['phenotype', 'pValue'])
 
-    # take the top N variants per phenotype
-    ranked = df.select('*', rank().over(w).alias('rank')).filter(col('rank') <= 5000)
-
-    # write them out, partitioned by phenotype
-    ranked.write \
-        .mode('overwrite') \
-        .partitionBy(['phenotype']) \
-        .json(outdir)
+    # write out the various associations
+    by_phenotype.write.mode('overwrite').json('%s/phenotype' % outdir)
 
     # done
     spark.stop()
