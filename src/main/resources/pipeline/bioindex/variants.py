@@ -219,8 +219,7 @@ if __name__ == '__main__':
     vep = spark.read.json(vep_srcdir) \
         .select(
             col('id').alias('varId'),
-            col('transcript_consequences').alias('transcriptConsequences'),
-            col('regulatory_feature_consequences').alias('regulatoryFeatureConsequences'),
+            struct('*').alias('effects'),
         )
 
     # join everything together, remove empty records
