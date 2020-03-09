@@ -24,5 +24,12 @@ if __name__ == '__main__':
         .mode('overwrite') \
         .json('%s/region' % outdir)
 
+    # write the genes by name
+    df.orderBy(['name']) \
+        .repartition(1) \
+        .write \
+        .mode('overwrite') \
+        .json('%s/name' % outdir)
+
     # done
     spark.stop()
