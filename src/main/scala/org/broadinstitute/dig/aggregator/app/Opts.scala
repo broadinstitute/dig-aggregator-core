@@ -46,6 +46,9 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   /** Skip running, assume complete, and insert runs into the database. */
   val insertRuns: ScallopOption[Boolean] = opt("insert-runs")
 
+  /** Run the processor, but do NOT insert runs when done. */
+  val noInsertRuns: ScallopOption[Boolean] = opt("no-insert-runs")
+
   /** The processor (or pipeline if --pipeline specified) to run. */
   val processorName: ScallopOption[String] = trailArg(required = false)
 
@@ -57,6 +60,8 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   mutuallyExclusive(verifyAndFix, only)
   mutuallyExclusive(verifyAndFix, exclude)
   mutuallyExclusive(verifyAndFix, insertRuns)
+  mutuallyExclusive(verifyAndFix, noInsertRuns)
+  mutuallyExclusive(insertRuns, noInsertRuns)
 
   // parse the command line options
   verify
@@ -79,9 +84,13 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   def processor(): String = processorName.getOrElse("")
 
   /** The options used by processors. */
-  def processorOpts: Processor.Opts = {
-    Processor.Opts(reprocess(), insertRuns(), only.toOption, exclude.toOption)
-  }
+  def processorOpts: Processor.Opts = Processor.Opts(
+    reprocess = reprocess(),
+    insertRuns = insertRuns(),
+    noInsertRuns = noInsertRuns(),
+    only = only.toOption,
+    exclude = exclude.toOption
+  )
 
   /** Outputs standard help from Scallop along with an additional message. */
   private def printHelp(message: String): Unit = {
