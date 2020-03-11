@@ -227,7 +227,7 @@ if __name__ == '__main__':
         .join(freq, 'varId', how='left_outer') \
         .join(tfs, 'varId', how='left_outer') \
         .join(vep, 'varId', how='left_outer') \
-        .filter(col('varId').isNotNull())
+        .filter(col('varId').isNotNull()) \
 
     # write out variant data by ID
     df.write \

@@ -18,15 +18,15 @@ if __name__ == '__main__':
         .filter(col('chromosome').isin(*chromosomes))
 
     # write the genes by region
-    df.orderBy(['chromosome', 'start']) \
-        .repartition(1) \
+    df.coalesce(1) \
+        .orderBy(['chromosome', 'start']) \
         .write \
         .mode('overwrite') \
         .json('%s/region' % outdir)
 
     # write the genes by name
-    df.orderBy(['name']) \
-        .repartition(1) \
+    df.coalesce(1) \
+        .orderBy(['name']) \
         .write \
         .mode('overwrite') \
         .json('%s/name' % outdir)

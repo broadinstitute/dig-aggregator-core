@@ -29,14 +29,14 @@ if __name__ == '__main__':
 
     # load the trans-ethnic, meta-analysis, top variants and write them sorted
     df = spark.read.csv(srcdir, sep='\t', header=True, schema=variants_schema)
-    top = df.filter(df.top | df.pValue < 1e-5)
+    top = df.filter(df.top | (df.pValue < 1e-5))
 
     # all associations indexed by locus
-    # df.drop(df.top) \
-    #     .orderBy(['chromosome', 'position']) \
-    #     .write \
-    #     .mode('overwrite') \
-    #     .json('%s/locus' % outdir)
+    df.drop(df.top) \
+        .orderBy(['phenotype', 'chromosome', 'position']) \
+        .write \
+        .mode('overwrite') \
+        .json('%s/locus' % outdir)
 
     # top associations indexed by locus
     top.drop(top.top) \
@@ -44,13 +44,6 @@ if __name__ == '__main__':
         .write \
         .mode('overwrite') \
         .json('%s/top' % outdir)
-
-    # top associations indexed by phenotype then locus
-    top.drop(top.top) \
-        .orderBy(['phenotype', 'chromosome', 'position']) \
-        .write \
-        .mode('overwrite') \
-        .json('%s/phenotype' % outdir)
 
     # done
     spark.stop()
