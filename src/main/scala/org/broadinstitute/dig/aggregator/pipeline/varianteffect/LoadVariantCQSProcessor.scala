@@ -28,7 +28,8 @@ import org.broadinstitute.dig.aggregator.core.DbPool
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** All the processors this processor depends on.
     */

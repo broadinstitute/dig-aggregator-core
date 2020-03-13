@@ -80,13 +80,14 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
     // cluster configuration used to process each phenotype
     val cluster = Cluster(
       name = name.toString,
-      instances = 4,
+      instances = 5,
       masterInstanceType = InstanceType.r5_4xlarge,
       slaveInstanceType = InstanceType.r5_2xlarge,
-      masterVolumeSizeInGB = 500,
-      slaveVolumeSizeInGB = 500,
+      masterVolumeSizeInGB = 800,
+      slaveVolumeSizeInGB = 800,
       configurations = Seq(
-        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
+        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3),
+        ApplicationConfig.sparkMaximizeResourceAllocation,
       )
     )
 
