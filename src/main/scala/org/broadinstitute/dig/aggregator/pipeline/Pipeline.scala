@@ -100,14 +100,16 @@ object Pipeline {
     */
   def pipelines(): Map[String, Pipeline] = Map(
     "BioIndexPipeline"             -> bioindex.BioIndexPipeline,
-    "MetaAnalysisPipeline"         -> metaanalysis.MetaAnalysisPipeline,
+    "MetaAnalysisPipeline"         -> metaanalysis.MetaAnalysisPipeline,            // bottom line analysis pipeline
     "FrequencyAnalysisPipeline"    -> frequencyanalysis.FrequencyAnalysisPipeline,
     "VariantEffectPipeline"        -> varianteffect.VariantEffectPipeline,
     "GregorPipeline"               -> gregor.GregorPipeline,
     "OverlapRegionsPipeline"       -> overlapregions.OverlapRegionsPipeline,
     "TranscriptionFactorsPipeline" -> transcriptionfactors.TranscriptionFactorsPipeline,
 
-    // Marc TODO - add pipeline for burden
+    // Marc - add pipeline for burden binning pipeline that creates 7 bins based on a combination of VEP results
+    "BurdenVariantBinningPipeline" -> burdenbinning.BurdenVariantBinningPipeline,
+
 
   )
 
