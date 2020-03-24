@@ -106,6 +106,9 @@ object Pipeline {
     "GregorPipeline"               -> gregor.GregorPipeline,
     "OverlapRegionsPipeline"       -> overlapregions.OverlapRegionsPipeline,
     "TranscriptionFactorsPipeline" -> transcriptionfactors.TranscriptionFactorsPipeline,
+
+    // Marc TODO - add pipeline for burden
+
   )
 
   /** Lookup a registered pipeline.

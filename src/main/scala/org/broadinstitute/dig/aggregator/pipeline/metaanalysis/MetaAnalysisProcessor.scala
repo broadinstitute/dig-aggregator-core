@@ -100,9 +100,9 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPo
     val loadAnalysis     = aws.uriOf("resources/pipeline/metaanalysis/loadAnalysis.py")
 
     Seq(
-      JobStep.PySpark(partition, phenotype),
+      JobStep.PySpark(partition, phenotype),                    // add in first arg will be phenotype
       // ancestry-specific analysis first and load it back
-      JobStep.Script(ancestrySpecific, phenotype),
+      JobStep.Script(ancestrySpecific, phenotype),              // shell
       JobStep.PySpark(loadAnalysis, "--ancestry-specific", phenotype),
       // trans-ethnic next using ancestry-specific results
       JobStep.Script(transEthnic, phenotype),
