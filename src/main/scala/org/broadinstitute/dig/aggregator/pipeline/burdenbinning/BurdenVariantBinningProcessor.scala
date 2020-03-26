@@ -34,7 +34,8 @@ class BurdenVariantBinningProcessor(name: Processor.Name, config: BaseConfig, po
     */
   override val dependencies: Seq[Processor.Name] = Seq(IntakePipeline.variants)
 
-  /** All the job scripts that need to be uploaded to AWS.
+  /**
+    * All the job scripts that need to be uploaded to AWS.
     */
   override val resources: Seq[String] = Seq(
     "pipeline/metaanalysis/cluster-bootstrap.sh",
