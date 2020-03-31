@@ -282,6 +282,11 @@ output_data_frame = final_bin1_data_frame     .union(final_bin2_data_frame)     
 # print
 print("the final agregated bin dataframe is: {}".format(output_data_frame.count()))
 
+# only select the relevant columns
+output_data_frame = output_data_frame.select(col(var_id), col(gene_ensemble_id), col(burden_bin_id))
+
+# print
+print("the final agregated bin with selected columns dataframe is: {}".format(output_data_frame.count()))
 
 # %%
 # save out the output data frame to file

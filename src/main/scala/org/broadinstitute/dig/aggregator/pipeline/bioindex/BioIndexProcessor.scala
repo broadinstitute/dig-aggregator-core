@@ -47,6 +47,7 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
     "pipeline/bioindex/phenotypeAssociations.py",
     "pipeline/bioindex/regions.py",
     "pipeline/bioindex/variants.py",
+    "pipeline/bioindex/burdenBinning.py",
   )
 
   /** Each ancestry gets its own output.
@@ -76,6 +77,7 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
     val phenotypeAssociationsScript = aws.uriOf("resources/pipeline/bioindex/phenotypeAssociations.py")
     val regionsScript               = aws.uriOf("resources/pipeline/bioindex/regions.py")
     val variantsScript              = aws.uriOf("resources/pipeline/bioindex/variants.py")
+    val burdenBinningScript         = aws.uriOf("resources/pipeline/bioindex/burdenBinning.py")
 
     // cluster configuration used to process each phenotype
     val cluster = Cluster(
@@ -101,6 +103,7 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
       case "BioIndex/phenotypeAssociations" => Seq(JobStep.PySpark(phenotypeAssociationsScript))
       case "BioIndex/regions"               => Seq(JobStep.PySpark(regionsScript))
       case "BioIndex/variants"              => Seq(JobStep.PySpark(variantsScript))
+      case "BioIndex/burdenBinning"         => Seq(JobStep.PySpark(burdenBinningScript))
     }
 
     // distribute across clusters
