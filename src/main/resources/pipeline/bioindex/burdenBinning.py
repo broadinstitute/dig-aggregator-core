@@ -9,7 +9,7 @@ from pyspark.sql.functions import col, struct, explode, when, lit
 # %%
 # load and output directory
 vep_srcdir = 's3://dig-analysis-data/out/varianteffect/effects/part-*'
-outdir = 's3://dig-bio-index/burden/vepbinning'
+outdir = 's3://dig-bio-index/burden/variantgene'
 
 # development localhost directories
 # vep_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/test*'
@@ -342,7 +342,7 @@ output_data_frame = output_data_frame.select(col(var_id), col(gene_ensemble_id),
 # %%
 # save out the output data frame to file
 output_data_frame \
-        .orderBy(var_id_col, gene_ensemble_id_col, burden_bin_id_col) \
+        .orderBy(gene_ensemble_id_col, burden_bin_id_col) \
         .write \
         .mode('overwrite') \
         .json('%s' % outdir)
