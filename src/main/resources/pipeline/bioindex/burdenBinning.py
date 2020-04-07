@@ -13,7 +13,7 @@ outdir = 's3://dig-bio-index/burden/variantgene'
 
 # development localhost directories
 # vep_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/test*'
-# outdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/Out2'
+# outdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/Out3'
 
 # print
 # print("the input directory is: {}".format(vep_srcdir))
@@ -60,7 +60,7 @@ filter_impact = "impact"
 
 # column constants
 var_id = "varId"
-gene_ensemble_id = "geneEnsembleId"
+gene_ensemble_id = "ensemblId"
 burden_bin_id = "burdenBinId"
 
 # column variables for output
@@ -143,7 +143,7 @@ vep = spark.read.json(vep_srcdir)
 # create new data frame with only var id
 transcript_consequences = vep.select(vep.id, vep.transcript_consequences)     .withColumn('cqs', explode(col('transcript_consequences')))     .select(
         col('id').alias('varId'),
-        col('cqs.gene_id').alias('geneEnsembleId'),
+        col('cqs.gene_id').alias(gene_ensemble_id),
         col('cqs.' + filter_lof).alias(filter_lof),
         col('cqs.' + filter_impact).alias(filter_impact),
 

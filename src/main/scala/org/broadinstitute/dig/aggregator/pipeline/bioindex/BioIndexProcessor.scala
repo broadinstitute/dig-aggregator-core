@@ -62,7 +62,7 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
       case GregorPipeline.sortRegionsProcessor                        => Processor.Outputs(Seq("BioIndex/regions"))
       case FrequencyAnalysisPipeline.frequencyProcessor               => Processor.Outputs(Seq("BioIndex/variants"))
       case TranscriptionFactorsPipeline.transcriptionFactorsProcessor => Processor.Outputs(Seq("BioIndex/variants"))
-      case VariantEffectPipeline.variantEffectProcessor               => Processor.Outputs(Seq("BioIndex/variants"))
+      case VariantEffectPipeline.variantEffectProcessor               => Processor.Outputs(Seq("BioIndex/variants", "BioIndex/burdenBinning"))
     }
   }
 
