@@ -107,13 +107,17 @@ object Run extends LazyLogging {
   /** When querying the `runs` table to determine what has already been
     * processed by dependency applications, this is what is returned.
     */
-  final case class Result(uuid: UUID, processor: Processor.Name, output: String, timestamp: java.time.Instant) {
+  final case class Result(uuid: UUID,
+                          processor: Processor.Name,
+                          input: Option[UUID],
+                          output: String,
+                          timestamp: java.time.Instant) {
     override def toString: String = s"$processor:$output"
   }
 
   /** Lookup all the results for a given run id. This is mostly used for testing. */
   def resultsOfRun(pool: DbPool, uuid: UUID): IO[Seq[Result]] = {
-    val q = sql"""|SELECT `uuid`, `processor`, `output`, `timestamp`
+    val q = sql"""|SELECT `uuid`, `processor`, `input`, `output`, `timestamp`
                   |FROM   `runs`
                   |WHERE  `uuid`=$uuid
                   |""".stripMargin.query[Result].to[Seq]
@@ -124,15 +128,11 @@ object Run extends LazyLogging {
   /** Build a SQL fragment that looks up the run results of a set of processors. */
   def resultsOfFragment(processors: Seq[Processor.Name]): Fragment = {
     val selects = processors.map { processor =>
-      fr"SELECT `uuid`, `processor`, `output`, `timestamp` FROM `runs` WHERE `processor`=$processor"
+      fr"SELECT `uuid`, `processor`, `input`, `output`, `timestamp` FROM `runs` WHERE `processor`=$processor"
     }
 
     // union all the runs produced by all the processors together
-    val union = selects.toList.intercalate(fr"UNION ALL")
-    val group = fr"GROUP BY `processor`, `output`"
-
-    // union all the outputs together and group them
-    union ++ group
+    selects.toList.intercalate(fr"UNION ALL")
   }
 
   /** Find all the run results processed by a set of processors. */
@@ -140,28 +140,20 @@ object Run extends LazyLogging {
     pool.exec(resultsOfFragment(processors).query[Result].to[Seq])
   }
 
-  /** Find all the run results processed by a set of processors, but NOT
-    * yet processed by another.
-    */
-  def resultsOf(pool: DbPool, processors: Seq[Processor.Name], notProcessedBy: Processor.Name): IO[Seq[Result]] = {
-    val inputs = resultsOfFragment(processors)
+  /** Lookup all the results of a given run by processor and output. */
+  def resultsOf(pool: DbPool, processor: Processor.Name, output: Option[String] = None): IO[Seq[Result]] = {
+    val q = sql"""|SELECT `uuid`, `processor`, `input`, `output`, `timestamp`
+                  |FROM   `runs`
+                  |WHERE  `processor` = $processor
+                  |""".stripMargin
 
-    // use the inputs as a subquery
-    val select = fr"SELECT `inputs`.`uuid`, `inputs`.`processor`, `inputs`.`output`, `inputs`.`timestamp`"
-    val from   = fr"FROM (" ++ inputs ++ fr") AS `inputs`"
+    // optionally add the output name to the query
+    val where = output match {
+      case Some(s) => fr"AND `output` = $s"
+      case _       => Fragment.empty
+    }
 
-    // join with the runs that used the inputs
-    val join = fr"""|LEFT OUTER JOIN `runs` AS `r`
-                    |ON `r`.`processor` = $notProcessedBy
-                    |AND `r`.`input` = inputs.`uuid`
-                    |AND `r`.`timestamp` > inputs.`timestamp`
-                    |""".stripMargin
-
-    // filter runs where the join failed (read: was not processed)
-    val where = fr"WHERE `r`.`processor` IS NULL"
-
-    // run the query
-    pool.exec((select ++ from ++ join ++ where).query[Result].to[Seq])
+    pool.exec((q ++ where).query[Result].to[Seq])
   }
 
   /** Verify the inputs of a single run by asserting that all the inputs exist.

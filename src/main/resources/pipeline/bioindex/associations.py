@@ -1,5 +1,8 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, BooleanType, DoubleType, IntegerType
+from pyspark.sql.functions import col, rank
+from pyspark.sql.window import Window
+
 
 # load and output directory
 srcdir = 's3://dig-analysis-data/out/metaanalysis/trans-ethnic/*/part-*'
@@ -23,27 +26,54 @@ variants_schema = StructType(
     ]
 )
 
+# this is the schema written out by the dbSNP processor
+dbSNP_schema = StructType(
+    [
+        StructField('varId', StringType(), nullable=False),
+        StructField('dbSNP', StringType(), nullable=False),
+    ]
+)
+
 
 if __name__ == '__main__':
     spark = SparkSession.builder.appName('bioindex').getOrCreate()
 
     # load the trans-ethnic, meta-analysis, top variants and write them sorted
     df = spark.read.csv(srcdir, sep='\t', header=True, schema=variants_schema)
+    dbSNP = spark.read.json(srcdir, sep='\t', header=True, schema=dbSNP_schema)
+
+    # join the dbSNP id with the associations
+    df = df.join(dbSNP, 'varId', how='left_outer')
+
+    # keep only the top/significant variants per phenotype
     top = df.filter(df.top | (df.pValue < 1e-5))
 
+    # find the most significant associations - genome wide - by p-value
+    w = Window.partitionBy(df.phenotype).orderBy(df.pValue)
+    by_phenotype = df.select('*', rank().over(w).alias('rank')) \
+        .filter(col('rank') <= 20000) \
+        .drop(col('rank'))
+
     # all associations indexed by locus
-    df.drop(df.top) \
+    df.drop('top') \
         .orderBy(['phenotype', 'chromosome', 'position']) \
         .write \
         .mode('overwrite') \
         .json('%s/locus' % outdir)
 
     # top associations indexed by locus
-    top.drop(top.top) \
+    top.drop('top') \
         .orderBy(['chromosome', 'position']) \
         .write \
         .mode('overwrite') \
         .json('%s/top' % outdir)
+
+    # write out the genome-wide associations by phenotype
+    by_phenotype.drop(['rank', 'top']) \
+        .orderBy(['phenotype', 'pValue']) \
+        .write \
+        .mode('overwrite') \
+        .json('%s/phenotype' % outdir)
 
     # done
     spark.stop()

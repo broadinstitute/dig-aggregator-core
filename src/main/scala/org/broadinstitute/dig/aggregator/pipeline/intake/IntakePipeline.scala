@@ -49,6 +49,7 @@ object IntakePipeline extends Pipeline {
   val variants: Name             = register("HDFS:variants", createDummyProcessor)
   val annotatedRegions: Name     = register("HDFS:annotated_regions", createDummyProcessor)
   val genes: Name                = register("HDFS:genes", createDummyProcessor)
+  val tissues: Name              = register("HDFS:tissues", createDummyProcessor)
   val transcriptionFactors: Name = register("HDFS:transcripion_factors", createDummyProcessor)
   val thousandGenomes: Name      = register("HDFS:1kg", createDummyProcessor)
 }

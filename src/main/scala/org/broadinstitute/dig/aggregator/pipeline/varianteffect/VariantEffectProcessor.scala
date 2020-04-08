@@ -24,7 +24,8 @@ import org.broadinstitute.dig.aggregator.core.DbPool
   *
   *  s3://dig-analysis-data/out/varianteffect/effects
   */
-class VariantEffectProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class VariantEffectProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /**
     * All the processors this processor depends on.
@@ -61,7 +62,7 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig, pool: DbP
     // definition of each VM "cluster" (of 1 machine) that will run VEP
     val cluster = Cluster(
       name = name.toString,
-      masterInstanceType = InstanceType.c5_4xlarge,
+      masterInstanceType = InstanceType.c5_9xlarge,
       instances = 1,
       masterVolumeSizeInGB = 800,
       applications = Seq.empty,
@@ -80,10 +81,7 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig, pool: DbP
       parts = keys.map(_.split('/').last)
 
       // split the part files into chunks that are processed in parallel
-      steps = parts
-        .sliding(20, 20)
-        .map(JobStep.Script(runScript, _: _*))
-        .toList
+      steps = parts.map(JobStep.Script(runScript, _)).toList
 
       // wrap each step so we have a list of jobs, each being a single step
       jobs = steps.map(Seq.apply(_))
