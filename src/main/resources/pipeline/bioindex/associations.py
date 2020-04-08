@@ -1,7 +1,6 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, BooleanType, DoubleType, IntegerType
-from pyspark.sql.functions import col, rank
-from pyspark.sql.window import Window
+from pyspark.sql.functions import col
 
 
 # load and output directory
@@ -44,15 +43,18 @@ if __name__ == '__main__':
 
     # join the dbSNP id with the associations
     df = df.join(dbSNP, 'varId', how='left_outer')
+    top = df.filter(df.top)
 
-    # keep only the top/significant variants per phenotype
-    top = df.filter(df.top | (df.pValue < 1e-5))
-
-    # find the most significant associations - genome wide - by p-value
-    w = Window.partitionBy(df.phenotype).orderBy(df.pValue)
-    by_phenotype = df.select('*', rank().over(w).alias('rank')) \
-        .filter(col('rank') <= 20000) \
-        .drop(col('rank'))
+    # find the variants most significant across the genome per phenotype, this
+    # assumes a manhattan plot 4000 pixels wide, which means a maximum of 4000
+    # "positions" to display, so 3B positions / 4000 = 750,000 to keep the best
+    # variant in (or significant ones)
+    by_phenotype = df.rdd \
+        .keyBy(lambda v: (v.phenotype, v.chromosome, v.position // 750000)) \
+        .reduceByKey(lambda a, b: b if b.pValue < a.pValue else a) \
+        .map(lambda v: v[1]) \
+        .toDF() \
+        .union(df.filter(df.pValue < 1e-5))
 
     # all associations indexed by locus
     df.drop('top') \
