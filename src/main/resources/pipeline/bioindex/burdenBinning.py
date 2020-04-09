@@ -3,17 +3,19 @@
 # %%
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, BooleanType, DoubleType, IntegerType
-from pyspark.sql.functions import col, struct, explode, when, lit
+from pyspark.sql.functions import col, struct, explode, when, lit, array_max, array
 
 
 # %%
 # load and output directory
-vep_srcdir = 's3://dig-analysis-data/out/varianteffect/effects/part-*'
-outdir = 's3://dig-bio-index/burden/variantgene'
+# vep_srcdir = 's3://dig-analysis-data/out/varianteffect/effects/part-*'
+# freq_srcdir = 's3://dig-analysis-data/out/frequencyanalysis/'
+# outdir = 's3://dig-bio-index/burden/variantgene'
 
 # development localhost directories
-# vep_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/test*'
-# outdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/Out3'
+vep_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/test*'
+freq_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/Frequency'
+outdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/Out5'
 
 # print
 # print("the input directory is: {}".format(vep_srcdir))
@@ -62,14 +64,17 @@ filter_impact = "impact"
 var_id = "varId"
 gene_ensemble_id = "ensemblId"
 burden_bin_id = "burdenBinId"
+maf = 'maf'
 
 # column variables for output
 var_id_col = col(var_id)
 gene_ensemble_id_col = col(gene_ensemble_id)
 burden_bin_id_col = col(burden_bin_id)
+maf_col = col(maf)
 
 # column variables for filters
 filter_lof_col = col("lof")
+filter_impact_col = col("impact")
 filter_polyphen2_hdiv_pred_col = col("polyphen2_hdiv_pred")
 filter_polyphen2_hvar_pred_col = col("polyphen2_hvar_pred")
 filter_sift_pred_col = col("sift_pred")
@@ -89,9 +94,9 @@ filter_metasvm_pred_col = col("metasvm_pred")
 
 # %%
 # variables for filters conditions
-condition_lof_hc = col('lof') == 'HC'
-condition_impact_moderate = col('impact') == 'MODERATE'
-condition_impact_high = col('impact') == 'HIGH'
+condition_lof_hc = filter_lof_col == 'HC'
+condition_impact_moderate = (filter_impact_col == 'MODERATE') & (maf_col < 0.01)
+condition_impact_high = (filter_impact_col == 'HIGH') & (maf_col < 0.01)
 
 # level 2 condition for bin 7
 condition_level2_bin7 = (filter_polyphen2_hdiv_pred_col != 'D') & \
@@ -129,9 +134,53 @@ condition_level2_inclusion_bin2 = condition_level2_inclusion_bin3 & \
         (filter_cadd_raw_rankscore_col > 0.9) & \
         (filter_vest3_rankscore_col > 0.9) 
 
+# schemas for csv files
+# this is the schema written out by the frequency analysis processor
+frequency_schema = StructType(
+    [
+        StructField('varId', StringType(), nullable=False),
+        StructField('chromosome', StringType(), nullable=False),
+        StructField('position', IntegerType(), nullable=False),
+        StructField('reference', StringType(), nullable=False),
+        StructField('alt', StringType(), nullable=False),
+        StructField('eaf', DoubleType(), nullable=False),
+        StructField('maf', DoubleType(), nullable=False),
+        StructField('ancestry', StringType(), nullable=False),
+    ]
+)
+
+# functions
+# method to load the frequencies
+def load_freq(ancestry_name, freq_srcdir):
+    return spark.read \
+        .csv('%s/%s/part-*' % (freq_srcdir, ancestry_name), sep='\t', header=True, schema=frequency_schema) \
+        .select(var_id_col, maf_col.alias(ancestry_name))
+
+# load and do the maf calculations
+# frequency outputs by ancestry
+ancestries = ['AA', 'AF', 'EA', 'EU', 'HS', 'SA']
+dataframe_freq = None
+
+# load frequencies by variant ID
+for ancestry in ancestries:
+    df = load_freq(ancestry, freq_srcdir)
+
+    # final, joined frequencies
+    dataframe_freq = df if dataframe_freq is None else dataframe_freq.join(df, var_id, how='outer')
+
+# pull all the frequencies together into a single array
+dataframe_freq = dataframe_freq.select(dataframe_freq.varId, array(*ancestries).alias('frequency'))
+
+# get the max for all frequencies
+dataframe_freq = dataframe_freq.select(dataframe_freq.varId, array_max('frequency').alias(maf))
+
+# print
+# print("the loaded frequency data frame has {} rows".format(dataframe_freq.count()))
+# dataframe_freq.show()
+
 
 # %%
-# load the json data
+# load the transcript json data
 vep = spark.read.json(vep_srcdir)
 
 # print
@@ -169,6 +218,12 @@ transcript_consequences = vep.select(vep.id, vep.transcript_consequences)     .w
 # print("the filtered test data count is: {}".format(transcript_consequences.count()))
 # transcript_consequences.show()
 
+# join the transcripts dataframe with the maf dataframe
+transcript_consequences = transcript_consequences.join(dataframe_freq, var_id, how='outer')
+
+# print
+# print("the filtered transcript with frequency data count is: {}".format(transcript_consequences.count()))
+# transcript_consequences.show()
 
 # %%
 # get the lof level 1 data frame
