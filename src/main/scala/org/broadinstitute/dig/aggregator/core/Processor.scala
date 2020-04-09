@@ -91,16 +91,27 @@ abstract class Processor(val name: Processor.Name,
 
   /** Determines the set of things that need to be processed. */
   def getWork(opts: Processor.Opts): IO[Map[String, Set[UUID]]] = {
-    if (opts.reprocess) {
-      Run.resultsOf(pool, dependencies).map(buildOutputMap(_, opts))
-    } else {
-      Run.resultsOf(pool, dependencies, name).flatMap { results =>
-        if (results.map(getOutputs).contains(Processor.AllOutputs)) {
-          getWork(opts.copy(reprocess = true))
-        } else {
-          IO(buildOutputMap(results, opts))
-        }
+    for {
+      inputs      <- Run.resultsOf(pool, dependencies)
+      lastOutputs <- Run.resultsOf(pool, name)
+    } yield {
+      val outputMap = buildOutputMap(inputs, opts).toList
+
+      // for each output, filter the inputs that haven't been processed
+      val filteredOutputs = outputMap.map {
+        case (output, inputs) =>
+          output -> inputs.filterNot { uuid =>
+            lastOutputs.exists(r => {
+              r.input match {
+                case Some(inputUUID) => r.output == output && inputUUID == uuid
+                case _               => false
+              }
+            })
+          }
       }
+
+      // remove any outputs with no inputs
+      filteredOutputs.filterNot(_._2.isEmpty).toMap
     }
   }
 

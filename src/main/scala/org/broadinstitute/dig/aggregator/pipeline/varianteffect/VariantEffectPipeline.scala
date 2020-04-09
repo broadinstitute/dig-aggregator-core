@@ -16,6 +16,7 @@ object VariantEffectPipeline extends Pipeline {
     */
   val variantListProcessor: Name      = register("VariantListProcessor", new VariantListProcessor(_, _, _))
   val variantEffectProcessor: Name    = register("VariantEffectProcessor", new VariantEffectProcessor(_, _, _))
+  val dbSNPProcessor: Name            = register("DbSNPProcessor", new DbSNPProcessor(_, _, _))
   val loadVariantCQSProcessor: Name   = register("LoadVariantCQSProcessor", new LoadVariantCQSProcessor(_, _, _))
   val uploadVariantCQSProcessor: Name = register("UploadVariantCQSProcessor", new UploadVariantCQSProcessor(_, _, _))
 }

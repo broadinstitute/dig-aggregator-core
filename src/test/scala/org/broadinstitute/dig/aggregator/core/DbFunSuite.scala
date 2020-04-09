@@ -32,14 +32,14 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     def insert(a: A): IO[_]
   }
 
-  def insertRun(processor: Processor.Name, output: String, inputs: NonEmptyList[UUID]): UUID = {
-    Run.insert(pool, processor, output, inputs).unsafeRunSync
+  def insertRun(processor: Processor.Name, inputs: NonEmptyList[UUID]): UUID = {
+    Run.insert(pool, processor, s"${processor}_output", inputs).unsafeRunSync
   }
 
   def allResults: Seq[Run.Result] = {
     import Run.UUIDGet // REQUIRED for doobie!
 
-    val q = sql"""|SELECT `uuid`, `processor`, `output`, `timestamp`
+    val q = sql"""|SELECT `uuid`, `processor`, `input`, `output`, `timestamp`
                   |FROM   `runs`
                   |""".stripMargin.query[Run.Result].to[Seq]
 
