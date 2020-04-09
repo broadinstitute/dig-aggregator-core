@@ -8,14 +8,14 @@ from pyspark.sql.functions import col, struct, explode, when, lit, array_max, ar
 
 # %%
 # load and output directory
-vep_srcdir = 's3://dig-analysis-data/out/varianteffect/effects/part-*'
-freq_srcdir = 's3://dig-analysis-data/out/frequencyanalysis/'
-outdir = 's3://dig-bio-index/burden/variantgene'
+# vep_srcdir = 's3://dig-analysis-data/out/varianteffect/effects/part-*'
+# freq_srcdir = 's3://dig-analysis-data/out/frequencyanalysis/'
+# outdir = 's3://dig-bio-index/burden/variantgene'
 
 # development localhost directories
-# vep_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/test*'
-# freq_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/Frequency'
-# outdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/Out6'
+vep_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/test*'
+freq_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/Frequency'
+outdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/Out10'
 
 # print
 # print("the input directory is: {}".format(vep_srcdir))
@@ -95,8 +95,10 @@ filter_metasvm_pred_col = col("metasvm_pred")
 # %%
 # variables for filters conditions
 condition_lof_hc = filter_lof_col == 'HC'
-condition_impact_moderate = (filter_impact_col == 'MODERATE') & (maf_col < 0.01)
-condition_impact_high = (filter_impact_col == 'HIGH') & (filter_lof_col == 'HC') & (maf_col < 0.01)
+# condition_impact_moderate = (filter_impact_col == 'MODERATE') & (maf_col < 0.01)
+# condition_impact_high = (filter_impact_col == 'HIGH') & (filter_lof_col == 'HC') & (maf_col < 0.01)
+condition_impact_moderate = filter_impact_col == 'MODERATE'
+condition_impact_high = filter_impact_col == 'HIGH'
 
 # level 2 condition for bin 7
 condition_level2_bin7 = (filter_polyphen2_hdiv_pred_col != 'D') & \
@@ -151,9 +153,9 @@ frequency_schema = StructType(
 
 # functions
 # method to load the frequencies
-def load_freq(ancestry_name, freq_srcdir):
+def load_freq(ancestry_name, input_srcdir):
     return spark.read \
-        .csv('%s/%s/part-*' % (freq_srcdir, ancestry_name), sep='\t', header=True, schema=frequency_schema) \
+        .csv('%s/%s/part-*' % (input_srcdir, ancestry_name), sep='\t', header=True, schema=frequency_schema) \
         .select(var_id_col, maf_col.alias(ancestry_name))
 
 # load and do the maf calculations
@@ -170,13 +172,13 @@ for ancestry in ancestries:
 
 # pull all the frequencies together into a single array
 dataframe_freq = dataframe_freq.select(dataframe_freq.varId, array(*ancestries).alias('frequency'))
-
-# get the max for all frequencies
+#
+# # get the max for all frequencies
 dataframe_freq = dataframe_freq.select(dataframe_freq.varId, array_max('frequency').alias(maf))
 
 # print
-# print("the loaded frequency data frame has {} rows".format(dataframe_freq.count()))
-# dataframe_freq.show()
+print("the loaded frequency data frame has {} rows".format(dataframe_freq.count()))
+dataframe_freq.show()
 
 
 # %%
@@ -219,11 +221,11 @@ transcript_consequences = vep.select(vep.id, vep.transcript_consequences)     .w
 # transcript_consequences.show()
 
 # join the transcripts dataframe with the maf dataframe
-transcript_consequences = transcript_consequences.join(dataframe_freq, var_id, how='outer')
+transcript_consequences = transcript_consequences.join(dataframe_freq, var_id, how='left')
 
 # print
-# print("the filtered transcript with frequency data count is: {}".format(transcript_consequences.count()))
-# transcript_consequences.show()
+print("the filtered transcript with frequency data count is: {}".format(transcript_consequences.count()))
+transcript_consequences.show()
 
 # %%
 # get the lof level 1 data frame
