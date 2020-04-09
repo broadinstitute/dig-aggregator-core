@@ -8,14 +8,14 @@ from pyspark.sql.functions import col, struct, explode, when, lit, array_max, ar
 
 # %%
 # load and output directory
-# vep_srcdir = 's3://dig-analysis-data/out/varianteffect/effects/part-*'
-# freq_srcdir = 's3://dig-analysis-data/out/frequencyanalysis/'
-# outdir = 's3://dig-bio-index/burden/variantgene'
+vep_srcdir = 's3://dig-analysis-data/out/varianteffect/effects/part-*'
+freq_srcdir = 's3://dig-analysis-data/out/frequencyanalysis/'
+outdir = 's3://dig-bio-index/burden/variantgene'
 
 # development localhost directories
-vep_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/test*'
-freq_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/Frequency'
-outdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/Out5'
+# vep_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/test*'
+# freq_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/Frequency'
+# outdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/Out6'
 
 # print
 # print("the input directory is: {}".format(vep_srcdir))
@@ -96,7 +96,7 @@ filter_metasvm_pred_col = col("metasvm_pred")
 # variables for filters conditions
 condition_lof_hc = filter_lof_col == 'HC'
 condition_impact_moderate = (filter_impact_col == 'MODERATE') & (maf_col < 0.01)
-condition_impact_high = (filter_impact_col == 'HIGH') & (maf_col < 0.01)
+condition_impact_high = (filter_impact_col == 'HIGH') & (filter_lof_col == 'HC') & (maf_col < 0.01)
 
 # level 2 condition for bin 7
 condition_level2_bin7 = (filter_polyphen2_hdiv_pred_col != 'D') & \
