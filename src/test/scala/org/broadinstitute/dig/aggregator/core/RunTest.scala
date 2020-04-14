@@ -3,84 +3,98 @@ package org.broadinstitute.dig.aggregator.core
 import cats.data.NonEmptyList
 import java.util.UUID
 
+import org.broadinstitute.dig.aggregator.core.config.BaseConfig
+
 /**
   * @author clint
   * Aug 28, 2018
   */
 final class RunTest extends DbFunSuite {
-
   def makeInput(): UUID = UUID.randomUUID()
+
+  // used for getting the work of a processor
+  val dummyOpts: Processor.Opts = Processor.Opts(
+    reprocess = false,
+    insertRuns = false,
+    noInsertRuns = false,
+    only = None,
+    exclude = None,
+  )
 
   dbTest("insert") {
     assert(allResults.isEmpty)
 
-    insertRun(TestProcessor.a, "o0", NonEmptyList(makeInput(), Nil))
+    insertRun(TestProcessor.a, NonEmptyList(makeInput(), Nil))
 
     assert(allResults.size == 1)
 
-    insertRun(TestProcessor.b, "o1", NonEmptyList(makeInput(), Nil))
-    insertRun(TestProcessor.b, "o2", NonEmptyList(makeInput(), Nil))
+    insertRun(TestProcessor.b, NonEmptyList(makeInput(), Nil))
+    insertRun(TestProcessor.b, NonEmptyList(makeInput(), Nil))
 
     assert(allResults.size == 3)
   }
 
   dbTest("insert - multiple inputs") {
     val inputs = NonEmptyList(makeInput(), List(makeInput(), makeInput()))
-    val r0     = insertRun(TestProcessor.a, "o0", inputs)
+    val uuid   = insertRun(TestProcessor.a, inputs)
 
     // there should be 3 rows inserted - 1 per input
-    assert(runResults(r0).size == 3)
+    assert(runResults(uuid).size == 3)
   }
 
-  dbTest("insert - same input, different outputs") {
-    val simpleInputs = NonEmptyList(makeInput(), Nil)
-
-    insertRun(TestProcessor.a, "o0", simpleInputs)
-    insertRun(TestProcessor.a, "o1", simpleInputs)
-
-    assert(allResults.size == 2)
-  }
+  /* FOR ALL TESTS BELOW THIS POINT, PLEASE TAKE CARE TO LOOK AT THE TestProcessor
+   * objects and their dependencies. These are fixed so that it's easy to test
+   * several cases (chains of dependencies and multiple dependencies).
+   */
 
   dbTest("lookup work to be done 1") {
-    val i0 = makeInput()
-    val i1 = makeInput()
+    val a_run = insertRun(TestProcessor.a, NonEmptyList(makeInput(), Nil))
+    val b_run = insertRun(TestProcessor.b, NonEmptyList(a_run, Nil))
 
-    val r0 = insertRun(TestProcessor.a, "o0", NonEmptyList(i0, Nil))
-    val r1 = insertRun(TestProcessor.b, "o1", NonEmptyList(i1, Nil))
+    // get the work that processor b needs to do
+    val b      = Processor(TestProcessor.b)(TestProcessor.dummyConfig, pool).get
+    val b_work = b.getWork(dummyOpts).unsafeRunSync()
 
-    // everything has already been processed
-    val r2 = insertRun(TestProcessor.c, "o2", NonEmptyList(r0, List(r1)))
+    // make sure that processor b is up to date
+    assert(b_work.isEmpty)
 
-    // find all outputs processor c needs to process still (depends on a and b)
-    val deps    = Seq(TestProcessor.a, TestProcessor.b)
-    val results = Run.resultsOf(pool, deps, TestProcessor.c).unsafeRunSync
+    // get the work that processor c needs to do
+    val c      = Processor(TestProcessor.c)(TestProcessor.dummyConfig, pool).get
+    val c_work = c.getWork(dummyOpts).unsafeRunSync()
 
-    assert(results.isEmpty)
+    // ensure that C_output needs to be made with the input B_output
+    assert(c_work.contains("C_output"))
+    assert(c_work("C_output") == Set(b_run))
   }
 
   dbTest("lookup work to be done 2") {
-    val i0 = makeInput()
-    val i1 = makeInput()
-    val i2 = makeInput()
-    val i3 = makeInput()
+    val c_run = insertRun(TestProcessor.c, NonEmptyList(makeInput(), Nil))
+    val d_run = insertRun(TestProcessor.d, NonEmptyList(makeInput(), Nil))
 
-    val r0 = insertRun(TestProcessor.a, "o0", NonEmptyList(i0, Nil))
-    val r1 = insertRun(TestProcessor.b, "o1", NonEmptyList(i1, Nil))
-    val r2 = insertRun(TestProcessor.b, "o2", NonEmptyList(i2, Nil))
+    // get the work that processor e needs to do
+    val e      = Processor(TestProcessor.e)(TestProcessor.dummyConfig, pool).get
+    val e_work = e.getWork(dummyOpts).unsafeRunSync()
 
-    // only r0 and r1 outputs have been processed
-    val r3 = insertRun(TestProcessor.c, "o3", NonEmptyList(r0, List(r1)))
+    // ensure that it needs to process both c and d output
+    assert(e_work.contains("E_output"))
+    assert(e_work("E_output") == Set(c_run, d_run))
 
-    // update the output of r1 by adding a new input
-    val r4 = insertRun(TestProcessor.b, "o1", NonEmptyList(i1, List(i3)))
+    // pretend that E ran
+    insertRun(TestProcessor.e, NonEmptyList(c_run, List(d_run)))
 
-    // find all that processor c needs to process still (depends on a and b)
-    val deps    = Seq(TestProcessor.a, TestProcessor.b)
-    val results = Run.resultsOf(pool, deps, TestProcessor.c).unsafeRunSync
+    // update the run for d and get the work of processor e again
+    val d_run2  = insertRun(TestProcessor.d, NonEmptyList(makeInput(), Nil))
+    val e_work2 = e.getWork(dummyOpts).unsafeRunSync()
 
-    // should need to process the outputs r2 (not done yet) and r4 (and update)
-    assert(results.size == 2)
-    assert(results.exists(_.uuid == r2))
-    assert(results.exists(_.uuid == r4))
+    // ensure it needs to run and only process d's output
+    assert(e_work2.contains("E_output"))
+    assert(e_work2("E_output") == Set(d_run2))
+
+    // pretend that E ran again
+    insertRun(TestProcessor.e, NonEmptyList(d_run2, Nil))
+
+    // get the work and ensure it's empty
+    val e_work3 = e.getWork(dummyOpts).unsafeRunSync()
+    assert(e_work3.isEmpty)
   }
 }

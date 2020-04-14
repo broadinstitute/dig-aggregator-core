@@ -11,7 +11,6 @@ import org.json4s.DefaultFormats
 import org.json4s.Formats
 import org.json4s.jackson.Serialization.read
 
-
 /** Settings are loaded from a JSON configuration file. They detail settings that are
   * used to make connections to databases and spin up machine clusters for processing.
   */
@@ -33,5 +32,10 @@ object Settings {
   /** Load the settings file and parse it. */
   def load(file: File): Settings = {
     read[Settings](Source.fromFile(file).mkString)
+  }
+
+  /** Load a settings file from a resource. */
+  def loadResource(resource: String): Settings = {
+    read[Settings](Source.fromResource(resource).mkString)
   }
 }

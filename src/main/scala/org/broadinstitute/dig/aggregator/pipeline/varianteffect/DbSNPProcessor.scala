@@ -4,18 +4,12 @@ import org.broadinstitute.dig.aggregator.core.Processor
 import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.ApplicationConfig
-import org.broadinstitute.dig.aws.emr.ClassificationProperties
-import org.broadinstitute.dig.aws.emr.Cluster
-
+import org.broadinstitute.dig.aws.emr.{ApplicationConfig, ClassificationProperties, Cluster, InstanceType}
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
 /** After all the variants across all datasets have had VEP run on them in the
-  * previous step, the results must be joined together. This is done by loading
-  * all the resulting JSON files together, and only keeping a single output
-  * per variant ID; the results of VEP are by variants and so will be identical
-  * across datasets.
+  * previous step the rsID for each variant is extracted into its own file.
   *
   * The input location:
   *
@@ -23,13 +17,11 @@ import org.broadinstitute.dig.aggregator.core.DbPool
   *
   * The output location:
   *
-  *  s3://dig-analysis-data/out/varianteffect/transcript_consequences/part-*.csv
-  *  s3://dig-analysis-data/out/varianteffect/regulatory_features/part-*.csv
+  *  s3://dig-analysis-data/out/varianteffect/dbsnp/part-*.csv
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
-    extends Processor(name, config, pool) {
+class DbSNPProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
 
   /** All the processors this processor depends on.
     */
@@ -40,33 +32,37 @@ class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: Db
   /** All the job scripts that need to be uploaded to AWS.
     */
   override val resources: Seq[String] = Seq(
-    "pipeline/varianteffect/loadCQS.py"
+    "pipeline/varianteffect/dbSNP.py"
   )
 
   /** Only a single output for VEP that uses ALL effects.
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
-    Processor.Outputs(Seq("VEP/CQS"))
+    Processor.Outputs(Seq("VEP/SNP"))
   }
 
   /** All effect results are combined together, so the results list is ignored.
     */
   override def processOutputs(outputs: Seq[String]): IO[Unit] = {
-    val scriptUri = aws.uriOf("resources/pipeline/varianteffect/loadCQS.py")
-    val sparkConf = ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
+    val scriptUri = aws.uriOf("resources/pipeline/varianteffect/dbSNP.py")
 
     // EMR cluster to run the job steps on
     val cluster = Cluster(
       name = name.toString,
-      instances = 5,
-      configurations = Seq(sparkConf)
+      masterInstanceType = InstanceType.c5_4xlarge,
+      slaveInstanceType = InstanceType.c5_4xlarge,
+      instances = 4,
+      configurations = Seq(
+        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3),
+        ApplicationConfig.sparkMaximizeResourceAllocation,
+      ),
     )
 
     // first run+load ancestry-specific and then trans-ethnic
     val steps = Seq(JobStep.PySpark(scriptUri))
 
     for {
-      _   <- IO(logger.info(s"Loading variant consequences..."))
+      _   <- IO(logger.info(s"Extracting dbSNP IDs..."))
       job <- aws.runJob(cluster, steps)
       _   <- aws.waitForJob(job)
     } yield ()

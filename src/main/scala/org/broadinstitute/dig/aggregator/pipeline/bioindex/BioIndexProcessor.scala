@@ -30,21 +30,20 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
     GregorPipeline.sortRegionsProcessor,
     GregorPipeline.globalEnrichmentProcessor,
     IntakePipeline.genes,
+    IntakePipeline.tissues,
     IntakePipeline.variants,
     MetaAnalysisPipeline.metaAnalysisProcessor,
     TranscriptionFactorsPipeline.transcriptionFactorsProcessor,
-    VariantEffectPipeline.variantEffectProcessor,
+    VariantEffectPipeline.dbSNPProcessor,
   )
 
   /** All the job scripts that need to be uploaded to AWS.
     */
   override val resources: Seq[String] = Seq(
     "pipeline/bioindex/associations.py",
-    "pipeline/bioindex/datasetAssociations.py",
     "pipeline/bioindex/datasets.py",
     "pipeline/bioindex/genes.py",
     "pipeline/bioindex/globalEnrichment.py",
-    "pipeline/bioindex/phenotypeAssociations.py",
     "pipeline/bioindex/regions.py",
     "pipeline/bioindex/variants.py",
     "pipeline/bioindex/burdenBinning.py",
@@ -54,30 +53,29 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
     input.processor match {
-      case MetaAnalysisPipeline.metaAnalysisProcessor =>
-        Processor.Outputs(Seq("BioIndex/associations", "BioIndex/phenotypeAssociations"))
+      case IntakePipeline.variants                                    => Processor.Outputs(Seq("BioIndex/datasets"))
       case IntakePipeline.genes                                       => Processor.Outputs(Seq("BioIndex/genes"))
-      case IntakePipeline.variants                                    => Processor.Outputs(Seq("BioIndex/datasets", "BioIndex/datasetAssociations"))
+      case IntakePipeline.tissues                                     => Processor.Outputs(Seq("BioIndex/globalEnrichment", "BioIndex/regions"))
+      case MetaAnalysisPipeline.metaAnalysisProcessor                 => Processor.Outputs(Seq("BioIndex/associations"))
       case GregorPipeline.globalEnrichmentProcessor                   => Processor.Outputs(Seq("BioIndex/globalEnrichment"))
       case GregorPipeline.sortRegionsProcessor                        => Processor.Outputs(Seq("BioIndex/regions"))
       case FrequencyAnalysisPipeline.frequencyProcessor               => Processor.Outputs(Seq("BioIndex/variants"))
       case TranscriptionFactorsPipeline.transcriptionFactorsProcessor => Processor.Outputs(Seq("BioIndex/variants"))
       case VariantEffectPipeline.variantEffectProcessor               => Processor.Outputs(Seq("BioIndex/variants", "BioIndex/burdenBinning"))
+      case VariantEffectPipeline.dbSNPProcessor                       => Processor.Outputs(Seq("BioIndex/variants"))
     }
   }
 
   /** For each phenotype output, process all the datasets for it.
     */
   override def processOutputs(outputs: Seq[String]): IO[Unit] = {
-    val associationsScript          = aws.uriOf("resources/pipeline/bioindex/associations.py")
-    val datasetAssociationsScript   = aws.uriOf("resources/pipeline/bioindex/datasetAssociations.py")
-    val datasetsScript              = aws.uriOf("resources/pipeline/bioindex/datasets.py")
-    val genesScript                 = aws.uriOf("resources/pipeline/bioindex/genes.py")
-    val globalEnrichmentScript      = aws.uriOf("resources/pipeline/bioindex/globalEnrichment.py")
-    val phenotypeAssociationsScript = aws.uriOf("resources/pipeline/bioindex/phenotypeAssociations.py")
-    val regionsScript               = aws.uriOf("resources/pipeline/bioindex/regions.py")
-    val variantsScript              = aws.uriOf("resources/pipeline/bioindex/variants.py")
-    val burdenBinningScript         = aws.uriOf("resources/pipeline/bioindex/burdenBinning.py")
+    val associationsScript     = aws.uriOf("resources/pipeline/bioindex/associations.py")
+    val datasetsScript         = aws.uriOf("resources/pipeline/bioindex/datasets.py")
+    val genesScript            = aws.uriOf("resources/pipeline/bioindex/genes.py")
+    val globalEnrichmentScript = aws.uriOf("resources/pipeline/bioindex/globalEnrichment.py")
+    val regionsScript          = aws.uriOf("resources/pipeline/bioindex/regions.py")
+    val variantsScript         = aws.uriOf("resources/pipeline/bioindex/variants.py")
+    val burdenBinningScript    = aws.uriOf("resources/pipeline/bioindex/burdenBinning.py")
 
     // cluster configuration used to process each phenotype
     val cluster = Cluster(
@@ -95,15 +93,13 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
 
     // run the jobs
     val jobs = outputs.map {
-      case "BioIndex/associations"          => Seq(JobStep.PySpark(associationsScript))
-      case "BioIndex/datasetAssociations"   => Seq(JobStep.PySpark(datasetAssociationsScript))
-      case "BioIndex/datasets"              => Seq(JobStep.PySpark(datasetsScript))
-      case "BioIndex/genes"                 => Seq(JobStep.PySpark(genesScript))
-      case "BioIndex/globalEnrichment"      => Seq(JobStep.PySpark(globalEnrichmentScript))
-      case "BioIndex/phenotypeAssociations" => Seq(JobStep.PySpark(phenotypeAssociationsScript))
-      case "BioIndex/regions"               => Seq(JobStep.PySpark(regionsScript))
-      case "BioIndex/variants"              => Seq(JobStep.PySpark(variantsScript))
-      case "BioIndex/burdenBinning"         => Seq(JobStep.PySpark(burdenBinningScript))
+      case "BioIndex/associations"     => Seq(JobStep.PySpark(associationsScript))
+      case "BioIndex/datasets"         => Seq(JobStep.PySpark(datasetsScript))
+      case "BioIndex/genes"            => Seq(JobStep.PySpark(genesScript))
+      case "BioIndex/globalEnrichment" => Seq(JobStep.PySpark(globalEnrichmentScript))
+      case "BioIndex/regions"          => Seq(JobStep.PySpark(regionsScript))
+      case "BioIndex/variants"         => Seq(JobStep.PySpark(variantsScript))
+      case "BioIndex/burdenBinning"    => Seq(JobStep.PySpark(burdenBinningScript))
     }
 
     // distribute across clusters
