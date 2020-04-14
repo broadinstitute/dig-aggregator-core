@@ -3,19 +3,19 @@
 # %%
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, BooleanType, DoubleType, IntegerType
-from pyspark.sql.functions import col, struct, explode, when, lit, array_max, array
+from pyspark.sql.functions import col, struct, explode, when, lit, array, udf
 
 
 # %%
 # load and output directory
-# vep_srcdir = 's3://dig-analysis-data/out/varianteffect/effects/part-*'
-# freq_srcdir = 's3://dig-analysis-data/out/frequencyanalysis/'
-# outdir = 's3://dig-bio-index/burden/variantgene'
+vep_srcdir = 's3://dig-analysis-data/out/varianteffect/effects/part-*'
+freq_srcdir = 's3://dig-analysis-data/out/frequencyanalysis/'
+outdir = 's3://dig-bio-index/burden/variantgene'
 
 # development localhost directories
-vep_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/test*'
-freq_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/Frequency'
-outdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/Out10'
+# vep_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/test*'
+# freq_srcdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/Frequency'
+# outdir = '/Users/mduby/Data/Broad/Aggregator/BurdenBinning/20200330/Out12'
 
 # print
 # print("the input directory is: {}".format(vep_srcdir))
@@ -158,6 +158,19 @@ def load_freq(ancestry_name, input_srcdir):
         .csv('%s/%s/part-*' % (input_srcdir, ancestry_name), sep='\t', header=True, schema=frequency_schema) \
         .select(var_id_col, maf_col.alias(ancestry_name))
 
+# method to get the max of an array
+def max_array(array_var):
+    max = 0.0                        # maf will never be less than 0
+    for element in array_var:
+        if (element is not None):
+            if (element > max):
+                max = element
+    return max
+
+# custom function used for sorting chromosomes properly
+max_array_udf = udf(max_array, DoubleType())
+
+
 # load and do the maf calculations
 # frequency outputs by ancestry
 ancestries = ['AA', 'AF', 'EA', 'EU', 'HS', 'SA']
@@ -174,11 +187,12 @@ for ancestry in ancestries:
 dataframe_freq = dataframe_freq.select(dataframe_freq.varId, array(*ancestries).alias('frequency'))
 #
 # # get the max for all frequencies
-dataframe_freq = dataframe_freq.select(dataframe_freq.varId, array_max('frequency').alias(maf))
+dataframe_freq = dataframe_freq.withColumn('maf', max_array_udf('frequency')).select(dataframe_freq.varId, 'maf')
+# dataframe_freq = dataframe_freq.select(dataframe_freq.varId, array_max('frequency').alias(maf))
 
 # print
-print("the loaded frequency data frame has {} rows".format(dataframe_freq.count()))
-dataframe_freq.show()
+# print("the loaded frequency data frame has {} rows".format(dataframe_freq.count()))
+# dataframe_freq.show()
 
 
 # %%
@@ -224,8 +238,8 @@ transcript_consequences = vep.select(vep.id, vep.transcript_consequences)     .w
 transcript_consequences = transcript_consequences.join(dataframe_freq, var_id, how='left')
 
 # print
-print("the filtered transcript with frequency data count is: {}".format(transcript_consequences.count()))
-transcript_consequences.show()
+# print("the filtered transcript with frequency data count is: {}".format(transcript_consequences.count()))
+# transcript_consequences.show()
 
 # %%
 # get the lof level 1 data frame
