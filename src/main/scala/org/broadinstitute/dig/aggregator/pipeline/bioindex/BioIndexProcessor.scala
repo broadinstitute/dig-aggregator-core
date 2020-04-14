@@ -34,6 +34,7 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
     IntakePipeline.variants,
     MetaAnalysisPipeline.metaAnalysisProcessor,
     TranscriptionFactorsPipeline.transcriptionFactorsProcessor,
+    VariantEffectPipeline.variantEffectProcessor,
     VariantEffectPipeline.dbSNPProcessor,
   )
 
