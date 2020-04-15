@@ -1,11 +1,13 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, BooleanType, DoubleType, IntegerType
-from pyspark.sql.functions import col
 
 
 # load and output directory
 srcdir = 's3://dig-analysis-data/out/metaanalysis/trans-ethnic/*/part-*'
 outdir = 's3://dig-bio-index/associations'
+
+# common vep data
+vepdir = 's3://dig-analysis-data/out/varianteffect/common/part-*'
 
 # this is the schema written out by the variant partition process
 variants_schema = StructType(
@@ -25,24 +27,16 @@ variants_schema = StructType(
     ]
 )
 
-# this is the schema written out by the dbSNP processor
-dbSNP_schema = StructType(
-    [
-        StructField('varId', StringType(), nullable=False),
-        StructField('dbSNP', StringType(), nullable=False),
-    ]
-)
-
 
 if __name__ == '__main__':
     spark = SparkSession.builder.appName('bioindex').getOrCreate()
 
     # load the trans-ethnic, meta-analysis, top variants and write them sorted
     df = spark.read.csv(srcdir, sep='\t', header=True, schema=variants_schema)
-    dbSNP = spark.read.json(srcdir, sep='\t', header=True, schema=dbSNP_schema)
+    common = spark.read.json(vepdir)
 
     # join the dbSNP id with the associations
-    df = df.join(dbSNP, 'varId', how='left_outer')
+    df = df.join(common, 'varId', how='left_outer')
     top = df.filter(df.top)
 
     # find the variants most significant across the genome per phenotype, this

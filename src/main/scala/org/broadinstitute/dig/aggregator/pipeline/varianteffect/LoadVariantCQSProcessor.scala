@@ -59,7 +59,10 @@ class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: Db
     val cluster = Cluster(
       name = name.toString,
       instances = 5,
-      configurations = Seq(sparkConf)
+      configurations = Seq(
+        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3),
+        ApplicationConfig.sparkMaximizeResourceAllocation,
+      )
     )
 
     // first run+load ancestry-specific and then trans-ethnic

@@ -61,7 +61,13 @@ if __name__ == '__main__':
     df.orderBy(['chromosome', 'start']) \
         .write \
         .mode('overwrite') \
-        .json(outdir)
+        .json('%s/locus' % outdir)
+
+    # sort by annotation and write
+    df.orderBy(['annotation', 'method']) \
+        .write \
+        .mode('overwrite') \
+        .json('%s/annotation' % outdir)
 
     # done
     spark.stop()

@@ -4,7 +4,7 @@ import os.path
 import platform
 
 from pyspark.sql import SparkSession, Row
-from pyspark.sql.functions import split, explode, col, substring  # pylint: disable=E0611
+from pyspark.sql.functions import explode, col, lit, substring, when  # pylint: disable=E0611
 
 # where in S3 VEP data (input and output) is
 s3dir = 's3://dig-analysis-data/out/varianteffect'
@@ -20,31 +20,38 @@ if __name__ == '__main__':
     # create the spark context
     spark = SparkSession.builder.appName('varianteffect').getOrCreate()
 
-    # read all the JSON files output by VEP, keep only the consequence data
-    df = spark.read.json('%s/effects/*.json' % s3dir) \
+    # read all the variant effects
+    vep = spark.read.json('%s/effects/*.json' % s3dir)
+
+    # transcript consequence gene (if present)
+    gene = when(vep.transcript_consequences.isNotNull(), vep.transcript_consequences[0].gene_id) \
+        .otherwise(lit(None))
+
+    # extract the common effect data
+    common = vep.select(
+        vep.id.alias('varId'),
+        gene.alias('gene'),
+        vep.most_severe_consequence.alias('mostSevereConsequence'),
+    )
+
+    # find existing variants (dbSNP IDs)
+    existing = vep \
         .withColumn('var', explode(col('colocated_variants'))) \
         .filter(substring(col('var.id'), 0, 2) == 'rs') \
         .filter(col('var.allele_string') == col('allele_string')) \
         .select(
             col('id').alias('varId'),
             col('var.id').alias('dbSNP'),
-            col('seq_region_name').alias('chromosome'),
-            col('start').alias('position'),
-            col('allele_string'),
         )
 
-    # split the reference and alternate allele string
-    allele = split(df.allele_string, '/')
-
-    # break it up into two columns
-    df = df \
-        .withColumn('reference', allele.getItem(0)) \
-        .withColumn('alt', allele.getItem(1)) \
-        .drop(col('allele_string'))
-
-    # output them to HDFS as a CSV file
-    df.filter(df.dbSNP.isNotNull()) \
+    # join and output the common effect data
+    common.join(existing, 'varId', how='left_outer') \
         .write \
+        .mode('overwrite') \
+        .json('%s/common' % s3dir)
+
+    # output dbSNP in CSV format for intake validation
+    existing.write \
         .mode('overwrite') \
         .csv('%s/dbsnp' % s3dir, sep='\t', header=True)
 

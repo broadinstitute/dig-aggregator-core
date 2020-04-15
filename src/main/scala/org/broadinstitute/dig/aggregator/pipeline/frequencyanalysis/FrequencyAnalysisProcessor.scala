@@ -26,7 +26,8 @@ import org.broadinstitute.dig.aggregator.core.DbPool
   *
   *  s3://dig-analysis-data/out/frequencyanalysis/<ancestry>/part-*
   */
-class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** Source data to consume.
     */
@@ -62,7 +63,8 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool:
       masterVolumeSizeInGB = 500,
       slaveVolumeSizeInGB = 500,
       configurations = Seq(
-        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
+        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3),
+        ApplicationConfig.sparkMaximizeResourceAllocation,
       )
     )
 
