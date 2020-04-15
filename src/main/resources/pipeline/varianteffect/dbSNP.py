@@ -4,7 +4,7 @@ import os.path
 import platform
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import explode, col, lit, when  # pylint: disable=E0611
+from pyspark.sql.functions import explode, col, lit  # pylint: disable=E0611
 
 # where in S3 VEP data (input and output) is
 s3dir = 's3://dig-analysis-data/out/varianteffect'
@@ -23,17 +23,20 @@ if __name__ == '__main__':
     # read all the variant effects
     vep = spark.read.json('%s/effects/*.json' % s3dir)
 
-    # transcript consequence gene (if present)
-    gene = when(vep.transcript_consequences.isNotNull(), vep.transcript_consequences[0].gene_id) \
-        .otherwise(lit(None)) \
-        .alias('gene')
-
     # pull out all the "common" columns
     common = vep.select(
         col('id').alias('varId'),
         col('most_severe_consequence').alias('mostSevereConsequence'),
-        gene,
     )
+
+    # load the common transcript consequence data to join
+    cqs = vep.withColumn('cqs', explode(vep.transcript_consequences)) \
+        .select(
+            col('id').alias('varId'),
+            col('cqs.gene_id').alias('gene'),
+            col('cqs.transcript_id').alias('transcript'),
+            col('cqs.biotype').alias('biotype'),
+        )
 
     # create a frame of just the dbSNPs
     dbSNPs = vep \
@@ -44,8 +47,10 @@ if __name__ == '__main__':
             col('existing.id').alias('dbSNP'),
         )
 
-    # join the common data and dbSNPs together
-    common = common.join(dbSNPs, 'varId', 'left_outer')
+    # join the common data with everything else
+    common = common \
+        .join(cqs, 'varId', 'left_outer') \
+        .join(dbSNPs, 'varId', 'left_outer')
 
     # join and output the common effect data
     common.write \

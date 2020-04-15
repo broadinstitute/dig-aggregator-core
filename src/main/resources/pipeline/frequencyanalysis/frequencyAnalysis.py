@@ -20,10 +20,9 @@ def calc_freq(df, ancestry):
     eaf = variants.filter(variants.eaf.isNotNull() & (~isnan(variants.eaf)))
     maf = variants.filter(variants.maf.isNotNull() & (~isnan(variants.maf)))
 
-    # find the max N per variant/dataset pair
-    n = variants.groupBy('varId', 'dataset').max('n') \
+    # find the max N per dataset
+    n = variants.groupBy('dataset').max('n') \
         .select(
-            col('varId'),
             col('dataset'),
             col('max(n)').alias('n')
         )
@@ -45,7 +44,7 @@ def calc_freq(df, ancestry):
         )
 
     # calculate the weighted EAF average across datasets
-    eaf = eaf.join(n, ['varId', 'dataset']) \
+    eaf = eaf.join(n, 'dataset') \
         .rdd \
         .keyBy(lambda v: v.varId) \
         .aggregateByKey(
@@ -57,7 +56,7 @@ def calc_freq(df, ancestry):
         .toDF()
 
     # calculate the weighted MAF average across datasets
-    maf = maf.join(n, ['varId', 'dataset']) \
+    maf = maf.join(n, 'dataset') \
         .rdd \
         .keyBy(lambda v: v.varId) \
         .aggregateByKey(
@@ -99,10 +98,13 @@ if __name__ == '__main__':
     # create a spark session
     spark = SparkSession.builder.appName('frequencyanalysis').getOrCreate()
 
-    # load variants from all datasets
-    calc_freq(spark.read.json('%s/part-*' % srcdir), args.ancestry).write \
-        .mode('overwrite') \
-        .json('%s/%s' % (outdir, args.ancestry))
+    # load variants from all datasets (returns None if ancestry has no variants)
+    freq_df = calc_freq(spark.read.json('%s/part-*' % srcdir), args.ancestry)
+
+    if freq_df:
+        freq_df.write \
+            .mode('overwrite') \
+            .json('%s/%s' % (outdir, args.ancestry))
 
     # done
     spark.stop()
