@@ -20,8 +20,15 @@ def calc_freq(df, ancestry):
     eaf = variants.filter(variants.eaf.isNotNull() & (~isnan(variants.eaf)))
     maf = variants.filter(variants.maf.isNotNull() & (~isnan(variants.maf)))
 
-    # find the max N per dataset
-    n = variants.groupBy('dataset').max('n') \
+    # read all the datasets
+    datasets = spark.read.json('s3://dig-analysis-data/variants/*/*/metadata') \
+        .select(
+            col('name').alias('dataset'),
+            col('samples').alias('n'),
+        )
+
+    # find the max N per dataset across all traits
+    n = datasets.groupBy('dataset').max('n') \
         .select(
             col('dataset'),
             col('max(n)').alias('n')

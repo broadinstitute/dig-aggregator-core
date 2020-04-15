@@ -21,7 +21,7 @@ if __name__ == '__main__':
     spark = SparkSession.builder.appName('varianteffect').getOrCreate()
 
     # read all the variant effects
-    vep = spark.read.json('%s/effects/*.json' % s3dir)
+    vep = spark.read.json('%s/effects/part-*.json' % s3dir)
 
     # pull out all the "common" columns
     common = vep.select(

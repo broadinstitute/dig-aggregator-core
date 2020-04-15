@@ -49,8 +49,8 @@ class DbSNPProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) ext
     // EMR cluster to run the job steps on
     val cluster = Cluster(
       name = name.toString,
-      masterInstanceType = InstanceType.c5_4xlarge,
-      slaveInstanceType = InstanceType.c5_4xlarge,
+      masterInstanceType = InstanceType.c5_9xlarge,
+      slaveInstanceType = InstanceType.c5_9xlarge,
       instances = 4,
       configurations = Seq(
         ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3),
@@ -62,7 +62,6 @@ class DbSNPProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) ext
     val steps = Seq(JobStep.PySpark(scriptUri))
 
     for {
-      _   <- IO(logger.info(s"Extracting dbSNP IDs..."))
       job <- aws.runJob(cluster, steps)
       _   <- aws.waitForJob(job)
     } yield ()
