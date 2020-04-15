@@ -41,7 +41,7 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool:
 
   /** Unique ancestries to process.
     */
-  private val ancestries = Seq("AA", "AF", "EA", "EU", "HS", "SA", "Mixed")
+  private val ancestries = Seq("AA", "AF", "EA", "EU", "HS", "SA")
 
   /** Each ancestry gets its own output.
     */
@@ -57,7 +57,7 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool:
     // cluster configuration used to process each phenotype
     val cluster = Cluster(
       name = name.toString,
-      instances = 3,
+      instances = 5,
       masterInstanceType = InstanceType.c5_9xlarge,
       slaveInstanceType = InstanceType.c5_9xlarge,
       masterVolumeSizeInGB = 500,

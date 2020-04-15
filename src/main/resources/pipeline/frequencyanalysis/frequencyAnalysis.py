@@ -12,48 +12,37 @@ s3dir = 's3://dig-analysis-data'
 def calc_freq(df, ancestry):
     variants = df.filter(df.ancestry == ancestry)
 
-    # find all variants with EAF
-    eaf = variants.select(variants.varId, variants.dataset, variants.eaf) \
-        .filter(variants.eaf.isNotNull() & (~isnan(variants.eaf)))
+    # no variants exist for this ancestry?
+    if variants.rdd.isEmpty():
+        return
 
-    # find all variants with MAF
-    maf = variants.select(variants.varId, variants.dataset, variants.maf) \
-        .filter(variants.maf.isNotNull() & (~isnan(variants.maf)))
+    # find all variants with EAF or MAF
+    eaf = variants.filter(variants.eaf.isNotNull() & (~isnan(variants.eaf)))
+    maf = variants.filter(variants.maf.isNotNull() & (~isnan(variants.maf)))
 
-    # find the max variant N per dataset
-    n = variants.rdd \
-        .keyBy(lambda v: (v.varId, v.dataset)) \
-        .aggregateByKey(
-            0,
-            lambda a, b: max(a, b.n),
-            lambda a, b: max(a, b),
-        ) \
-        .map(lambda v: Row(varId=v[0][0], dataset=v[0][1], n=v[1])) \
-        .toDF()
+    # find the max N per variant/dataset pair
+    n = variants.groupBy('varId', 'dataset').max('n') \
+        .select(
+            col('varId'),
+            col('dataset'),
+            col('max(n)').alias('n')
+        )
 
-    # calculate the average EAF across traits per dataset
-    if not eaf.rdd.isEmpty():
-        eaf = eaf.rdd \
-            .keyBy(lambda v: (v.varId, v.dataset)) \
-            .aggregateByKey(
-                (0, 0),
-                lambda a, b: (a[0] + b.eaf, a[1] + 1),
-                lambda a, b: (a[0] + b[0], a[1] + b[1])
-            ) \
-            .map(lambda v: Row(varId=v[0][0], dataset=v[0][1], eaf=v[1][0] / v[1][1])) \
-            .toDF()
+    # calculate the average EAF across traits per variant/dataset pair
+    eaf = eaf.groupBy('varId', 'dataset').avg('eaf') \
+        .select(
+            col('varId'),
+            col('dataset'),
+            col('avg(eaf)').alias('eaf')
+        )
 
-    # calculate the average MAF across traits per dataset
-    if not maf.rdd.isEmpty():
-        maf = maf.rdd \
-            .keyBy(lambda v: (v.varId, v.dataset)) \
-            .aggregateByKey(
-                (0, 0),
-                lambda a, b: (a[0] + b.maf, a[1] + 1),
-                lambda a, b: (a[0] + b[0], a[1] + b[1])
-            ) \
-            .map(lambda v: Row(varId=v[0][0], dataset=v[0][1], maf=v[1][0] / v[1][1])) \
-            .toDF()
+    # calculate the average MAF across traits per variant/dataset pair
+    maf = maf.groupBy('varId', 'dataset').avg('maf') \
+        .select(
+            col('varId'),
+            col('dataset'),
+            col('avg(maf)').alias('maf')
+        )
 
     # calculate the weighted EAF average across datasets
     eaf = eaf.join(n, ['varId', 'dataset']) \

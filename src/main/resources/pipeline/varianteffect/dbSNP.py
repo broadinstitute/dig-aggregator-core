@@ -3,8 +3,8 @@
 import os.path
 import platform
 
-from pyspark.sql import SparkSession, Row
-from pyspark.sql.functions import explode, col, lit, substring, when  # pylint: disable=E0611
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import explode, col, lit, when  # pylint: disable=E0611
 
 # where in S3 VEP data (input and output) is
 s3dir = 's3://dig-analysis-data/out/varianteffect'
@@ -25,33 +25,35 @@ if __name__ == '__main__':
 
     # transcript consequence gene (if present)
     gene = when(vep.transcript_consequences.isNotNull(), vep.transcript_consequences[0].gene_id) \
-        .otherwise(lit(None))
+        .otherwise(lit(None)) \
+        .alias('gene')
 
-    # extract the common effect data
+    # pull out all the "common" columns
     common = vep.select(
-        vep.id.alias('varId'),
-        gene.alias('gene'),
-        vep.most_severe_consequence.alias('mostSevereConsequence'),
+        col('id').alias('varId'),
+        col('most_severe_consequence').alias('mostSevereConsequence'),
+        gene,
     )
 
-    # find existing variants (dbSNP IDs)
-    existing = vep \
-        .withColumn('var', explode(col('colocated_variants'))) \
-        .filter(substring(col('var.id'), 0, 2) == 'rs') \
-        .filter(col('var.allele_string') == col('allele_string')) \
+    # create a frame of just the dbSNPs
+    dbSNPs = vep \
+        .withColumn('existing', explode(col('colocated_variants'))) \
+        .filter(col('existing.id').startswith('rs') & (col('existing.allele_string') == col('allele_string'))) \
         .select(
             col('id').alias('varId'),
-            col('var.id').alias('dbSNP'),
+            col('existing.id').alias('dbSNP'),
         )
 
+    # join the common data and dbSNPs together
+    common = common.join(dbSNPs, 'varId', 'left_outer')
+
     # join and output the common effect data
-    common.join(existing, 'varId', how='left_outer') \
-        .write \
+    common.write \
         .mode('overwrite') \
         .json('%s/common' % s3dir)
 
     # output dbSNP in CSV format for intake validation
-    existing.write \
+    dbSNPs.write \
         .mode('overwrite') \
         .csv('%s/dbsnp' % s3dir, sep='\t', header=True)
 
