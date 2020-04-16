@@ -50,8 +50,10 @@ class DbSNPProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) ext
     val cluster = Cluster(
       name = name.toString,
       masterInstanceType = InstanceType.c5_9xlarge,
-      slaveInstanceType = InstanceType.c5_9xlarge,
+      slaveInstanceType = InstanceType.c5_4xlarge,
       instances = 4,
+      masterVolumeSizeInGB = 400,
+      slaveVolumeSizeInGB = 400,
       configurations = Seq(
         ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3),
         ApplicationConfig.sparkMaximizeResourceAllocation,

@@ -112,30 +112,14 @@ if __name__ == '__main__':
 
     # common effect data (pre-calculated) and full effects
     common = spark.read.json(common_srcdir)
-    vep = spark.read.json(vep_srcdir)
 
-    # extract the picked transcript consequence terms
-    transcript_consequence = vep.select(vep.id, vep.transcript_consequences) \
-        .withColumn('cqs', explode(col('transcript_consequences'))) \
+    # load the consequences
+    cqs = spark.read.json(vep_srcdir) \
         .select(
             col('id').alias('varId'),
-            struct('cqs.*').alias('transcriptConsequence'),
-        )
-
-    # extract the picked intergenic consequence terms
-    intergenic_consequence = vep.select(vep.id, vep.intergenic_consequences) \
-        .withColumn('cqs', explode(col('intergenic_consequences'))) \
-        .select(
-            col('id').alias('varId'),
-            struct('cqs.*').alias('intergenicConsequence'),
-        )
-
-    # extract the picked regulator feature consequence terms
-    regulatory_consequence = vep.select(vep.id, vep.regulatory_feature_consequences) \
-        .withColumn('cqs', explode(col('regulatory_feature_consequences'))) \
-        .select(
-            col('id').alias('varId'),
-            struct('cqs.*').alias('regulatoryConsequence'),
+            col('transcript_consequences').alias('transcriptConsequences'),
+            col('regulatory_feature_consequences').alias('regulatoryFeatureConsequences'),
+            col('intergenic_consequences').alias('intergenicConsequences'),
         )
 
     # load the bottom-line results, join them together by varId
@@ -162,11 +146,9 @@ if __name__ == '__main__':
     df = variants \
         .filter(col('varId').isNotNull()) \
         .join(common, 'varId', how='left_outer') \
+        .join(cqs, 'varId', how='left_outer') \
         .join(freq, 'varId', how='left_outer') \
         .join(tfs, 'varId', how='left_outer') \
-        .join(transcript_consequence, 'varId', how='left_outer') \
-        .join(intergenic_consequence, 'varId', how='left_outer') \
-        .join(regulatory_consequence, 'varId', how='left_outer') \
         .join(bottom_line, 'varId', how='left_outer') \
         .orderBy(['chromosome', 'position'])
 
