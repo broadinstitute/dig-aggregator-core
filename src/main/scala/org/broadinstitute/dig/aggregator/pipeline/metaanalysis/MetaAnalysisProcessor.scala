@@ -35,7 +35,8 @@ import org.broadinstitute.dig.aggregator.core.DbPool
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** Processor inputs.
     */
@@ -80,15 +81,11 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPo
       configurations = Seq(sparkConf)
     )
 
-    // get the unique list of phenotypes
-    val phenotypes = outputs
-
-    // create a job for each phenotype; cluster them
-    val jobs          = phenotypes.map(processPhenotype)
-    val clusteredJobs = aws.clusterJobs(cluster, jobs)
+    // create a job for each output (phenotype); cluster them
+    val jobs = outputs.map(processPhenotype)
 
     // wait for all the jobs to complete, then insert all the results
-    aws.waitForJobs(clusteredJobs)
+    aws.runJobs(cluster, jobs)
   }
 
   /** Create a cluster and process a single phenotype.

@@ -86,12 +86,9 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig, pool: DbP
       // wrap each step so we have a list of jobs, each being a single step
       jobs = steps.map(Seq.apply(_))
 
-      // distribute the jobs across many clustered machines
-      clusteredJobs = aws.clusterJobs(cluster, jobs)
-
       // run and wait for them to finish
       _ <- IO(logger.info("Running VEP..."))
-      _ <- aws.waitForJobs(clusteredJobs)
+      _ <- aws.runJobs(cluster, jobs)
     } yield ()
   }
 }

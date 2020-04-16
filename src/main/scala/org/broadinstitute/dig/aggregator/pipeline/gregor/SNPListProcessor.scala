@@ -13,7 +13,6 @@ import org.broadinstitute.dig.aws.emr.InstanceType
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
-
 /** Gathers all the output variants from the trans-ethnic, meta-analysis results
   * and generates a unique list of SNPs for use with GREGOR.
   *
@@ -69,9 +68,7 @@ class SNPListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) e
       Seq(JobStep.PySpark(script, phenotype))
     }
 
-    // cluster the jobs
-    val clusteredJobs = aws.clusterJobs(cluster, jobs)
-
-    aws.waitForJobs(clusteredJobs)
+    // run the jobs
+    aws.runJobs(cluster, jobs)
   }
 }

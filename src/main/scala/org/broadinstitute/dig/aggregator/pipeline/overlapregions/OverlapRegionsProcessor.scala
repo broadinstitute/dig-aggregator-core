@@ -10,7 +10,8 @@ import org.broadinstitute.dig.aws._
 import org.broadinstitute.dig.aws.emr._
 import org.broadinstitute.dig.aggregator.core.DbPool
 
-class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** Dependency processors.
     */
@@ -65,10 +66,7 @@ class OverlapRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: Db
       Seq(JobStep.PySpark(script, join, chr))
     }
 
-    // cluster the jobs across multiple machines
-    val clusteredJobs = aws.clusterJobs(cluster, jobs)
-
     // wait for all the jobs to complete
-    aws.waitForJobs(clusteredJobs)
+    aws.runJobs(cluster, jobs)
   }
 }

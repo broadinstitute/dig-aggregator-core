@@ -57,9 +57,8 @@ class VariantListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPoo
     )
 
     for {
-      _   <- IO(logger.info("Processing datasets..."))
-      job <- aws.runJob(cluster, JobStep.PySpark(pyScript))
-      _   <- aws.waitForJob(job)
+      _ <- IO(logger.info("Processing datasets..."))
+      _ <- aws.runJob(cluster, JobStep.PySpark(pyScript))
     } yield ()
   }
 }

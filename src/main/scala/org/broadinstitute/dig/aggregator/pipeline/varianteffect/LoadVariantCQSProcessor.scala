@@ -64,13 +64,9 @@ class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: Db
       )
     )
 
-    // first run+load ancestry-specific and then trans-ethnic
-    val steps = Seq(JobStep.PySpark(scriptUri))
-
     for {
-      _   <- IO(logger.info(s"Loading variant consequences..."))
-      job <- aws.runJob(cluster, steps)
-      _   <- aws.waitForJob(job)
+      _ <- IO(logger.info(s"Loading variant consequences..."))
+      _ <- aws.runJob(cluster, JobStep.PySpark(scriptUri))
     } yield ()
   }
 }

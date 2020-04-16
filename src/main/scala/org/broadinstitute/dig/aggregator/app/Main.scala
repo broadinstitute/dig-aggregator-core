@@ -53,11 +53,12 @@ object Main extends IOApp with LazyLogging {
     */
   private def confirmReprocess(opts: Opts): IO[Boolean] = {
     val warning = IO {
-      logger.warn("The database state is being reset because the --reprocess")
-      logger.warn("flag was passed on the command line.")
+      logger.warn("The --reprocess flag was provided. All inputs")
+      logger.warn("will be processed again regardless of whether")
+      logger.warn("or not they already have been.")
       logger.warn("")
-      logger.warn("If this is the desired course of action, answer 'Y' at")
-      logger.warn("the prompt; any other response will exit the program")
+      logger.warn("If this is the desired course of action, answer")
+      logger.warn(" Y' at the prompt; any other response will exit")
       logger.warn("before any damage is done.")
 
       StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")
@@ -67,12 +68,12 @@ object Main extends IOApp with LazyLogging {
   }
 
   private def makeDefaultDbPool(opts: Opts): DbPool = DbPool.fromMySQLConfig(opts.config.mysql)
-  
+
   /** Run an entire pipeline until all the processors in it have no work left.
     */
   private def runPipeline(name: String, opts: Opts): IO[Unit] = {
     def pool = makeDefaultDbPool(opts)
-    
+
     Pipeline(name) match {
       case Some(p) => (if (opts.yes()) p.run _ else p.showWork _)(opts.config, pool, opts.processorOpts)
       case _       => IO.raiseError(new Exception(s"Unknown pipeline '$name'"))
@@ -83,7 +84,7 @@ object Main extends IOApp with LazyLogging {
     */
   private def runProcessor(name: String, opts: Opts): IO[Unit] = {
     val pool = makeDefaultDbPool(opts)
-    
+
     Processor(name)(opts.config, pool) match {
       case Some(p) => (if (opts.yes()) p.run _ else p.showWork _)(opts.processorOpts)
       case _       => IO.raiseError(new Exception(s"Unknown processor '$name'"))

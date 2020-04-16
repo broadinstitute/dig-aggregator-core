@@ -11,7 +11,8 @@ import org.broadinstitute.dig.aws.emr.InstanceType
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
-class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** All the processors this processor depends on.
     */
@@ -81,9 +82,6 @@ class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig, pool: 
     } yield Seq(JobStep.Script(run, gregor_ancestry, r2, phenotype, t2dkp_ancestry))
 
     // cluster the jobs so each cluster has approximately the same run time
-    val clusteredJobs = aws.clusterJobs(cluster, jobs)
-
-    // run all the jobs then update the database
-    aws.waitForJobs(clusteredJobs)
+    aws.runJobs(cluster, jobs)
   }
 }

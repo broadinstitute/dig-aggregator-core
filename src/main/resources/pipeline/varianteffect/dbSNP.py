@@ -4,7 +4,7 @@ import os.path
 import platform
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import explode, col, lit  # pylint: disable=E0611
+from pyspark.sql.functions import explode_outer
 
 # where in S3 VEP data (input and output) is
 s3dir = 's3://dig-analysis-data/out/varianteffect'
@@ -21,44 +21,34 @@ if __name__ == '__main__':
     spark = SparkSession.builder.appName('varianteffect').getOrCreate()
 
     # read all the variant effects
-    vep = spark.read.json('%s/effects/part-*.json' % s3dir)
+    df = spark.read.json('%s/effects/part-*.json' % s3dir)
 
-    # pull out all the "common" columns
-    common = vep.select(
-        col('id').alias('varId'),
-        col('most_severe_consequence').alias('mostSevereConsequence'),
+    # explode the transcript consequence and existing variants
+    df = df \
+        .withColumn('cqs', explode_outer(df.transcript_consequences)) \
+        .withColumn('snp', explode_outer(df.colocated_variants))
+
+    # is this a dbSNP reference with the same alleles?
+    dbSNP_ref = df.snp.id.isNull() | (df.snp.id.startswith('rs') & (df.snp.allele_string == df.allele_string))
+
+    # remove existing variants we don't care about
+    df = df.filter(dbSNP_ref)
+
+    # keep only the columns we care about
+    df = df.select(
+        df.id.alias('varId'),
+        df.snp.id.alias('dbSNP'),
+        df.most_severe_consequence.alias('mostSevereConsequence'),
+        df.cqs.gene_id.alias('gene'),
     )
 
-    # load the common transcript consequence data to join
-    cqs = vep.withColumn('cqs', explode(vep.transcript_consequences)) \
-        .select(
-            col('id').alias('varId'),
-            col('cqs.gene_id').alias('gene'),
-            col('cqs.transcript_id').alias('transcript'),
-            col('cqs.biotype').alias('biotype'),
-        )
-
-    # create a frame of just the dbSNPs
-    dbSNPs = vep \
-        .withColumn('existing', explode(col('colocated_variants'))) \
-        .filter(col('existing.id').startswith('rs') & (col('existing.allele_string') == col('allele_string'))) \
-        .select(
-            col('id').alias('varId'),
-            col('existing.id').alias('dbSNP'),
-        )
-
-    # join the common data with everything else
-    common = common \
-        .join(cqs, 'varId', 'left_outer') \
-        .join(dbSNPs, 'varId', 'left_outer')
-
     # join and output the common effect data
-    common.write \
+    df.write \
         .mode('overwrite') \
         .json('%s/common' % s3dir)
 
-    # output dbSNP in CSV format for intake validation
-    dbSNPs.write \
+    # output the dbSNP in CSV format for intake validation
+    df.write \
         .mode('overwrite') \
         .csv('%s/dbsnp' % s3dir, sep='\t', header=True)
 

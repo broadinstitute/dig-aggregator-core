@@ -58,12 +58,6 @@ class DbSNPProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) ext
       ),
     )
 
-    // first run+load ancestry-specific and then trans-ethnic
-    val steps = Seq(JobStep.PySpark(scriptUri))
-
-    for {
-      job <- aws.runJob(cluster, steps)
-      _   <- aws.waitForJob(job)
-    } yield ()
+    aws.runJob(cluster, JobStep.PySpark(scriptUri))
   }
 }

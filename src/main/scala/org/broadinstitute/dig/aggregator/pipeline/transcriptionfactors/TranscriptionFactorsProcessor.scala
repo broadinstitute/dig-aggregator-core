@@ -11,7 +11,8 @@ import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{ApplicationConfig, ClassificationProperties, Cluster, InstanceType}
 import org.broadinstitute.dig.aggregator.core.DbPool
 
-class TranscriptionFactorsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class TranscriptionFactorsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** Dependency processors.
     */
@@ -51,9 +52,6 @@ class TranscriptionFactorsProcessor(name: Processor.Name, config: BaseConfig, po
     )
 
     // there's only a single output that ever needs processed.
-    for {
-      job <- aws.runJob(cluster, JobStep.PySpark(script))
-      _   <- aws.waitForJob(job)
-    } yield ()
+    aws.runJob(cluster, JobStep.PySpark(script))
   }
 }

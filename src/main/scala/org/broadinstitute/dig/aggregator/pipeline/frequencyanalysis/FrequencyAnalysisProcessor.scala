@@ -72,8 +72,6 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool:
       Seq(JobStep.PySpark(script, ancestry))
     }
 
-    val clusteredJobs = aws.clusterJobs(cluster, jobs)
-
-    aws.waitForJobs(clusteredJobs)
+    aws.runJobs(cluster, jobs)
   }
 }

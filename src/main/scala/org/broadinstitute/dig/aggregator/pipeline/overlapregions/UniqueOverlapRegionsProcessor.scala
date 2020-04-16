@@ -8,7 +8,8 @@ import org.broadinstitute.dig.aws._
 import org.broadinstitute.dig.aws.emr._
 import org.broadinstitute.dig.aggregator.core.DbPool
 
-class UniqueOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class UniqueOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** Dependency processors.
     */
@@ -45,9 +46,6 @@ class UniqueOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig, po
       )
     )
 
-    for {
-      job <- aws.runJob(cluster, JobStep.PySpark(unique))
-      _   <- aws.waitForJob(job)
-    } yield ()
+    aws.runJob(cluster, JobStep.PySpark(unique))
   }
 }

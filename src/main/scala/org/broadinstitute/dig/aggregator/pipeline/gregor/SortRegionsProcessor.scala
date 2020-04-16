@@ -13,7 +13,8 @@ import org.broadinstitute.dig.aws.emr.InstanceType
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
-class SortRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class SortRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** Dependencies.
     */
@@ -51,9 +52,6 @@ class SortRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPoo
     )
 
     // run all the jobs then update the database
-    for {
-      job <- aws.runJob(cluster, JobStep.PySpark(script))
-      _   <- aws.waitForJob(job)
-    } yield ()
+    aws.runJob(cluster, JobStep.PySpark(script))
   }
 }

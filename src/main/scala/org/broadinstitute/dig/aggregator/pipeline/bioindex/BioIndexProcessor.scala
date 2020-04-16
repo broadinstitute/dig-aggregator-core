@@ -99,8 +99,6 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
     }
 
     // distribute across clusters
-    val clusteredJobs = aws.clusterJobs(cluster, jobs)
-
-    aws.waitForJobs(clusteredJobs)
+    aws.runJobs(cluster, jobs)
   }
 }
