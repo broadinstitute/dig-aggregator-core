@@ -5,12 +5,7 @@ import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.ApplicationConfig
-import org.broadinstitute.dig.aws.emr.BootstrapScript
-import org.broadinstitute.dig.aws.emr.ClassificationProperties
-import org.broadinstitute.dig.aws.emr.Cluster
-import org.broadinstitute.dig.aws.emr.InstanceType
-
+import org.broadinstitute.dig.aws.emr.{BootstrapScript, Cluster, InstanceType, Spark}
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
@@ -68,7 +63,6 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPo
     */
   override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val bootstrapUri = aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh")
-    val sparkConf    = ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
 
     // cluster definition to run jobs
     val cluster = Cluster(
@@ -78,7 +72,9 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPo
       instances = 4,
       masterVolumeSizeInGB = 800,
       bootstrapScripts = Seq(new BootstrapScript(bootstrapUri)),
-      configurations = Seq(sparkConf)
+      configurations = Seq(
+        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
+      )
     )
 
     // create a job for each output (phenotype); cluster them

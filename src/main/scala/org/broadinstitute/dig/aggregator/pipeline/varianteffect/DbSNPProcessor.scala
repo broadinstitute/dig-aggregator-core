@@ -4,7 +4,7 @@ import org.broadinstitute.dig.aggregator.core.Processor
 import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{ApplicationConfig, ClassificationProperties, Cluster, InstanceType}
+import org.broadinstitute.dig.aws.emr.{Spark, Cluster, InstanceType}
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
@@ -49,14 +49,12 @@ class DbSNPProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) ext
     // EMR cluster to run the job steps on
     val cluster = Cluster(
       name = name.toString,
-      masterInstanceType = InstanceType.c5_9xlarge,
-      slaveInstanceType = InstanceType.c5_4xlarge,
-      instances = 4,
-      masterVolumeSizeInGB = 400,
-      slaveVolumeSizeInGB = 400,
+      masterInstanceType = InstanceType.m5_8xlarge,
+      slaveInstanceType = InstanceType.m5_8xlarge,
+      instances = 5,
       configurations = Seq(
-        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3),
-        ApplicationConfig.sparkMaximizeResourceAllocation,
+        Spark.config.withProperty(Spark.maximizeResourceAllocation),
+        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
       ),
     )
 

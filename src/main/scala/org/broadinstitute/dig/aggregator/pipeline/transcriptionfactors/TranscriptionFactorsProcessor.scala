@@ -1,14 +1,12 @@
 package org.broadinstitute.dig.aggregator.pipeline.transcriptionfactors
 
 import cats.effect.IO
-
 import org.broadinstitute.dig.aggregator.core.{Processor, Run}
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
 import org.broadinstitute.dig.aggregator.pipeline.varianteffect.VariantEffectPipeline
-
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{ApplicationConfig, ClassificationProperties, Cluster, InstanceType}
+import org.broadinstitute.dig.aws.emr.{Cluster, InstanceType, Spark}
 import org.broadinstitute.dig.aggregator.core.DbPool
 
 class TranscriptionFactorsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
@@ -47,7 +45,7 @@ class TranscriptionFactorsProcessor(name: Processor.Name, config: BaseConfig, po
       slaveInstanceType = InstanceType.c5_2xlarge,
       instances = 5,
       configurations = Seq(
-        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
+        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
       )
     )
 

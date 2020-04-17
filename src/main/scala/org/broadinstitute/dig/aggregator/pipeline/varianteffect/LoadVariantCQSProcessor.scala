@@ -4,7 +4,7 @@ import org.broadinstitute.dig.aggregator.core.Processor
 import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{ApplicationConfig, ClassificationProperties, Cluster, InstanceType}
+import org.broadinstitute.dig.aws.emr.{Cluster, InstanceType, Spark}
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
@@ -50,7 +50,6 @@ class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: Db
     */
   override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val scriptUri = aws.uriOf("resources/pipeline/varianteffect/loadCQS.py")
-    val sparkConf = ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
 
     // EMR cluster to run the job steps on
     val cluster = Cluster(
@@ -59,8 +58,8 @@ class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: Db
       slaveInstanceType = InstanceType.c5_4xlarge,
       instances = 4,
       configurations = Seq(
-        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3),
-        ApplicationConfig.sparkMaximizeResourceAllocation,
+        Spark.config.withProperty(Spark.maximizeResourceAllocation),
+        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
       )
     )
 

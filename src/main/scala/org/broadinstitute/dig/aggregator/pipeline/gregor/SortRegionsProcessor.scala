@@ -5,11 +5,7 @@ import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.ApplicationConfig
-import org.broadinstitute.dig.aws.emr.ClassificationProperties
-import org.broadinstitute.dig.aws.emr.Cluster
-import org.broadinstitute.dig.aws.emr.InstanceType
-
+import org.broadinstitute.dig.aws.emr.{Cluster, InstanceType, Spark}
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
@@ -47,7 +43,7 @@ class SortRegionsProcessor(name: Processor.Name, config: BaseConfig, pool: DbPoo
       slaveInstanceType = InstanceType.c5_2xlarge,
       instances = 5,
       configurations = Seq(
-        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
+        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
       )
     )
 

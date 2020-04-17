@@ -42,7 +42,7 @@ class UniqueOverlapRegionsProcessor(name: Processor.Name, config: BaseConfig, po
       slaveInstanceType = InstanceType.c5_2xlarge,
       instances = 5,
       configurations = Seq(
-        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
+        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
       )
     )
 

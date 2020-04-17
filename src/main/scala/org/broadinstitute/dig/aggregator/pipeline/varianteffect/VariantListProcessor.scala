@@ -5,7 +5,7 @@ import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{ApplicationConfig, ClassificationProperties, Cluster, InstanceType}
+import org.broadinstitute.dig.aws.emr.{Spark, Cluster, InstanceType}
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
@@ -42,9 +42,6 @@ class VariantListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPoo
   override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val pyScript = aws.uriOf("resources/pipeline/varianteffect/listVariants.py")
 
-    // spark configuration settings
-    val sparkConf = ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
-
     // define settings for the cluster to run the job
     val cluster = Cluster(
       name = name.toString,
@@ -53,7 +50,9 @@ class VariantListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPoo
       slaveInstanceType = InstanceType.c5_2xlarge,
       masterVolumeSizeInGB = 400,
       slaveVolumeSizeInGB = 400,
-      configurations = Seq(sparkConf)
+      configurations = Seq(
+        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
+      )
     )
 
     for {

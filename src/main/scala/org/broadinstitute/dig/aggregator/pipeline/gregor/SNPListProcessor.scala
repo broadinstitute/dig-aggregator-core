@@ -5,11 +5,7 @@ import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.pipeline.metaanalysis.MetaAnalysisPipeline
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.ApplicationConfig
-import org.broadinstitute.dig.aws.emr.ClassificationProperties
-import org.broadinstitute.dig.aws.emr.Cluster
-import org.broadinstitute.dig.aws.emr.InstanceType
-
+import org.broadinstitute.dig.aws.emr.{Cluster, InstanceType, Spark}
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
@@ -56,7 +52,7 @@ class SNPListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) e
       masterInstanceType = InstanceType.m5_2xlarge,
       slaveInstanceType = InstanceType.m5_2xlarge,
       configurations = Seq(
-        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
+        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
       )
     )
 

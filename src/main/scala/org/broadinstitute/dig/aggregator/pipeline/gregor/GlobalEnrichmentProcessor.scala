@@ -61,8 +61,6 @@ class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig, pool: 
       bootstrapSteps = Seq(JobStep.Script(install, r2))
     )
 
-    // TODO: if regions.size > 0 then phenotypes = all SNPListProcessor outputs!
-
     // get all the phenotypes that need processed
     val phenotypes = outputs
 
@@ -75,13 +73,40 @@ class GlobalEnrichmentProcessor(name: Processor.Name, config: BaseConfig, pool: 
       "SA" -> "SAN"
     )
 
-    // For each ancestry, for each phenotype, run GREGOR.
-    val jobs = for {
-      (t2dkp_ancestry, gregor_ancestry) <- ancestries
-      phenotype                         <- phenotypes
-    } yield Seq(JobStep.Script(run, gregor_ancestry, r2, phenotype, t2dkp_ancestry))
+    // Get all the snp list source files in s3 and compare it against
+    // the set of phenotype/ancestry pairings that need processed.
+    //
+    // Since GREGOR requires globally significant variants as input,
+    // for many of the phenotype/ancestry pairs there is either no
+    // ancestry dataset available for the phenotype or there are no
+    // globally significant variants. In those cases, we'd be
+    // submitting a step to EMR that returns immediately.
+    //
+    // In-and-of-itself this isn't bad, but due to rate limiting on
+    // the AWS cluster state polling, it means we could be spending
+    // most of the time running this processor spent waiting, doing
+    // nothing.
+    //
+    // To prevent this situation, only jobs that actually have data
+    // are created and added to the cluster.
 
-    // cluster the jobs so each cluster has approximately the same run time
-    aws.runJobs(cluster, jobs)
+    val buildJobList: IO[Seq[Seq[JobStep]]] =
+      for (sources <- aws.ls("out/gregor/snp/")) yield {
+        for {
+          (t2dkp_ancestry, gregor_ancestry) <- ancestries
+          phenotype                         <- phenotypes
+
+          // pattern to match against the phenotype/ancestry pair in the source list
+          pattern = s"out/gregor/snp/$phenotype/ancestry=$t2dkp_ancestry/"
+
+          // do any of the sources match the pattern?
+          if sources.exists(_.startsWith(pattern))
+        } yield Seq(JobStep.Script(run, gregor_ancestry, r2, phenotype, t2dkp_ancestry))
+      }
+
+    for {
+      jobs <- buildJobList
+      _    <- aws.runJobs(cluster, jobs)
+    } yield ()
   }
 }

@@ -85,6 +85,9 @@ if __name__ == '__main__':
     variants = spark.read.csv(all_srcdir, sep='\t', header=False, schema=all_schema) \
         .select('varId', 'chromosome', 'position')
 
+    # common effect data from VEP
+    common = spark.read.json(common_srcdir)
+
     # frequency outputs by ancestry
     ancestries = ['AA', 'AF', 'EA', 'EU', 'HS', 'SA']
     freq = None
@@ -109,9 +112,6 @@ if __name__ == '__main__':
             col('_1').alias('varId'),
             col('_2').alias('transcriptionFactors'),
         )
-
-    # common effect data (pre-calculated) and full effects
-    common = spark.read.json(common_srcdir)
 
     # load the consequences
     cqs = spark.read.json(vep_srcdir) \

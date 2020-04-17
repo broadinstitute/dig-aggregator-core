@@ -11,10 +11,7 @@ import org.broadinstitute.dig.aggregator.pipeline.metaanalysis.MetaAnalysisPipel
 import org.broadinstitute.dig.aggregator.pipeline.transcriptionfactors.TranscriptionFactorsPipeline
 import org.broadinstitute.dig.aggregator.pipeline.varianteffect.VariantEffectPipeline
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.ApplicationConfig
-import org.broadinstitute.dig.aws.emr.ClassificationProperties
-import org.broadinstitute.dig.aws.emr.Cluster
-import org.broadinstitute.dig.aws.emr.InstanceType
+import org.broadinstitute.dig.aws.emr.{ApplicationConfig, ClassificationProperties, Cluster, InstanceType, Spark}
 import org.broadinstitute.dig.aggregator.core.DbPool
 
 /** After running meta-analysis or gregor, the outputs are joined together with
@@ -83,8 +80,8 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
       masterVolumeSizeInGB = 800,
       slaveVolumeSizeInGB = 800,
       configurations = Seq(
-        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3),
-        ApplicationConfig.sparkMaximizeResourceAllocation,
+        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
+        Spark.config.withProperty(Spark.maximizeResourceAllocation),
       )
     )
 
