@@ -21,7 +21,7 @@ if __name__ == '__main__':
     spark = SparkSession.builder.appName('varianteffect').getOrCreate()
 
     # read all the variant effects
-    df = spark.read.json('%s/effects/part-*.json' % s3dir)
+    df = spark.read.json('%s/effects/part-*.json' % s3dir).repartition(400)
 
     # explode the existing variants
     df = df.select(df.id, df.most_severe_consequence, df.colocated_variants, df.allele_string) \
@@ -37,8 +37,7 @@ if __name__ == '__main__':
         )
 
     # output the dbSNP in CSV format for intake validation
-    df.repartition(1000) \
-        .write \
+    df.write \
         .mode('overwrite') \
         .csv('%s/dbsnp' % s3dir, sep='\t', header=True)
 

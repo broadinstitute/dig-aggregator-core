@@ -73,7 +73,7 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPo
       masterVolumeSizeInGB = 800,
       bootstrapScripts = Seq(new BootstrapScript(bootstrapUri)),
       configurations = Seq(
-        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
+        Spark.Env().withPython3,
       )
     )
 

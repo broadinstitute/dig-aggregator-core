@@ -4,7 +4,7 @@ import org.broadinstitute.dig.aggregator.core.Processor
 import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{Spark, Cluster, InstanceType}
+import org.broadinstitute.dig.aws.emr.{Spark, Cluster, InstanceType, MemorySize}
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
@@ -22,6 +22,7 @@ import org.broadinstitute.dig.aggregator.core.DbPool
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
 class DbSNPProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+  import MemorySize.Implicits._
 
   /** All the processors this processor depends on.
     */
@@ -53,8 +54,9 @@ class DbSNPProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) ext
       slaveInstanceType = InstanceType.m5_8xlarge,
       instances = 5,
       configurations = Seq(
-        Spark.config.withProperty(Spark.maximizeResourceAllocation),
-        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
+        Spark.Env().withPython3,
+        Spark.Config().withMaximizeResourceAllocation,
+        Spark.Defaults(),
       ),
     )
 

@@ -80,8 +80,8 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
       masterVolumeSizeInGB = 800,
       slaveVolumeSizeInGB = 800,
       configurations = Seq(
-        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
-        Spark.config.withProperty(Spark.maximizeResourceAllocation),
+        Spark.Env().withPython3,
+        Spark.Config().withMaximizeResourceAllocation,
       )
     )
 

@@ -58,8 +58,8 @@ class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: Db
       slaveInstanceType = InstanceType.c5_4xlarge,
       instances = 4,
       configurations = Seq(
-        Spark.config.withProperty(Spark.maximizeResourceAllocation),
-        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
+        Spark.Env().withPython3,
+        Spark.Config().withMaximizeResourceAllocation,
       )
     )
 

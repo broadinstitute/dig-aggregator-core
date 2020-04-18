@@ -45,7 +45,7 @@ class TranscriptionFactorsProcessor(name: Processor.Name, config: BaseConfig, po
       slaveInstanceType = InstanceType.c5_2xlarge,
       instances = 5,
       configurations = Seq(
-        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
+        Spark.Env().withPython3,
       )
     )
 

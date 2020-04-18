@@ -59,8 +59,8 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool:
       masterVolumeSizeInGB = 500,
       slaveVolumeSizeInGB = 500,
       configurations = Seq(
-        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
-        Spark.config.withProperty(Spark.maximizeResourceAllocation),
+        Spark.Env().withPython3,
+        Spark.Config().withMaximizeResourceAllocation,
       )
     )
 

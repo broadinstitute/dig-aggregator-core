@@ -51,7 +51,7 @@ class VariantListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPoo
       masterVolumeSizeInGB = 400,
       slaveVolumeSizeInGB = 400,
       configurations = Seq(
-        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
+        Spark.Env().withPython3,
       )
     )
 

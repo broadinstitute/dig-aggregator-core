@@ -52,7 +52,7 @@ class SNPListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) e
       masterInstanceType = InstanceType.m5_2xlarge,
       slaveInstanceType = InstanceType.m5_2xlarge,
       configurations = Seq(
-        Spark.Env.config.withProperty(Spark.Env.Export.usePython3),
+        Spark.Env().withPython3,
       )
     )
 
