@@ -55,11 +55,13 @@ class DbSNPProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) ext
       instances = 5,
       configurations = Seq(
         Spark.Env().withPython3,
-        Spark.Config().withMaximizeResourceAllocation,
-        Spark.Defaults(),
       ),
     )
 
-    aws.runJob(cluster, JobStep.PySpark(scriptUri))
+    // create all the job definitions (one per chromosome)
+    val chromosomes = (1 to 22).map(_.toString) ++ List("X", "XY")
+    val jobs        = chromosomes.map(chr => Seq(JobStep.PySpark(scriptUri, chr)))
+
+    aws.runJobs(cluster, jobs)
   }
 }
