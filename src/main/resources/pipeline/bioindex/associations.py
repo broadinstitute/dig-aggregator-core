@@ -1,5 +1,6 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, BooleanType, DoubleType, IntegerType
+from pyspark.sql.functions import rand
 
 
 # load and output directory
@@ -55,23 +56,14 @@ if __name__ == '__main__':
         .mode('overwrite') \
         .json('%s/top' % outdir)
 
-    # Find all the variants (per phenotype) across the genome that will be
-    # used for manhattan plots, and finding variants.
-    #
-    # This is done similar to the "top" associations: find the most significant
-    # variant within a range of each chromosome and only keep those. However,
-    # we also keep all associations with signal as well.
-    #
-    # With the "top" associations, this is done using a small range (~5 kb),
-    # while this will be done with a very large range.
+    # add a uniform random value to each record
+    df = df.withColumn('r', rand())
 
-    df.filter(df.pValue > 1.e-5) \
-        .rdd \
-        .keyBy(lambda v: (v.phenotype, v.chromosome, v.position // 250000)) \
-        .reduceByKey(lambda a, b: b if b.pValue < a.pValue else a) \
-        .map(lambda v: v[1]) \
-        .toDF() \
-        .union(df.filter(df.pValue < 1.e-5)) \
+    # filter associations based on p-value and the uniform random value
+    df = df.filter((df.pValue * df.r) <= 1.e-6)
+
+    # drop the random column, sort, and write the associations
+    df.drop('r') \
         .orderBy(['phenotype', 'pValue']) \
         .write \
         .mode('overwrite') \
