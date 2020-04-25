@@ -34,34 +34,38 @@ bed_re = r'([A-Z]+_\d+)___([^_]+)___(.*)'
 if __name__ == '__main__':
     spark = SparkSession.builder.appName('bioindex').getOrCreate()
 
-    # load the tissue ontology to join
-    tissues = spark.read.json(tissue_ontology)
-
     # load all regions, fix the tissue ID, sort, and write
     df = spark.read.csv(srcdir, sep='\t', header=True, schema=regions_schema)
 
-    # fix tissue name and convert NA method to null
-    tissue = regexp_replace(df.tissue, '_', ':')
-    method = when(df.method == 'NA', lit(None)).otherwise(df.method)
+    # load the tissue ontology to join
+    tissues = spark.read.json(tissue_ontology)
 
     # put all the tissue data into a single column for tissues for the join
-    tissues = tissues.select(tissues.id, struct('*').alias('tissue'))
+    tissues = tissues.select(tissues.id.alias('tissueId'), struct('*').alias('tissue'))
 
     # fix the tissue and method columns
     df = df \
-        .withColumn('tissueId', tissue) \
-        .withColumn('method', method)
+        .withColumn('method', when(df.method == 'NA', lit(None)).otherwise(df.method)) \
+        .withColumn('tissue', regexp_replace(df.tissue, '_', ':'))
+
+    # rename the tissue column to tissueId
+    df = df.withColumnRenamed('tissue', 'tissueId')
 
     # join with the tissue ontology
-    df = df \
-        .join(tissues, df.tissueId == tissues.id, how='left_outer') \
+    df = df.join(tissues, 'tissueId', how='left_outer') \
         .drop('tissueId')
 
     # sort by locus and write
     df.orderBy(['chromosome', 'start']) \
         .write \
         .mode('overwrite') \
-        .json(outdir)
+        .json('%s/locus' % outdir)
+
+    # sort by annotation and method
+    df.orderBy(['annotation', 'method']) \
+        .write \
+        .mode('overwrite') \
+        .json('%s/annotation' % outdir)
 
     # done
     spark.stop()

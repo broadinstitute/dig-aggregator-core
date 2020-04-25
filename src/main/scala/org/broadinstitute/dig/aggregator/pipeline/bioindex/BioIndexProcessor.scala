@@ -11,10 +11,7 @@ import org.broadinstitute.dig.aggregator.pipeline.metaanalysis.MetaAnalysisPipel
 import org.broadinstitute.dig.aggregator.pipeline.transcriptionfactors.TranscriptionFactorsPipeline
 import org.broadinstitute.dig.aggregator.pipeline.varianteffect.VariantEffectPipeline
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.ApplicationConfig
-import org.broadinstitute.dig.aws.emr.ClassificationProperties
-import org.broadinstitute.dig.aws.emr.Cluster
-import org.broadinstitute.dig.aws.emr.InstanceType
+import org.broadinstitute.dig.aws.emr.{Cluster, InstanceType, Spark}
 import org.broadinstitute.dig.aggregator.core.DbPool
 
 /** After running meta-analysis or gregor, the outputs are joined together with
@@ -34,7 +31,7 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
     IntakePipeline.variants,
     MetaAnalysisPipeline.metaAnalysisProcessor,
     TranscriptionFactorsPipeline.transcriptionFactorsProcessor,
-    VariantEffectPipeline.dbSNPProcessor,
+    VariantEffectPipeline.commonSNPProcessor,
   )
 
   /** All the job scripts that need to be uploaded to AWS.
@@ -52,15 +49,15 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
     input.processor match {
-      case IntakePipeline.variants                                    => Processor.Outputs(Seq("BioIndex/datasets"))
-      case IntakePipeline.genes                                       => Processor.Outputs(Seq("BioIndex/genes"))
-      case IntakePipeline.tissues                                     => Processor.Outputs(Seq("BioIndex/globalEnrichment", "BioIndex/regions"))
-      case MetaAnalysisPipeline.metaAnalysisProcessor                 => Processor.Outputs(Seq("BioIndex/associations"))
-      case GregorPipeline.globalEnrichmentProcessor                   => Processor.Outputs(Seq("BioIndex/globalEnrichment"))
-      case GregorPipeline.sortRegionsProcessor                        => Processor.Outputs(Seq("BioIndex/regions"))
-      case FrequencyAnalysisPipeline.frequencyProcessor               => Processor.Outputs(Seq("BioIndex/variants"))
-      case TranscriptionFactorsPipeline.transcriptionFactorsProcessor => Processor.Outputs(Seq("BioIndex/variants"))
-      case VariantEffectPipeline.dbSNPProcessor                       => Processor.Outputs(Seq("BioIndex/variants"))
+      case IntakePipeline.variants                                    => Processor.Outputs(Seq("datasets"))
+      case IntakePipeline.genes                                       => Processor.Outputs(Seq("genes"))
+      case IntakePipeline.tissues                                     => Processor.Outputs(Seq("globalEnrichment", "regions"))
+      case MetaAnalysisPipeline.metaAnalysisProcessor                 => Processor.Outputs(Seq("associations"))
+      case GregorPipeline.globalEnrichmentProcessor                   => Processor.Outputs(Seq("globalEnrichment"))
+      case GregorPipeline.sortRegionsProcessor                        => Processor.Outputs(Seq("regions"))
+      case FrequencyAnalysisPipeline.frequencyProcessor               => Processor.Outputs(Seq("variants"))
+      case TranscriptionFactorsPipeline.transcriptionFactorsProcessor => Processor.Outputs(Seq("variants"))
+      case VariantEffectPipeline.commonSNPProcessor                   => Processor.Outputs(Seq("associations", "variants"))
     }
   }
 
@@ -83,24 +80,22 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
       masterVolumeSizeInGB = 800,
       slaveVolumeSizeInGB = 800,
       configurations = Seq(
-        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3),
-        ApplicationConfig.sparkMaximizeResourceAllocation,
+        Spark.Env().withPython3,
+        Spark.Config().withMaximizeResourceAllocation,
       )
     )
 
     // run the jobs
     val jobs = outputs.map {
-      case "BioIndex/associations"     => Seq(JobStep.PySpark(associationsScript))
-      case "BioIndex/datasets"         => Seq(JobStep.PySpark(datasetsScript))
-      case "BioIndex/genes"            => Seq(JobStep.PySpark(genesScript))
-      case "BioIndex/globalEnrichment" => Seq(JobStep.PySpark(globalEnrichmentScript))
-      case "BioIndex/regions"          => Seq(JobStep.PySpark(regionsScript))
-      case "BioIndex/variants"         => Seq(JobStep.PySpark(variantsScript))
+      case "associations"     => Seq(JobStep.PySpark(associationsScript))
+      case "datasets"         => Seq(JobStep.PySpark(datasetsScript))
+      case "genes"            => Seq(JobStep.PySpark(genesScript))
+      case "globalEnrichment" => Seq(JobStep.PySpark(globalEnrichmentScript))
+      case "regions"          => Seq(JobStep.PySpark(regionsScript))
+      case "variants"         => Seq(JobStep.PySpark(variantsScript))
     }
 
     // distribute across clusters
-    val clusteredJobs = aws.clusterJobs(cluster, jobs)
-
-    aws.waitForJobs(clusteredJobs)
+    aws.runJobs(cluster, jobs)
   }
 }

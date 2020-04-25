@@ -17,19 +17,12 @@ if __name__ == '__main__':
     df = spark.read.json(srcdir) \
         .filter(col('chromosome').isin(*chromosomes))
 
-    # write the genes by region
+    # index by position
     df.coalesce(1) \
         .orderBy(['chromosome', 'start']) \
         .write \
         .mode('overwrite') \
-        .json('%s/region' % outdir)
-
-    # write the genes by name
-    df.coalesce(1) \
-        .orderBy(['name']) \
-        .write \
-        .mode('overwrite') \
-        .json('%s/name' % outdir)
+        .json('%s/locus' % outdir)
 
     # done
     spark.stop()

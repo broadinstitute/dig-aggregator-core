@@ -5,11 +5,7 @@ import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.ApplicationConfig
-import org.broadinstitute.dig.aws.emr.ClassificationProperties
-import org.broadinstitute.dig.aws.emr.Cluster
-import org.broadinstitute.dig.aws.emr.InstanceType
-
+import org.broadinstitute.dig.aws.emr.{Cluster, InstanceType, Spark}
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
@@ -26,7 +22,8 @@ import org.broadinstitute.dig.aggregator.core.DbPool
   *
   *  s3://dig-analysis-data/out/frequencyanalysis/<ancestry>/part-*
   */
-class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** Source data to consume.
     */
@@ -40,7 +37,7 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool:
 
   /** Unique ancestries to process.
     */
-  private val ancestries = Seq("AA", "AF", "EA", "EU", "HS", "SA", "Mixed")
+  private val ancestries = Seq("AA", "AF", "EA", "EU", "HS", "SA")
 
   /** Each ancestry gets its own output.
     */
@@ -56,13 +53,14 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool:
     // cluster configuration used to process each phenotype
     val cluster = Cluster(
       name = name.toString,
-      instances = 3,
+      instances = 5,
       masterInstanceType = InstanceType.c5_9xlarge,
       slaveInstanceType = InstanceType.c5_9xlarge,
       masterVolumeSizeInGB = 500,
       slaveVolumeSizeInGB = 500,
       configurations = Seq(
-        ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
+        Spark.Env().withPython3,
+        Spark.Config().withMaximizeResourceAllocation,
       )
     )
 
@@ -70,8 +68,6 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool:
       Seq(JobStep.PySpark(script, ancestry))
     }
 
-    val clusteredJobs = aws.clusterJobs(cluster, jobs)
-
-    aws.waitForJobs(clusteredJobs)
+    aws.runJobs(cluster, jobs)
   }
 }

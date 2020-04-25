@@ -5,12 +5,7 @@ import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.ApplicationConfig
-import org.broadinstitute.dig.aws.emr.BootstrapScript
-import org.broadinstitute.dig.aws.emr.ClassificationProperties
-import org.broadinstitute.dig.aws.emr.Cluster
-import org.broadinstitute.dig.aws.emr.InstanceType
-
+import org.broadinstitute.dig.aws.emr.{BootstrapScript, Cluster, InstanceType, Spark}
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
@@ -35,7 +30,8 @@ import org.broadinstitute.dig.aggregator.core.DbPool
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) extends Processor(name, config, pool) {
+class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
+    extends Processor(name, config, pool) {
 
   /** Processor inputs.
     */
@@ -67,7 +63,6 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPo
     */
   override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val bootstrapUri = aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh")
-    val sparkConf    = ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
 
     // cluster definition to run jobs
     val cluster = Cluster(
@@ -77,18 +72,16 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPo
       instances = 4,
       masterVolumeSizeInGB = 800,
       bootstrapScripts = Seq(new BootstrapScript(bootstrapUri)),
-      configurations = Seq(sparkConf)
+      configurations = Seq(
+        Spark.Env().withPython3,
+      )
     )
 
-    // get the unique list of phenotypes
-    val phenotypes = outputs
-
-    // create a job for each phenotype; cluster them
-    val jobs          = phenotypes.map(processPhenotype)
-    val clusteredJobs = aws.clusterJobs(cluster, jobs)
+    // create a job for each output (phenotype); cluster them
+    val jobs = outputs.map(processPhenotype)
 
     // wait for all the jobs to complete, then insert all the results
-    aws.waitForJobs(clusteredJobs)
+    aws.runJobs(cluster, jobs)
   }
 
   /** Create a cluster and process a single phenotype.

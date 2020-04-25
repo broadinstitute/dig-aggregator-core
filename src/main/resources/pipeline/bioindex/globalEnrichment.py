@@ -56,7 +56,7 @@ if __name__ == '__main__':
     isValid = \
         df.phenotype.isNotNull() & \
         df.ancestry.isNotNull() & \
-        df.tissue.isNotNull() & \
+        df.tissueId.isNotNull() & \
         df.method.isNotNull() & \
         df.annotation.isNotNull()
 
@@ -64,12 +64,12 @@ if __name__ == '__main__':
     method = when(df.method == 'NA', lit(None)).otherwise(df.method)
 
     # put all the tissue data into a single column for tissues for the join
-    tissues = tissues.select(tissues.id, struct('*').alias('tissue'))
+    tissues = tissues.select(tissues.id.alias('tissueId'), struct('*').alias('tissue'))
 
     # add th method and join the tissue ontology
     df = df.filter(isValid) \
         .withColumn('method', method) \
-        .join(tissues, df.tissueId == tissues.id, how='left_outer') \
+        .join(tissues, 'tissueId', how='left_outer') \
         .drop('tissueId')
 
     # write out the global enrichment data sorted by phenotype

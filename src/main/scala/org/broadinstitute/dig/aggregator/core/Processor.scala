@@ -93,7 +93,7 @@ abstract class Processor(val name: Processor.Name,
   def getWork(opts: Processor.Opts): IO[Map[String, Set[UUID]]] = {
     for {
       inputs      <- Run.resultsOf(pool, dependencies)
-      lastOutputs <- Run.resultsOf(pool, name)
+      lastOutputs <- if (opts.reprocess) IO(Seq.empty) else Run.resultsOf(pool, name)
     } yield {
       val outputMap = buildOutputMap(inputs, opts).toList
 

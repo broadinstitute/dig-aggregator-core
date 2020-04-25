@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession, Row
 from pyspark.sql.types import StructType, StructField, StringType, BooleanType, DoubleType, IntegerType
-from pyspark.sql.functions import col, struct, explode
+from pyspark.sql.functions import col, struct
 
 
 # source directories
@@ -9,7 +9,7 @@ freq_srcdir = 's3://dig-analysis-data/out/frequencyanalysis/'
 tf_srcdir = 's3://dig-analysis-data/out/transcriptionfactors/part-*'
 vep_srcdir = 's3://dig-analysis-data/out/varianteffect/effects/part-*'
 assoc_srcdir = 's3://dig-analysis-data/out/metaanalysis/trans-ethnic/*/part-*'
-snp_srcdir = 's3://dig-analysis-data/out/varianteffect/dbsnp/part-*'
+common_srcdir = 's3://dig-analysis-data/out/varianteffect/common/part-*'
 
 # output directory
 outdir = 's3://dig-bio-index/variants'
@@ -71,14 +71,6 @@ assoc_schema = StructType(
     ]
 )
 
-# this is the schema written out by the dbSNP processor
-dbSNP_schema = StructType(
-    [
-        StructField('varId', StringType(), nullable=False),
-        StructField('dbSNP', StringType(), nullable=False),
-    ]
-)
-
 
 def load_freq(ancestry_name):
     return spark.read \
@@ -94,7 +86,7 @@ if __name__ == '__main__':
         .select('varId', 'chromosome', 'position')
 
     # frequency outputs by ancestry
-    ancestries = ['AA', 'AF', 'EA', 'EU', 'HS', 'SA']
+    ancestries = ['AA', 'EA', 'EU', 'HS', 'SA']
     freq = None
 
     # load frequencies by variant ID
@@ -107,6 +99,9 @@ if __name__ == '__main__':
     # pull all the frequencies together into a single map
     freq = freq.select(freq.varId, struct(*ancestries).alias('frequency'))
 
+    # common effect data from VEP
+    common = spark.read.csv(common_srcdir, sep='\t', header=True)
+
     # load transcription factors and group them by varId
     tfs = spark.read.csv(tf_srcdir, sep='\t', header=True, schema=tf_schema) \
         .rdd \
@@ -118,40 +113,11 @@ if __name__ == '__main__':
             col('_2').alias('transcriptionFactors'),
         )
 
-    # dbsnp ids
-    db_snp = spark.read.csv(snp_srcdir, sep='\t', header=True, schema=dbSNP_schema)
-
-    # load effects
-    vep = spark.read.json(vep_srcdir)
-
-    # get the most severe consequence
-    most_severe_consequence = vep.select(
-        vep.id.alias('varId'),
-        vep.most_severe_consequence.alias('mostSevereConsequence'),
-    )
-
-    # extract the picked transcript consequence terms
-    transcript_consequence = vep.select(vep.id, vep.transcript_consequences) \
-        .withColumn('cqs', explode(col('transcript_consequences'))) \
+    # load the consequences
+    cqs = spark.read.json(vep_srcdir) \
         .select(
             col('id').alias('varId'),
-            struct('cqs.*').alias('transcriptConsequence'),
-        )
-
-    # extract the picked intergenic consequence terms
-    intergenic_consequence = vep.select(vep.id, vep.intergenic_consequences) \
-        .withColumn('cqs', explode(col('intergenic_consequences'))) \
-        .select(
-            col('id').alias('varId'),
-            struct('cqs.*').alias('intergenicConsequence'),
-        )
-
-    # extract the picked regulator feature consequence terms
-    regulatory_consequence = vep.select(vep.id, vep.regulatory_feature_consequences) \
-        .withColumn('cqs', explode(col('regulatory_feature_consequences'))) \
-        .select(
-            col('id').alias('varId'),
-            struct('cqs.*').alias('regulatoryConsequence'),
+            col('transcript_consequences').alias('transcriptConsequences'),
         )
 
     # load the bottom-line results, join them together by varId
@@ -176,15 +142,11 @@ if __name__ == '__main__':
 
     # remove empty records, join everything together, then sort
     df = variants \
-        .filter(col('varId').isNotNull()) \
-        .join(db_snp, 'varId', how='left_outer') \
+        .join(common, 'varId', how='left_outer') \
         .join(freq, 'varId', how='left_outer') \
-        .join(tfs, 'varId', how='left_outer') \
-        .join(most_severe_consequence, 'varId', how='left_outer') \
-        .join(transcript_consequence, 'varId', how='left_outer') \
-        .join(intergenic_consequence, 'varId', how='left_outer') \
-        .join(regulatory_consequence, 'varId', how='left_outer') \
         .join(bottom_line, 'varId', how='left_outer') \
+        .join(tfs, 'varId', how='left_outer') \
+        .join(cqs, 'varId', how='left_outer') \
         .orderBy(['chromosome', 'position'])
 
     # write out variant data by ID

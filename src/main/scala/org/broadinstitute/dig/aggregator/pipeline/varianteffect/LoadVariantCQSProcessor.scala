@@ -4,10 +4,7 @@ import org.broadinstitute.dig.aggregator.core.Processor
 import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.ApplicationConfig
-import org.broadinstitute.dig.aws.emr.ClassificationProperties
-import org.broadinstitute.dig.aws.emr.Cluster
-
+import org.broadinstitute.dig.aws.emr.{Cluster, InstanceType, Spark}
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
@@ -53,22 +50,22 @@ class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: Db
     */
   override def processOutputs(outputs: Seq[String]): IO[Unit] = {
     val scriptUri = aws.uriOf("resources/pipeline/varianteffect/loadCQS.py")
-    val sparkConf = ApplicationConfig.sparkEnv.withConfig(ClassificationProperties.sparkUsePython3)
 
     // EMR cluster to run the job steps on
     val cluster = Cluster(
       name = name.toString,
-      instances = 5,
-      configurations = Seq(sparkConf)
+      masterInstanceType = InstanceType.c5_4xlarge,
+      slaveInstanceType = InstanceType.c5_4xlarge,
+      instances = 4,
+      configurations = Seq(
+        Spark.Env().withPython3,
+        Spark.Config().withMaximizeResourceAllocation,
+      )
     )
 
-    // first run+load ancestry-specific and then trans-ethnic
-    val steps = Seq(JobStep.PySpark(scriptUri))
-
     for {
-      _   <- IO(logger.info(s"Loading variant consequences..."))
-      job <- aws.runJob(cluster, steps)
-      _   <- aws.waitForJob(job)
+      _ <- IO(logger.info(s"Loading variant consequences..."))
+      _ <- aws.runJob(cluster, JobStep.PySpark(scriptUri))
     } yield ()
   }
 }
