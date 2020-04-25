@@ -1,6 +1,5 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, BooleanType, DoubleType, IntegerType
-from pyspark.sql.functions import rand
 
 
 # load and output directory
@@ -41,13 +40,6 @@ if __name__ == '__main__':
     # join the common data into the associations
     df = df.join(common, 'varId', how='left_outer')
 
-    # write associations indexed by phenotype and locus
-    df.drop('top') \
-        .orderBy(['phenotype', 'chromosome', 'position']) \
-        .write \
-        .mode('overwrite') \
-        .json('%s/locus' % outdir)
-
     # write out just the top associations, indexed by locus
     df.filter(df.top) \
         .drop('top') \
@@ -55,19 +47,6 @@ if __name__ == '__main__':
         .write \
         .mode('overwrite') \
         .json('%s/top' % outdir)
-
-    # add a uniform random value to each record
-    df = df.withColumn('r', rand())
-
-    # filter associations based on p-value and the uniform random value
-    df = df.filter((df.pValue * df.r) <= 1.e-6)
-
-    # drop the random column, sort, and write the associations
-    df.drop('r', 'top') \
-        .orderBy(['phenotype', 'pValue']) \
-        .write \
-        .mode('overwrite') \
-        .json('%s/phenotype' % outdir)
 
     # done
     spark.stop()

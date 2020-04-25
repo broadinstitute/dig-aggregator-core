@@ -7,7 +7,8 @@ from pyspark.sql.functions import rand
 srcdir = 's3://dig-analysis-data/out/metaanalysis/trans-ethnic/*/part-*'
 outdir = 's3://dig-bio-index/associations'
 
-# common vep data
+# join data
+datasets_dir = 's3://dig-analysis-data/variants/*/*/metadata'
 common_dir = 's3://dig-analysis-data/out/varianteffect/common'
 genes_dir = 's3://dig-analysis-data/genes/GRCh37'
 
@@ -35,26 +36,24 @@ if __name__ == '__main__':
 
     # load the trans-ethnic, meta-analysis, top variants and write them sorted
     df = spark.read.csv(srcdir, sep='\t', header=True, schema=variants_schema)
+
     common = spark.read.csv('%s/part-*' % common_dir, sep='\t', header=True)
     genes = spark.read.json(genes_dir)
+    datasets = spark.read.json(datasets_dir)
+
+    # find the sum of N across all datasets for each phenotype
+    subjects = datasets.groupBy(datasets.phenotype) \
+        .sum('subjects') \
+        .withColumnRenamed('sum(subjects)', 'subjects') \
+        .collect()
+
+    # convert n to a dictionary of phenotype -> n
+    n = {r.name: r.subjects for r in subjects}
+
+    # TODO: use n[df.phenotype] to calculate the threshold
 
     # join the common data into the associations
     df = df.join(common, 'varId', how='left_outer')
-
-    # write associations indexed by phenotype and locus
-    df.drop('top') \
-        .orderBy(['phenotype', 'chromosome', 'position']) \
-        .write \
-        .mode('overwrite') \
-        .json('%s/locus' % outdir)
-
-    # write out just the top associations, indexed by locus
-    df.filter(df.top) \
-        .drop('top') \
-        .orderBy(['chromosome', 'position']) \
-        .write \
-        .mode('overwrite') \
-        .json('%s/top' % outdir)
 
     # add a uniform random value to each record
     df = df.withColumn('r', rand())
@@ -67,7 +66,7 @@ if __name__ == '__main__':
         .orderBy(['phenotype', 'pValue']) \
         .write \
         .mode('overwrite') \
-        .json('%s/phenotype' % outdir)
+        .json('%s/global' % outdir)
 
     # done
     spark.stop()

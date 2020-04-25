@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession, Row
 from pyspark.sql.types import StructType, StructField, StringType, BooleanType, DoubleType, IntegerType
-from pyspark.sql.functions import col, struct, explode
+from pyspark.sql.functions import col, struct
 
 
 # source directories
@@ -85,11 +85,8 @@ if __name__ == '__main__':
     variants = spark.read.csv(all_srcdir, sep='\t', header=False, schema=all_schema) \
         .select('varId', 'chromosome', 'position')
 
-    # common effect data from VEP
-    common = spark.read.json(common_srcdir)
-
     # frequency outputs by ancestry
-    ancestries = ['AA', 'AF', 'EA', 'EU', 'HS', 'SA']
+    ancestries = ['AA', 'EA', 'EU', 'HS', 'SA']
     freq = None
 
     # load frequencies by variant ID
@@ -101,6 +98,9 @@ if __name__ == '__main__':
 
     # pull all the frequencies together into a single map
     freq = freq.select(freq.varId, struct(*ancestries).alias('frequency'))
+
+    # common effect data from VEP
+    common = spark.read.csv(common_srcdir, sep='\t', header=True)
 
     # load transcription factors and group them by varId
     tfs = spark.read.csv(tf_srcdir, sep='\t', header=True, schema=tf_schema) \
@@ -118,8 +118,6 @@ if __name__ == '__main__':
         .select(
             col('id').alias('varId'),
             col('transcript_consequences').alias('transcriptConsequences'),
-            col('regulatory_feature_consequences').alias('regulatoryFeatureConsequences'),
-            col('intergenic_consequences').alias('intergenicConsequences'),
         )
 
     # load the bottom-line results, join them together by varId
@@ -144,12 +142,11 @@ if __name__ == '__main__':
 
     # remove empty records, join everything together, then sort
     df = variants \
-        .filter(col('varId').isNotNull()) \
         .join(common, 'varId', how='left_outer') \
-        .join(cqs, 'varId', how='left_outer') \
         .join(freq, 'varId', how='left_outer') \
-        .join(tfs, 'varId', how='left_outer') \
         .join(bottom_line, 'varId', how='left_outer') \
+        .join(tfs, 'varId', how='left_outer') \
+        .join(cqs, 'varId', how='left_outer') \
         .orderBy(['chromosome', 'position'])
 
     # write out variant data by ID
