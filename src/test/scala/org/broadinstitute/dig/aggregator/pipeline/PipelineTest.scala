@@ -25,6 +25,7 @@ final class PipelineTest extends FunSuite {
     val metaanalysisProcessors = metaanalysisPipeline.processors
     val expectedProcessors = Set(
       MetaAnalysisPipeline.metaAnalysisProcessor,
+      MetaAnalysisPipeline.manhattanPlotProcessor,
       MetaAnalysisPipeline.uploadMetaAnalysisProcessor
     )
 
