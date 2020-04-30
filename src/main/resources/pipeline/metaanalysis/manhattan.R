@@ -1,7 +1,7 @@
-#!/mnt/var/install/R-3.6.3/bin/Rscript
+#!/mnt/var/install/R-4.0.0/bin/Rscript
 
-w <- 600
-h <- 360
+w <- 460
+h <- 300
 
 # load required libraries
 library(grDevices)
@@ -17,9 +17,20 @@ df$CHR <- ifelse(df$CHR == 'Y', 24, df$CHR)
 df$CHR <- ifelse(df$CHR == 'XY', 25, df$CHR)
 df$CHR <- ifelse(df$CHR == 'MT', 26, df$CHR)
 
-# target 20,000 data points
-target <- 20000 / nrow(df)
-points <- df[(! is.na(df$P)) & (df$P > 0) & (df$P <= 1) & (df$P * runif(nrow(df)) < target),]
+# ensure the chromosome is numeric
+df$CHR <- as.numeric(df$CHR)
+
+# create a column to filter data points with
+df$R <- runif(nrow(df))
+
+# target ~50,000 data points
+target <- 50000 / nrow(df)
+
+# filter manhattan plot points
+points <- df[is.finite(df$P) & (df$P > 0) & (df$P <= 1) & (df$P * df$R < target),]
+
+# write the data points used so it can be debugged
+write.table(points, 'manhattan.tbl', quote=FALSE, sep='\t', row.names=FALSE)
 
 # generate manhattan plot
 png('manhattan.png', width=w, height=h)
