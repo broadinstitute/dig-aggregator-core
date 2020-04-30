@@ -62,7 +62,7 @@ if __name__ == '__main__':
         .json('%s/locus' % outdir)
 
     # sort by annotation and method
-    df.orderBy(['annotation', 'method']) \
+    df.orderBy(['annotation', 'chromosome', 'start']) \
         .write \
         .mode('overwrite') \
         .json('%s/annotation' % outdir)

@@ -30,6 +30,7 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
     IntakePipeline.tissues,
     IntakePipeline.variants,
     MetaAnalysisPipeline.metaAnalysisProcessor,
+    MetaAnalysisPipeline.manhattanPlotProcessor,
     TranscriptionFactorsPipeline.transcriptionFactorsProcessor,
     VariantEffectPipeline.commonSNPProcessor,
   )
@@ -42,6 +43,7 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
     "pipeline/bioindex/genes.py",
     "pipeline/bioindex/globalEnrichment.py",
     "pipeline/bioindex/regions.py",
+    "pipeline/bioindex/statics/plots.sh",
     "pipeline/bioindex/variants.py",
   )
 
@@ -53,6 +55,7 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
       case IntakePipeline.genes                                       => Processor.Outputs(Seq("genes"))
       case IntakePipeline.tissues                                     => Processor.Outputs(Seq("globalEnrichment", "regions"))
       case MetaAnalysisPipeline.metaAnalysisProcessor                 => Processor.Outputs(Seq("associations"))
+      case MetaAnalysisPipeline.manhattanPlotProcessor                => Processor.Outputs(Seq("plots"))
       case GregorPipeline.globalEnrichmentProcessor                   => Processor.Outputs(Seq("globalEnrichment"))
       case GregorPipeline.sortRegionsProcessor                        => Processor.Outputs(Seq("regions"))
       case FrequencyAnalysisPipeline.frequencyProcessor               => Processor.Outputs(Seq("variants"))
@@ -68,6 +71,7 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
     val datasetsScript         = aws.uriOf("resources/pipeline/bioindex/datasets.py")
     val genesScript            = aws.uriOf("resources/pipeline/bioindex/genes.py")
     val globalEnrichmentScript = aws.uriOf("resources/pipeline/bioindex/globalEnrichment.py")
+    val plotsScript            = aws.uriOf("resources/pipeline/bioindex/statics/plots.sh")
     val regionsScript          = aws.uriOf("resources/pipeline/bioindex/regions.py")
     val variantsScript         = aws.uriOf("resources/pipeline/bioindex/variants.py")
 
@@ -91,6 +95,7 @@ class BioIndexProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) 
       case "datasets"         => Seq(JobStep.PySpark(datasetsScript))
       case "genes"            => Seq(JobStep.PySpark(genesScript))
       case "globalEnrichment" => Seq(JobStep.PySpark(globalEnrichmentScript))
+      case "plots"            => Seq(JobStep.Script(plotsScript))
       case "regions"          => Seq(JobStep.PySpark(regionsScript))
       case "variants"         => Seq(JobStep.PySpark(variantsScript))
     }
