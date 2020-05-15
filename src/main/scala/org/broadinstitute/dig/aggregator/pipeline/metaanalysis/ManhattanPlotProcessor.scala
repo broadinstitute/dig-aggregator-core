@@ -1,5 +1,7 @@
 package org.broadinstitute.dig.aggregator.pipeline.metaanalysis
 
+import java.net.URI
+
 import org.broadinstitute.dig.aggregator.core.Processor
 import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
@@ -45,6 +47,15 @@ class ManhattanPlotProcessor(name: Processor.Name, config: BaseConfig, pool: DbP
     "pipeline/metaanalysis/manhattan.R",
   )
 
+  val installR: URI = aws.uriOf("resources/pipeline/metaanalysis/install-R.sh")
+
+  // cluster definition to run jobs
+  override val cluster: Cluster = super.cluster.copy(
+    masterInstanceType = InstanceType.m5_4xlarge,
+    instances = 1,
+    bootstrapScripts = Seq(new BootstrapScript(installR)),
+  )
+
   /** The phenotype of each input phenotype is a plot for that phenotype.
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
@@ -53,25 +64,11 @@ class ManhattanPlotProcessor(name: Processor.Name, config: BaseConfig, pool: DbP
 
   /** Take all the phenotype results from the dependencies and process them.
     */
-  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
-    val installR   = aws.uriOf("resources/pipeline/metaanalysis/install-R.sh")
+  override def getJob(output: String): Seq[JobStep] = {
     val plotScript = aws.uriOf("resources/pipeline/metaanalysis/makePlot.sh")
-
-    // cluster definition to run jobs
-    val cluster = Cluster(
-      name = name.toString,
-      masterInstanceType = InstanceType.m5_4xlarge,
-      instances = 1,
-      masterVolumeSizeInGB = 100,
-      bootstrapScripts = Seq(new BootstrapScript(installR)),
-    )
+    val phenotype  = output
 
     // create a job for each output (phenotype)
-    val jobs = outputs.map { phenotype =>
-      Seq(JobStep.Script(plotScript, phenotype))
-    }
-
-    // wait for all the jobs to complete, then insert all the results
-    aws.runJobs(cluster, jobs)
+    Seq(JobStep.Script(plotScript, phenotype))
   }
 }

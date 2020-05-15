@@ -7,5 +7,4 @@ import org.broadinstitute.dig.aws.config.AWSConfig
 final case class BaseConfig(
     aws: AWSConfig,
     mysql: MySQLConfig,
-    neo4j: Neo4jConfig,
 )

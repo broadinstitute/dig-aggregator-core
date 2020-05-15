@@ -40,6 +40,11 @@ class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: Db
     "pipeline/varianteffect/loadCQS.py"
   )
 
+  // EMR cluster to run the job steps on
+  override val cluster: Cluster = super.cluster.copy(
+    configurations = Seq(Spark.Env().withPython3, Spark.Config().withMaximizeResourceAllocation)
+  )
+
   /** Only a single output for VEP that uses ALL effects.
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
@@ -48,24 +53,9 @@ class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: Db
 
   /** All effect results are combined together, so the results list is ignored.
     */
-  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
+  override def getJob(output: String): Seq[JobStep] = {
     val scriptUri = aws.uriOf("resources/pipeline/varianteffect/loadCQS.py")
 
-    // EMR cluster to run the job steps on
-    val cluster = Cluster(
-      name = name.toString,
-      masterInstanceType = InstanceType.c5_4xlarge,
-      slaveInstanceType = InstanceType.c5_4xlarge,
-      instances = 4,
-      configurations = Seq(
-        Spark.Env().withPython3,
-        Spark.Config().withMaximizeResourceAllocation,
-      )
-    )
-
-    for {
-      _ <- IO(logger.info(s"Loading variant consequences..."))
-      _ <- aws.runJob(cluster, JobStep.PySpark(scriptUri))
-    } yield ()
+    Seq(JobStep.PySpark(scriptUri))
   }
 }

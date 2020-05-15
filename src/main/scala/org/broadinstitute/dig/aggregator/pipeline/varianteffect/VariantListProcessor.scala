@@ -29,6 +29,13 @@ class VariantListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPoo
     "pipeline/varianteffect/listVariants.py"
   )
 
+  /* Define settings for the cluster to run the job.
+   */
+  override val cluster: Cluster = super.cluster.copy(
+    masterVolumeSizeInGB = 400,
+    slaveVolumeSizeInGB = 400,
+  )
+
   /** Only a single output for VEP that uses ALL datasets.
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
@@ -39,25 +46,9 @@ class VariantListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPoo
     * actually ignored, and _everything_ is reprocessed. This is done because
     * there is only a single analysis node for all variants.
     */
-  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
+  override def getJob(output: String): Seq[JobStep] = {
     val pyScript = aws.uriOf("resources/pipeline/varianteffect/listVariants.py")
 
-    // define settings for the cluster to run the job
-    val cluster = Cluster(
-      name = name.toString,
-      instances = 5,
-      masterInstanceType = InstanceType.c5_4xlarge,
-      slaveInstanceType = InstanceType.c5_2xlarge,
-      masterVolumeSizeInGB = 400,
-      slaveVolumeSizeInGB = 400,
-      configurations = Seq(
-        Spark.Env().withPython3,
-      )
-    )
-
-    for {
-      _ <- IO(logger.info("Processing datasets..."))
-      _ <- aws.runJob(cluster, JobStep.PySpark(pyScript))
-    } yield ()
+    Seq(JobStep.PySpark(pyScript))
   }
 }

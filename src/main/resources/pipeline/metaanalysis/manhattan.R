@@ -1,7 +1,7 @@
 #!/mnt/var/install/R-4.0.0/bin/Rscript
 
-w <- 460
-h <- 300
+w <- 800
+h <- 400
 
 # load required libraries
 library(grDevices)
@@ -39,6 +39,7 @@ dev.off()
 
 # generate qq plot
 png('qq.png', width=w, height=h)
+par(bty='L')
 qq(df$P)
 dev.off()
 

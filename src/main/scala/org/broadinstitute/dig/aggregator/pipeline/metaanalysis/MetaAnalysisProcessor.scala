@@ -49,6 +49,13 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPo
     "scripts/getmerge-strip-headers.sh"
   )
 
+  /* Cluster definition to run jobs.
+   */
+  override val cluster: Cluster = super.cluster.copy(
+    masterVolumeSizeInGB = 800,
+    bootstrapScripts = Seq(new BootstrapScript(aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh"))),
+  )
+
   /** The phenotype of each dataset is the output.
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
@@ -61,36 +68,12 @@ class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPo
 
   /** Take all the phenotype results from the dependencies and process them.
     */
-  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
-    val bootstrapUri = aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh")
-
-    // cluster definition to run jobs
-    val cluster = Cluster(
-      name = name.toString,
-      masterInstanceType = InstanceType.c5_4xlarge,
-      slaveInstanceType = InstanceType.c5_2xlarge,
-      instances = 4,
-      masterVolumeSizeInGB = 800,
-      bootstrapScripts = Seq(new BootstrapScript(bootstrapUri)),
-      configurations = Seq(
-        Spark.Env().withPython3,
-      )
-    )
-
-    // create a job for each output (phenotype); cluster them
-    val jobs = outputs.map(processPhenotype)
-
-    // wait for all the jobs to complete, then insert all the results
-    aws.runJobs(cluster, jobs)
-  }
-
-  /** Create a cluster and process a single phenotype.
-    */
-  private def processPhenotype(phenotype: String): Seq[JobStep] = {
+  override def getJob(output: String): Seq[JobStep] = {
     val partition        = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
     val ancestrySpecific = aws.uriOf("resources/pipeline/metaanalysis/runAncestrySpecific.sh")
     val transEthnic      = aws.uriOf("resources/pipeline/metaanalysis/runTransEthnic.sh")
     val loadAnalysis     = aws.uriOf("resources/pipeline/metaanalysis/loadAnalysis.py")
+    val phenotype        = output
 
     Seq(
       JobStep.PySpark(partition, phenotype),

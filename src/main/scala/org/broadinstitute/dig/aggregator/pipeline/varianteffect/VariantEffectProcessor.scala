@@ -1,5 +1,7 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
+import java.net.URI
+
 import org.broadinstitute.dig.aggregator.core.Processor
 import org.broadinstitute.dig.aggregator.core.Run
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
@@ -7,7 +9,6 @@ import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.BootstrapScript
 import org.broadinstitute.dig.aws.emr.Cluster
 import org.broadinstitute.dig.aws.emr.InstanceType
-
 import cats.effect.IO
 import org.broadinstitute.dig.aggregator.core.DbPool
 
@@ -44,34 +45,33 @@ class VariantEffectProcessor(name: Processor.Name, config: BaseConfig, pool: DbP
     "pipeline/varianteffect/runVEP.pl"
   )
 
+  val clusterBootstrap: URI = aws.uriOf("resources/pipeline/varianteffect/cluster-bootstrap.sh")
+  val installScript: URI    = aws.uriOf("resources/pipeline/varianteffect/installVEP.sh")
+
+  // definition of each VM "cluster" (of 1 machine) that will run VEP
+  override val cluster: Cluster = super.cluster.copy(
+    masterInstanceType = InstanceType.c5_9xlarge,
+    instances = 1,
+    masterVolumeSizeInGB = 800,
+    applications = Seq.empty,
+    bootstrapScripts = Seq(new BootstrapScript(clusterBootstrap)),
+    bootstrapSteps = Seq(JobStep.Script(installScript))
+  )
+
   /** Only a single output for VEP that uses ALL variants.
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
     Processor.Outputs(Seq("VEP/effects"))
   }
 
-  /**
-    * The results are ignored, as all the variants are refreshed and everything
+  /** The results are ignored, as all the variants are refreshed and everything
     * needs to be run through VEP again.
     */
-  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
-    val clusterBootstrap = aws.uriOf("resources/pipeline/varianteffect/cluster-bootstrap.sh")
-    val installScript    = aws.uriOf("resources/pipeline/varianteffect/installVEP.sh")
-    val runScript        = aws.uriOf("resources/pipeline/varianteffect/runVEP.pl")
-
-    // definition of each VM "cluster" (of 1 machine) that will run VEP
-    val cluster = Cluster(
-      name = name.toString,
-      masterInstanceType = InstanceType.c5_9xlarge,
-      instances = 1,
-      masterVolumeSizeInGB = 800,
-      applications = Seq.empty,
-      bootstrapScripts = Seq(new BootstrapScript(clusterBootstrap)),
-      bootstrapSteps = Seq(JobStep.Script(installScript))
-    )
+  override def getJob(output: String): Seq[JobStep] = {
+    val runScript = aws.uriOf("resources/pipeline/varianteffect/runVEP.pl")
 
     for {
-      // delete all the existing effects for the dataset
+      // delete all the existing effects
       _ <- aws.rmdir(s"out/varianteffect/effects/")
 
       // get all the variant part files to process

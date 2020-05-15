@@ -43,28 +43,11 @@ class SNPListProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool) e
 
   /** Find all the unique SNPs from all the output of the meta-analysis processor.
     */
-  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
-    val script = aws.uriOf("resources/pipeline/gregor/snplist.py")
-
-    // cluster configuration used to process each phenotype
-    val cluster = Cluster(
-      name = name.toString,
-      masterInstanceType = InstanceType.m5_2xlarge,
-      slaveInstanceType = InstanceType.m5_2xlarge,
-      configurations = Seq(
-        Spark.Env().withPython3,
-      )
-    )
+  override def getJob(output: String): Seq[JobStep] = {
+    val script    = aws.uriOf("resources/pipeline/gregor/snplist.py")
+    val phenotype = output
 
     // each phenotype gets its own snp list output
-    val phenotypes = outputs
-
-    // create a job per phenotype
-    val jobs = phenotypes.map { phenotype =>
-      Seq(JobStep.PySpark(script, phenotype))
-    }
-
-    // run the jobs
-    aws.runJobs(cluster, jobs)
+    Seq(JobStep.PySpark(script, phenotype))
   }
 }

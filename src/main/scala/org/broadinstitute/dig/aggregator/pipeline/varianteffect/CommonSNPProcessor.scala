@@ -36,6 +36,19 @@ class CommonSNPProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
     "pipeline/varianteffect/common.py"
   )
 
+  // EMR cluster to run the job steps on
+  override val cluster: Cluster = super.cluster.copy(
+    masterInstanceType = InstanceType.m5_4xlarge,
+    slaveInstanceType = InstanceType.m5_8xlarge,
+    instances = 4,
+    configurations = Seq(
+      Spark.Env().withPython3,
+      Spark.Config().withMaximizeResourceAllocation,
+      Spark.Defaults().withExecutorMemory(20.gb).withExecutorMemoryOverhead(4.gb),
+      Spark.MapReduce().withMapMemory(8.gb).withReduceMemory(8.gb),
+    ),
+  )
+
   /** Only a single output for VEP that uses ALL effects.
     */
   override def getOutputs(input: Run.Result): Processor.OutputList = {
@@ -44,23 +57,9 @@ class CommonSNPProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
 
   /** All effect results are combined together, so the results list is ignored.
     */
-  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
+  override def getJob(output: String): Seq[JobStep] = {
     val scriptUri = aws.uriOf("resources/pipeline/varianteffect/common.py")
 
-    // EMR cluster to run the job steps on
-    val cluster = Cluster(
-      name = name.toString,
-      masterInstanceType = InstanceType.m5_4xlarge,
-      slaveInstanceType = InstanceType.m5_8xlarge,
-      instances = 4,
-      configurations = Seq(
-        Spark.Env().withPython3,
-        Spark.Config().withMaximizeResourceAllocation,
-        Spark.Defaults().withExecutorMemory(20.gb).withExecutorMemoryOverhead(4.gb),
-        Spark.MapReduce().withMapMemory(8.gb).withReduceMemory(8.gb),
-      ),
-    )
-
-    aws.runJob(cluster, JobStep.PySpark(scriptUri))
+    Seq(JobStep.PySpark(scriptUri))
   }
 }

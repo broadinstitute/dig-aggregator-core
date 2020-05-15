@@ -3,9 +3,9 @@ package org.broadinstitute.dig.aggregator.app
 import cats.effect._
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dig.aggregator.core.{DbPool, Email, Processor, Run}
-import org.broadinstitute.dig.aggregator.pipeline._
+import org.broadinstitute.dig.aggregator.core.{DbPool, Email, Pipeline, Processor, Run}
 
+import java.io.File
 import scala.io.StdIn
 
 object Main extends IOApp with LazyLogging {
@@ -21,8 +21,7 @@ object Main extends IOApp with LazyLogging {
     if (opts.version()) {
       IO.pure(ExitCode.Success)
     } else {
-      // side-effect code that registers all the pipelines and processors
-      Pipeline.pipelines()
+      Pipeline.loadAll(new File("c:/users/jeff/desktop/pipelines.json"))
 
       // choose the run function
       val run: (String, Opts) => IO[Unit] = {

@@ -13,6 +13,4 @@ object TranscriptionFactorsPipeline extends Pipeline {
     */
   val transcriptionFactorsProcessor: Name =
     register("TranscriptionFactorsProcessor", new TranscriptionFactorsProcessor(_, _, _))
-  val uploadTranscriptionFactorsProcessor: Name =
-    register("UploadTranscriptionFactorsProcessor", new UploadTranscriptionFactorsProcessor(_, _, _))
 }

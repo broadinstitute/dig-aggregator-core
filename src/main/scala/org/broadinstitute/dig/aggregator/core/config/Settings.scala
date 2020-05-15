@@ -19,9 +19,8 @@ final case class Settings(aws: AWSConfig, mysqlSecretId: String, neo4jSecretId: 
   /** Download secrets and build the BaseConfig from the Settings. */
   lazy val config: BaseConfig = {
     val mysqlConfig = Secrets.get[MySQLConfig](mysqlSecretId)
-    val neo4jConfig = Secrets.get[Neo4jConfig](neo4jSecretId)
 
-    BaseConfig(aws, mysqlConfig.get, neo4jConfig.get)
+    BaseConfig(aws, mysqlConfig.get)
   }
 }
 

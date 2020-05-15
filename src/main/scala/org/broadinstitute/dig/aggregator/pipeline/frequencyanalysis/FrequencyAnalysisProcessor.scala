@@ -35,6 +35,21 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool:
     "pipeline/frequencyanalysis/frequencyAnalysis.py"
   )
 
+  /* Cluster configuration used to process frequency.
+   */
+  override val cluster: Cluster = Cluster(
+    name = name.toString,
+    instances = 5,
+    masterInstanceType = InstanceType.c5_9xlarge,
+    slaveInstanceType = InstanceType.c5_9xlarge,
+    masterVolumeSizeInGB = 500,
+    slaveVolumeSizeInGB = 500,
+    configurations = Seq(
+      Spark.Env().withPython3,
+      Spark.Config().withMaximizeResourceAllocation,
+    )
+  )
+
   /** Unique ancestries to process.
     */
   private val ancestries = Seq("AA", "AF", "EA", "EU", "HS", "SA")
@@ -47,27 +62,11 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool:
 
   /** For each phenotype output, process all the datasets for it.
     */
-  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
-    val script = aws.uriOf("resources/pipeline/frequencyanalysis/frequencyAnalysis.py")
+  override def getJob(output: String): Seq[JobStep] = {
+    val script   = aws.uriOf("resources/pipeline/frequencyanalysis/frequencyAnalysis.py")
+    val ancestry = output
 
-    // cluster configuration used to process each phenotype
-    val cluster = Cluster(
-      name = name.toString,
-      instances = 5,
-      masterInstanceType = InstanceType.c5_9xlarge,
-      slaveInstanceType = InstanceType.c5_9xlarge,
-      masterVolumeSizeInGB = 500,
-      slaveVolumeSizeInGB = 500,
-      configurations = Seq(
-        Spark.Env().withPython3,
-        Spark.Config().withMaximizeResourceAllocation,
-      )
-    )
-
-    val jobs = outputs.map { ancestry =>
-      Seq(JobStep.PySpark(script, ancestry))
-    }
-
-    aws.runJobs(cluster, jobs)
+    // output is an ancestry
+    Seq(JobStep.PySpark(script, ancestry))
   }
 }

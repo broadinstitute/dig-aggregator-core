@@ -3,15 +3,13 @@ package org.broadinstitute.dig.aggregator.core
 import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
-
 import com.typesafe.scalalogging.LazyLogging
-
 import doobie._
-
 import java.util.UUID
 
 import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aws.AWS
+import org.broadinstitute.dig.aws.{AWS, JobStep}
+import org.broadinstitute.dig.aws.emr.{Cluster, InstanceType, Spark}
 
 /** Each processor has a globally unique name and a run function. */
 abstract class Processor(val name: Processor.Name,
@@ -34,6 +32,19 @@ abstract class Processor(val name: Processor.Name,
     */
   val dependencies: Seq[Processor.Name]
 
+  /** The cluster definition to instantiate for this processor. This is a
+    * very basic configuration that should work for a good number of jobs.
+    */
+  val cluster: Cluster = Cluster(
+    name = name.toString,
+    masterInstanceType = InstanceType.c5_4xlarge,
+    slaveInstanceType = InstanceType.c5_2xlarge,
+    instances = 5,
+    masterVolumeSizeInGB = 100,
+    slaveVolumeSizeInGB = 50,
+    configurations = Seq(Spark.Env().withPython3)
+  )
+
   /** AWS client for uploading resources and running jobs. */
   protected val aws: AWS = new AWS(config.aws)
 
@@ -45,8 +56,18 @@ abstract class Processor(val name: Processor.Name,
     */
   def getOutputs(input: Run.Result): Processor.OutputList
 
+  /** Given an output, returns a sequence of job steps to be executed on
+    * the cluster.
+    */
+  def getJob(output: String): Seq[JobStep]
+
   /** Process a set of run results. */
-  def processOutputs(output: Seq[String]): IO[_]
+  def processOutputs(output: Seq[String]): IO[Unit] = {
+    val jobs = output.map(getJob)
+
+    // spins up the cluster(s) and runs all the jobs
+    aws.runJobs(cluster, jobs)
+  }
 
   /** Using all the outputs returned from `getOutputs`, build a map of
     * output -> seq[input], which will be written to the database.

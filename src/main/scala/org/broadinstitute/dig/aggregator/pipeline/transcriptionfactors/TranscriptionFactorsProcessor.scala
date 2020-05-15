@@ -35,21 +35,10 @@ class TranscriptionFactorsProcessor(name: Processor.Name, config: BaseConfig, po
   /** With a new variants list or new regions, need to reprocess and get a list
     * of all regions with the variants that they overlap.
     */
-  override def processOutputs(outputs: Seq[String]): IO[Unit] = {
+  override def getJob(output: String): Seq[JobStep] = {
     val script = aws.uriOf("resources/pipeline/transcriptionfactors/transcriptionFactors.py")
 
-    // cluster configuration used to process each phenotype
-    val cluster = Cluster(
-      name = name.toString,
-      masterInstanceType = InstanceType.c5_4xlarge,
-      slaveInstanceType = InstanceType.c5_2xlarge,
-      instances = 5,
-      configurations = Seq(
-        Spark.Env().withPython3,
-      )
-    )
-
     // there's only a single output that ever needs processed.
-    aws.runJob(cluster, JobStep.PySpark(script))
+    Seq(JobStep.PySpark(script))
   }
 }
