@@ -1,12 +1,7 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
-import org.broadinstitute.dig.aggregator.core.Processor
-import org.broadinstitute.dig.aggregator.core.Run
-import org.broadinstitute.dig.aggregator.core.config.BaseConfig
+import org.broadinstitute.dig.aggregator.core.{Stage, Run}
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{Cluster, InstanceType, Spark}
-import cats.effect.IO
-import org.broadinstitute.dig.aggregator.core.DbPool
 
 /** After all the variants across all datasets have had VEP run on them in the
   * previous step, the results must be joined together. This is done by loading
@@ -25,36 +20,24 @@ import org.broadinstitute.dig.aggregator.core.DbPool
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class LoadVariantCQSProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
-    extends Processor(name, config, pool) {
+class LoadVariantCQSStage extends Stage {
 
   /** All the processors this processor depends on.
     */
-  override val dependencies: Seq[Processor.Name] = Seq(
-    VariantEffectPipeline.variantEffectProcessor
-  )
-
-  /** All the job scripts that need to be uploaded to AWS.
-    */
-  override val resources: Seq[String] = Seq(
-    "pipeline/varianteffect/loadCQS.py"
-  )
-
-  // EMR cluster to run the job steps on
-  override val cluster: Cluster = super.cluster.copy(
-    configurations = Seq(Spark.Env().withPython3, Spark.Config().withMaximizeResourceAllocation)
+  override val dependencies: Seq[Run.Input.Source] = Seq(
+    Run.Input.Source.Success("out/varianteffect/effects/"),
   )
 
   /** Only a single output for VEP that uses ALL effects.
     */
-  override def getOutputs(input: Run.Result): Processor.OutputList = {
-    Processor.Outputs(Seq("VEP/CQS"))
+  override def getOutputs(input: Run.Input): Stage.Outputs = {
+    Stage.Outputs.Set("VEP/CQS")
   }
 
   /** All effect results are combined together, so the results list is ignored.
     */
   override def getJob(output: String): Seq[JobStep] = {
-    val scriptUri = aws.uriOf("resources/pipeline/varianteffect/loadCQS.py")
+    val scriptUri = resourceURI("pipeline/varianteffect/loadCQS.py")
 
     Seq(JobStep.PySpark(scriptUri))
   }

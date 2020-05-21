@@ -1,13 +1,8 @@
 package org.broadinstitute.dig.aggregator.pipeline.metaanalysis
 
-import org.broadinstitute.dig.aggregator.core.Processor
-import org.broadinstitute.dig.aggregator.core.Run
-import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
+import org.broadinstitute.dig.aggregator.core.{Stage, Run}
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{BootstrapScript, Cluster, InstanceType, Spark}
-import cats.effect.IO
-import org.broadinstitute.dig.aggregator.core.DbPool
+import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef}
 
 /** After all the variants for a particular phenotype have been processed and
   * partitioned, meta-analysis is run on them.
@@ -30,49 +25,44 @@ import org.broadinstitute.dig.aggregator.core.DbPool
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class MetaAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
-    extends Processor(name, config, pool) {
+class MetaAnalysisStage extends Stage {
 
   /** Processor inputs.
     */
-  override val dependencies: Seq[Processor.Name] = Seq(IntakePipeline.variants)
+  override val dependencies: Seq[Run.Input.Source] = Seq(
+    Run.Input.Source.Dataset("variants/"),
+  )
 
-  /** All the job scripts that need to be uploaded to AWS.
-    */
-  override val resources: Seq[String] = Seq(
-    "pipeline/metaanalysis/cluster-bootstrap.sh",
-    "pipeline/metaanalysis/partitionVariants.py",
+  /** Additional resources to upload. */
+  override def additionalResources: Seq[String] = Seq(
     "pipeline/metaanalysis/runMETAL.sh",
-    "pipeline/metaanalysis/runAncestrySpecific.sh",
-    "pipeline/metaanalysis/runTransEthnic.sh",
-    "pipeline/metaanalysis/loadAnalysis.py",
-    "scripts/getmerge-strip-headers.sh"
+    "scripts/getmerge-strip-headers.sh",
   )
 
   /* Cluster definition to run jobs.
    */
-  override val cluster: Cluster = super.cluster.copy(
+  override def cluster: ClusterDef = super.cluster.copy(
     masterVolumeSizeInGB = 800,
-    bootstrapScripts = Seq(new BootstrapScript(aws.uriOf("resources/pipeline/metaanalysis/cluster-bootstrap.sh"))),
+    bootstrapScripts = Seq(new BootstrapScript(resourceURI("pipeline/metaanalysis/cluster-bootstrap.sh"))),
   )
 
   /** The phenotype of each dataset is the output.
     */
-  override def getOutputs(input: Run.Result): Processor.OutputList = {
-    val pattern = raw"([^/]+)/(.*)".r
+  override def getOutputs(input: Run.Input): Stage.Outputs = {
+    val pattern = raw"variants/([^/]+)/([^/]+)/.*".r
 
-    input.output match {
-      case pattern(_, phenotype) => Processor.Outputs(Seq(phenotype))
+    input.key match {
+      case pattern(_, phenotype) => Stage.Outputs.Set(phenotype)
     }
   }
 
   /** Take all the phenotype results from the dependencies and process them.
     */
   override def getJob(output: String): Seq[JobStep] = {
-    val partition        = aws.uriOf("resources/pipeline/metaanalysis/partitionVariants.py")
-    val ancestrySpecific = aws.uriOf("resources/pipeline/metaanalysis/runAncestrySpecific.sh")
-    val transEthnic      = aws.uriOf("resources/pipeline/metaanalysis/runTransEthnic.sh")
-    val loadAnalysis     = aws.uriOf("resources/pipeline/metaanalysis/loadAnalysis.py")
+    val partition        = resourceURI("pipeline/metaanalysis/partitionVariants.py")
+    val ancestrySpecific = resourceURI("pipeline/metaanalysis/runAncestrySpecific.sh")
+    val transEthnic      = resourceURI("pipeline/metaanalysis/runTransEthnic.sh")
+    val loadAnalysis     = resourceURI("pipeline/metaanalysis/loadAnalysis.py")
     val phenotype        = output
 
     Seq(

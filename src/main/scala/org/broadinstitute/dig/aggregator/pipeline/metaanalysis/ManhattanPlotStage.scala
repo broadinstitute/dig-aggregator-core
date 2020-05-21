@@ -2,14 +2,9 @@ package org.broadinstitute.dig.aggregator.pipeline.metaanalysis
 
 import java.net.URI
 
-import org.broadinstitute.dig.aggregator.core.Processor
-import org.broadinstitute.dig.aggregator.core.Run
-import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
+import org.broadinstitute.dig.aggregator.core.{Glob, Run, Stage}
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{BootstrapScript, Cluster, InstanceType, Spark}
-import cats.effect.IO
-import org.broadinstitute.dig.aggregator.core.DbPool
+import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef, InstanceType}
 
 /** After all the variants for a particular phenotype have been processed and
   * partitioned, meta-analysis is run on them.
@@ -32,25 +27,18 @@ import org.broadinstitute.dig.aggregator.core.DbPool
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class ManhattanPlotProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
-    extends Processor(name, config, pool) {
+class ManhattanPlotStage extends Stage {
 
   /** Processor inputs.
     */
-  override val dependencies: Seq[Processor.Name] = Seq(MetaAnalysisPipeline.metaAnalysisProcessor)
-
-  /** All the job scripts that need to be uploaded to AWS.
-    */
-  override val resources: Seq[String] = Seq(
-    "pipeline/metaanalysis/install-R.sh",
-    "pipeline/metaanalysis/makePlot.sh",
-    "pipeline/metaanalysis/manhattan.R",
+  override val dependencies: Seq[Run.Input.Source] = Seq(
+    Run.Input.Source.Success("out/metaanalysis/trans-ethnic/"),
   )
 
-  val installR: URI = aws.uriOf("resources/pipeline/metaanalysis/install-R.sh")
+  lazy val installR: URI = resourceURI("pipeline/metaanalysis/install-R.sh")
 
   // cluster definition to run jobs
-  override val cluster: Cluster = super.cluster.copy(
+  override def cluster: ClusterDef = super.cluster.copy(
     masterInstanceType = InstanceType.m5_4xlarge,
     instances = 1,
     bootstrapScripts = Seq(new BootstrapScript(installR)),
@@ -58,14 +46,19 @@ class ManhattanPlotProcessor(name: Processor.Name, config: BaseConfig, pool: DbP
 
   /** The phenotype of each input phenotype is a plot for that phenotype.
     */
-  override def getOutputs(input: Run.Result): Processor.OutputList = {
-    Processor.Outputs(Seq(input.output))
+  override def getOutputs(input: Run.Input): Stage.Outputs = {
+    val pattern = Glob("out/metaanalysis/trans-ethnic/*/...")
+
+    input.key match {
+      case pattern(phenotype) => Stage.Outputs.Set(phenotype)
+    }
   }
 
   /** Take all the phenotype results from the dependencies and process them.
     */
   override def getJob(output: String): Seq[JobStep] = {
-    val plotScript = aws.uriOf("resources/pipeline/metaanalysis/makePlot.sh")
+    val plotScript = resourceURI("pipeline/metaanalysis/makePlot.sh")
+    val _          = resourceURI("pipeline/metaanalysis/manhattan.R")
     val phenotype  = output
 
     // create a job for each output (phenotype)

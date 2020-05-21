@@ -1,13 +1,8 @@
 package org.broadinstitute.dig.aggregator.pipeline.frequencyanalysis
 
-import org.broadinstitute.dig.aggregator.core.Processor
-import org.broadinstitute.dig.aggregator.core.Run
-import org.broadinstitute.dig.aggregator.core.config.BaseConfig
-import org.broadinstitute.dig.aggregator.pipeline.intake.IntakePipeline
+import org.broadinstitute.dig.aggregator.core.{Stage, Run}
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{Cluster, InstanceType, Spark}
-import cats.effect.IO
-import org.broadinstitute.dig.aggregator.core.DbPool
+import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType}
 
 /** After all the variants for a particular phenotype have been uploaded, the
   * frequency processor runs a Spark job that will calculate the average EAF
@@ -22,32 +17,22 @@ import org.broadinstitute.dig.aggregator.core.DbPool
   *
   *  s3://dig-analysis-data/out/frequencyanalysis/<ancestry>/part-*
   */
-class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool: DbPool)
-    extends Processor(name, config, pool) {
+class FrequencyAnalysisStage extends Stage {
 
   /** Source data to consume.
     */
-  override val dependencies: Seq[Processor.Name] = Seq(IntakePipeline.variants)
-
-  /** All the job scripts that need to be uploaded to AWS.
-    */
-  override val resources: Seq[String] = Seq(
-    "pipeline/frequencyanalysis/frequencyAnalysis.py"
+  override val dependencies: Seq[Run.Input.Source] = Seq(
+    Run.Input.Source.Dataset("variants/"),
   )
 
   /* Cluster configuration used to process frequency.
    */
-  override val cluster: Cluster = Cluster(
-    name = name.toString,
+  override def cluster: ClusterDef = super.cluster.copy(
     instances = 5,
     masterInstanceType = InstanceType.c5_9xlarge,
     slaveInstanceType = InstanceType.c5_9xlarge,
     masterVolumeSizeInGB = 500,
     slaveVolumeSizeInGB = 500,
-    configurations = Seq(
-      Spark.Env().withPython3,
-      Spark.Config().withMaximizeResourceAllocation,
-    )
   )
 
   /** Unique ancestries to process.
@@ -56,14 +41,14 @@ class FrequencyAnalysisProcessor(name: Processor.Name, config: BaseConfig, pool:
 
   /** Each ancestry gets its own output.
     */
-  override def getOutputs(input: Run.Result): Processor.OutputList = {
-    Processor.Outputs(ancestries)
+  override def getOutputs(input: Run.Input): Stage.Outputs = {
+    Stage.Outputs.Set(ancestries: _*)
   }
 
   /** For each phenotype output, process all the datasets for it.
     */
   override def getJob(output: String): Seq[JobStep] = {
-    val script   = aws.uriOf("resources/pipeline/frequencyanalysis/frequencyAnalysis.py")
+    val script   = resourceURI("pipeline/frequencyanalysis/frequencyAnalysis.py")
     val ancestry = output
 
     // output is an ancestry

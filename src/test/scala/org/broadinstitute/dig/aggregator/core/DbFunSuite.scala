@@ -32,7 +32,7 @@ trait DbFunSuite extends FunSuite with ProvidesH2Transactor {
     def insert(a: A): IO[_]
   }
 
-  def insertRun(processor: Processor.Name, inputs: NonEmptyList[UUID]): UUID = {
+  def insertRun(processor: Stage.Name, inputs: NonEmptyList[UUID]): UUID = {
     Run.insert(pool, processor, s"${processor}_output", inputs).unsafeRunSync
   }
 

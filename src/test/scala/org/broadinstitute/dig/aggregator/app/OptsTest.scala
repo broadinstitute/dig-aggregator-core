@@ -1,12 +1,13 @@
 package org.broadinstitute.dig.aggregator.app
 
+import org.broadinstitute.dig.aggregator.core.Opts
 import org.scalatest.FunSuite
 import org.rogach.scallop.exceptions.ScallopException
 
 /**
- * @author clint
- * Jul 24, 2018
- */
+  * @author clint
+  * Jul 24, 2018
+  */
 final class OptsTest extends FunSuite {
 
   private def opts(commandLine: String): Opts = {

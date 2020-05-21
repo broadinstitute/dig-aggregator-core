@@ -11,7 +11,7 @@ import org.scalatest.FunSuite
 import scala.io.Source
 
 object TestProcessor {
-  import Processor.{Name, register}
+  import Stage.{Name, register}
 
   // used for instantiating a dummy processor
   lazy val dummyConfig: BaseConfig = {
@@ -28,21 +28,21 @@ object TestProcessor {
 
   /** Creates a new instance of a dummy processor.
     */
-  def makeProcessor(dep: Name*)(processorName: Name, c: BaseConfig, pool: DbPool): Processor = {
-    new Processor(processorName, c, pool) {
+  def makeProcessor(dep: Name*)(processorName: Name, c: BaseConfig, pool: DbPool): Stage = {
+    new Stage(processorName, c, pool) {
 
       /** No dependencies to upload. */
-      override val dependencies: Seq[Processor.Name] = dep
+      override val dependencies: Seq[Stage.Name] = dep
 
       /** Generate an output that's the same name as the processor. */
-      override def getOutputs(input: Run.Result): Processor.OutputList =
-        Processor.Outputs(Seq(s"${name.toString}_output"))
+      override def getOutputs(input: Run.Result): Stage.OutputList =
+        Stage.Outputs(Seq(s"${name.toString}_output"))
 
       /** Nothing to do. */
       override def processOutputs(outputs: Seq[String]): IO[Unit] = IO.unit
 
       /** Does nothing, just here for the trait. */
-      override def run(opts: Processor.Opts): IO[Unit] = IO.unit
+      override def run(opts: Stage.Opts): IO[Unit] = IO.unit
     }
   }
 

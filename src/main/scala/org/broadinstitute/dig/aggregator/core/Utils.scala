@@ -11,13 +11,14 @@ import scala.concurrent.duration._
 object Utils {
   import Implicits.timer
 
-  /** Attempt to run an IO operation. If it fails, wait a little bit and then
-    * try again up to `retries` times.
+  /** Attempt to run an IO operation. If it fails, wait a little
+    * bit and then try again up to `retries` times. Applies an
+    * exponential backoff each attempt.
     */
-  def retry[A](ioa: IO[A], retries: Int = 10): IO[A] = {
+  def retry[A](ioa: IO[A], delay: FiniteDuration = 30.seconds, retries: Int = 10): IO[A] = {
     ioa.handleErrorWith { error =>
       if (retries > 0) {
-        IO.sleep(2.seconds) *> retry(ioa, retries - 1)
+        IO.sleep(delay) *> retry(ioa, delay * 2, retries - 1)
       } else {
         IO.raiseError(error)
       }

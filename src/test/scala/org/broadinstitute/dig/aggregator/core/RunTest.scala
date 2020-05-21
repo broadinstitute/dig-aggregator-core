@@ -13,7 +13,7 @@ final class RunTest extends DbFunSuite {
   def makeInput(): UUID = UUID.randomUUID()
 
   // used for getting the work of a processor
-  val dummyOpts: Processor.Opts = Processor.Opts(
+  val dummyOpts: Stage.Opts = Stage.Opts(
     reprocess = false,
     insertRuns = false,
     noInsertRuns = false,
@@ -52,14 +52,14 @@ final class RunTest extends DbFunSuite {
     val b_run = insertRun(TestProcessor.b, NonEmptyList(a_run, Nil))
 
     // get the work that processor b needs to do
-    val b      = Processor(TestProcessor.b)(TestProcessor.dummyConfig, pool).get
+    val b      = Stage(TestProcessor.b)(TestProcessor.dummyConfig, pool).get
     val b_work = b.getWork(dummyOpts).unsafeRunSync()
 
     // make sure that processor b is up to date
     assert(b_work.isEmpty)
 
     // get the work that processor c needs to do
-    val c      = Processor(TestProcessor.c)(TestProcessor.dummyConfig, pool).get
+    val c      = Stage(TestProcessor.c)(TestProcessor.dummyConfig, pool).get
     val c_work = c.getWork(dummyOpts).unsafeRunSync()
 
     // ensure that C_output needs to be made with the input B_output
@@ -72,7 +72,7 @@ final class RunTest extends DbFunSuite {
     val d_run = insertRun(TestProcessor.d, NonEmptyList(makeInput(), Nil))
 
     // get the work that processor e needs to do
-    val e      = Processor(TestProcessor.e)(TestProcessor.dummyConfig, pool).get
+    val e      = Stage(TestProcessor.e)(TestProcessor.dummyConfig, pool).get
     val e_work = e.getWork(dummyOpts).unsafeRunSync()
 
     // ensure that it needs to process both c and d output
