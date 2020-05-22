@@ -17,13 +17,15 @@ object Context {
   def current: Context = _current.value
 
   /** Create a new context and execute a body of code with it. */
-  def use[T](method: Method)(body: => T)(implicit opts: Opts): Try[T] = {
-    for (secret <- opts.config.aws.rds.secret) yield {
-      val db  = DbPool(secret, "test")
-      val aws = new AWS(opts.config.aws)
+  def use[T](method: Method)(body: => T)(implicit opts: Opts): Try[Unit] = Try {
+    val secret = opts.config.aws.rds.secret.get
+    val db     = DbPool(secret, "test")
+    val aws    = new AWS(opts.config.aws)
 
-      // create the new context and execute
-      _current.withValue(Context(aws, db, method))(body)
-    }
+    // create the new context and execute
+    _current.withValue(Context(aws, db, method))(body)
+
+    // close the db connection
+    db.close()
   }
 }

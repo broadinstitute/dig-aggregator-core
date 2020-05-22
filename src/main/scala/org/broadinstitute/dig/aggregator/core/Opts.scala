@@ -45,10 +45,6 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   // test for options that don't go together
   mutuallyExclusive(insertRuns, noInsertRuns)
 
-  // cannot supply --only or --exclude without --stage
-  dependsOnAll(only, List(stage))
-  dependsOnAll(exclude, List(stage))
-
   // parse the command line options
   verify
 
@@ -60,6 +56,9 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
     case e @ ScallopException(msg) => printHelp(msg); throw e
     case ex                        => super.onError(ex)
   }
+
+  /** Just the opposite of --yes. */
+  lazy val dryRun: ScallopOption[Boolean] = yes.map(!_)
 
   /** Private (not in version control) configuration settings. */
   lazy val config: Config = {

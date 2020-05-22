@@ -150,7 +150,7 @@ abstract class Stage extends LazyLogging {
   }
 
   /** Determines the set of things that need to be processed. This is
-    * a mapping of output -> Set[key -> eTag].
+    * a mapping of output -> Set[Input].
     */
   def getWork(opts: Opts): Map[String, Set[Input]] = {
     val lastOutputs = if (opts.reprocess()) Seq.empty else Runs.resultsOf(this)
@@ -185,39 +185,39 @@ abstract class Stage extends LazyLogging {
 
   /** Complete all work and write to the database what was done. */
   def insertRuns(outputs: Map[String, Set[Input]]): Unit = {
-    logger.info("Updating database...")
-
-    for ((output, inputs) <- outputs.toList.sortBy(_._1)) yield {
+    for ((output, inputs) <- outputs.toList.sortBy(_._1)) {
+      logger.info(s"Updating output $output for $getName ($inputs.size inputs)...")
       Runs.insert(this, output, inputs.toList)
     }
-
-    logger.info("Done")
   }
 
-  /** True if this processor has new/updated dependencies. */
-  def hasWork(opts: Opts): Boolean = {
-    getWork(opts).nonEmpty
-  }
-
-  /** Logs the set of things this processor will process if run. */
+  /** Logs the set of outputs this processor will build if run. */
   def showWork(opts: Opts): Unit = {
+    logger.info(s"Finding new/updated inputs of stage $getName...")
+
+    // find all the outputs that need built
     val outputMap = getWork(opts)
 
+    // output them to the log
     if (outputMap.isEmpty) {
-      logger.info("Everything up to date.")
+      logger.info(s"Stage $getName is up to date.")
     } else {
-      outputMap.keys.foreach { output =>
-        logger.info(s"Output $output will be built")
+      for ((output, inputs) <- outputMap) {
+        logger.info(s"Output $output has ${inputs.size} new/updated inputs")
       }
     }
   }
 
   /** Run this stage. */
   def run(opts: Opts): Unit = {
+    logger.info(s"${if (opts.test()) "Testing" else "Running"} stage $getName...")
+
+    // find all the outputs that need built
     val outputMap = getWork(opts)
 
+    // process them
     if (outputMap.isEmpty) {
-      logger.info("Everything up to date.")
+      logger.info(s"$getName is up to date.")
     } else {
       if (!opts.insertRuns()) processOutputs(outputMap.keys.toSeq, opts)
       if (!opts.noInsertRuns()) insertRuns(outputMap)

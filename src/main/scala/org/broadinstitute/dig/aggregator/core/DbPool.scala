@@ -30,4 +30,7 @@ final case class DbPool(secret: RdsConfig.Secret, schema: String) {
 
   /** Quill context. */
   lazy val ctx = new MysqlJdbcContext(LowerCase, dataSource)
+
+  /** Close pool connections. */
+  def close(): Unit = ctx.close()
 }

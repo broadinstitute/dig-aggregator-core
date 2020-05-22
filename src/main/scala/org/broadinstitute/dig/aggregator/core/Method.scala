@@ -2,6 +2,8 @@ package org.broadinstitute.dig.aggregator.core
 
 import com.typesafe.scalalogging.LazyLogging
 
+import scala.util.Failure
+
 /** A method is an object that is broken down into one or more stages and
   * run on data that has been loaded into S3, producing new data, which
   * may be the input to other methods.
@@ -35,62 +37,41 @@ abstract class Method extends LazyLogging {
   }
 
   /** Lookup a stage in this method by name. */
-  def getStage(name: String): Option[Stage] = {
-    stages.find(_.getName == name)
-  }
-
-  /** Output all the work that each processor in the pipeline has to do. This
-    * will only show a single level of work, and not later work that may need
-    * to happen downstream.
-    */
-  def showWork(opts: Opts, stage: Option[String] = None): Unit = {
-    val stagesToRun = stagesWithWork(opts)
-
-    if (stagesToRun.isEmpty) {
-      logger.info("Method output is up to date; nothing to do.")
-    } else {
-      stagesToRun.filter(s => stage.getOrElse(s) == s).foreach { stage =>
-        logger.info(s"Stage ${stage.getName} will be run.")
-      }
+  def getStage(name: String): Stage = {
+    stages.find(_.getName == name).getOrElse {
+      throw new Exception(s"No such stage $name in method.")
     }
   }
 
-  /** Returns the list of stages that have new/updated dependencies. The
-    * order of the stages returned is stable with respect to the order
-    * they were added to the method.
+  /** Get all the stages or just those matching the --stage name.
     */
-  private def stagesWithWork(opts: Opts): List[Stage] = {
-    stages.filter { stage =>
-      logger.info(s"Checking for new/updated inputs for ${stage.getName}...")
-      stage.hasWork(opts)
+  def filterStages(opts: Opts): Seq[Stage] = {
+    opts.stage.toOption match {
+      case None => stages
+      case Some(name) =>
+        stages.filter(_.getName == name) match {
+          case Nil    => throw new Exception(s"""No stages found in $getName matching "$name"""")
+          case stages => stages
+        }
     }
   }
 
-  /** Execute a single stage of the method by name.
+  /** Test stages until one is found to have work, and show what will be
+    * done with it.
     */
-  private def executeStage(name: String, opts: Opts): Unit = {
-    getStage(name).map(_.run(opts)).get
+  def showWork(opts: Opts): Unit = {
+    filterStages(opts) match {
+      case Nil           => logger.warn(s"No stage(s) found in $getName")
+      case stagesToCheck => stagesToCheck.foreach(_.showWork(opts))
+    }
   }
 
   /** Run the entire method.
-    *
-    * This function will determine which stages have new or updated
-    * dependencies and then run them in the order they were added to
-    * the method. Once those stages have completed, this function is
-    * called again recursively. This repeats until there is no more
-    * stages with work.
     */
-  @scala.annotation.tailrec
-  private def execute(opts: Opts): Unit = {
-    val stagesToRun = stagesWithWork(opts)
-
-    if (stagesToRun.isEmpty) {
-      logger.info("Method output is up to date; nothing to do.")
-    } else {
-      stagesToRun.foreach(_.run(opts))
-
-      // recurse until all stages are up-to-date
-      execute(opts)
+  private def run(opts: Opts): Unit = {
+    filterStages(opts) match {
+      case Nil         => logger.warn(s"No stage(s) found in $getName")
+      case stagesToRun => stagesToRun.foreach(_.run(opts))
     }
   }
 
@@ -100,16 +81,19 @@ abstract class Method extends LazyLogging {
   private def confirmReprocess(opts: Opts)(body: => Unit): Unit = {
     import scala.io.StdIn
 
-    def warn(): Boolean = {
-      logger.warn("The reprocess flag was passed. All stages")
-      logger.warn("will be run; are you sure?")
+    def confirm(): Boolean = {
+      val task = opts.stage.toOption.map(getStage).map(_.getName).getOrElse(getName)
+
+      // use the stage name if --stage is provided, otherwise the method name
+      logger.warn(s"The reprocess flag was passed. All inputs to $task")
+      logger.warn("will be treated as new and updated; are you sure?")
 
       // only succeed if the user types in 'y'
       StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")
     }
 
     // warn if needed, or just execute
-    if (!opts.reprocess() || !opts.yes() || warn()) {
+    if (opts.dryRun() || !opts.reprocess() || confirm()) {
       body
     }
   }
@@ -124,7 +108,7 @@ abstract class Method extends LazyLogging {
     implicit val opts: Opts = new Opts(args.toList)
 
     // set implicits for the rest of the execution
-    Context.use(this) {
+    val result = Context.use(this) {
       logger.info(s"Connecting to ${opts.config.aws.rds.instance}")
 
       // ensure the runs table exists
@@ -135,17 +119,20 @@ abstract class Method extends LazyLogging {
 
       // verify the action and execute it
       confirmReprocess(opts) {
-        implicit val method: Method = this
+        if (opts.dryRun()) logger.warn("Dry run; no outputs will be built")
+        if (opts.yes() && opts.test()) logger.warn("Test run; outputs will be built to test location")
 
-        logger.info(s"Running $getName...")
-
-        opts.stage.toOption match {
-          case Some(name) => if (opts.yes()) executeStage(name, opts) else showWork(opts, Some(name))
-          case _          => if (opts.yes()) execute(opts) else showWork(opts)
-        }
+        // run or just show work that would be run if --yes was provided
+        if (opts.yes()) run(opts) else showWork(opts)
       }
+
+      logger.info("Done")
     }
 
-    ()
+    // output any error reported
+    result match {
+      case Failure(ex) => logger.error(ex.getMessage)
+      case _           => ()
+    }
   }
 }
