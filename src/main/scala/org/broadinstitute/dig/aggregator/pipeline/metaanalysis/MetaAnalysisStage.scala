@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.metaanalysis
 
-import org.broadinstitute.dig.aggregator.core.{Stage, Run}
+import org.broadinstitute.dig.aggregator.core.{Stage, Input, Outputs}
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef}
 
@@ -29,8 +29,8 @@ class MetaAnalysisStage extends Stage {
 
   /** Processor inputs.
     */
-  override val dependencies: Seq[Run.Input.Source] = Seq(
-    Run.Input.Source.Dataset("variants/"),
+  override val dependencies: Seq[Input.Source] = Seq(
+    Input.Source.Dataset("variants/"),
   )
 
   /** Additional resources to upload. */
@@ -48,11 +48,11 @@ class MetaAnalysisStage extends Stage {
 
   /** The phenotype of each dataset is the output.
     */
-  override def getOutputs(input: Run.Input): Stage.Outputs = {
+  override def getOutputs(input: Input): Outputs = {
     val pattern = raw"variants/([^/]+)/([^/]+)/.*".r
 
     input.key match {
-      case pattern(_, phenotype) => Stage.Outputs.Set(phenotype)
+      case pattern(_, phenotype) => Outputs.Named(phenotype)
     }
   }
 

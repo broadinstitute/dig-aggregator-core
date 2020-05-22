@@ -1,17 +1,12 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats.effect._
-import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dig.aws.AWS
-
-import scala.io.StdIn
 
 /** A method is an object that is broken down into one or more stages and
   * run on data that has been loaded into S3, producing new data, which
   * may be the input to other methods.
   */
-abstract class Method extends IOApp with LazyLogging {
+abstract class Method extends LazyLogging {
 
   /** All the stages of this method. */
   private var stages = List.empty[Stage]
@@ -48,14 +43,14 @@ abstract class Method extends IOApp with LazyLogging {
     * will only show a single level of work, and not later work that may need
     * to happen downstream.
     */
-  def showWork(opts: Opts, stage: Option[String] = None): IO[Unit] = {
-    for (stagesToRun <- stagesWithWork(opts)) yield {
-      if (stagesToRun.isEmpty) {
-        logger.info("Method output is up to date; nothing to do.")
-      } else {
-        stagesToRun.filter(s => stage.getOrElse(s) == s).foreach { stage =>
-          logger.info(s"Stage ${stage.getName} will be run.")
-        }
+  def showWork(opts: Opts, stage: Option[String] = None): Unit = {
+    val stagesToRun = stagesWithWork(opts)
+
+    if (stagesToRun.isEmpty) {
+      logger.info("Method output is up to date; nothing to do.")
+    } else {
+      stagesToRun.filter(s => stage.getOrElse(s) == s).foreach { stage =>
+        logger.info(s"Stage ${stage.getName} will be run.")
       }
     }
   }
@@ -64,21 +59,17 @@ abstract class Method extends IOApp with LazyLogging {
     * order of the stages returned is stable with respect to the order
     * they were added to the method.
     */
-  private def stagesWithWork(opts: Opts): IO[List[Stage]] = {
-    stages.map(stage => stage.hasWork(opts).map(stage -> _)).sequence.map { stages =>
-      stages.flatMap {
-        case (stage, true) => Some(stage)
-        case _             => None
-      }
+  private def stagesWithWork(opts: Opts): List[Stage] = {
+    stages.filter { stage =>
+      logger.info(s"Checking for new/updated inputs for ${stage.getName}...")
+      stage.hasWork(opts)
     }
   }
 
   /** Execute a single stage of the method by name.
     */
-  private def executeStage(name: String, opts: Opts): IO[Unit] = {
-    getStage(name).map(_.run(opts)).getOrElse {
-      IO.raiseError(new Exception(s"Unknown stage: $name"))
-    }
+  private def executeStage(name: String, opts: Opts): Unit = {
+    getStage(name).map(_.run(opts)).get
   }
 
   /** Run the entire method.
@@ -89,18 +80,27 @@ abstract class Method extends IOApp with LazyLogging {
     * called again recursively. This repeats until there is no more
     * stages with work.
     */
-  private def execute(opts: Opts): IO[Unit] = {
-    stagesWithWork(opts).flatMap {
-      case Nil         => IO(logger.info("Method output is up to date; nothing to do."))
-      case stagesToRun => stagesToRun.map(_.run(opts)).sequence.as(()) >> execute(opts)
+  @scala.annotation.tailrec
+  private def execute(opts: Opts): Unit = {
+    val stagesToRun = stagesWithWork(opts)
+
+    if (stagesToRun.isEmpty) {
+      logger.info("Method output is up to date; nothing to do.")
+    } else {
+      stagesToRun.foreach(_.run(opts))
+
+      // recurse until all stages are up-to-date
+      execute(opts)
     }
   }
 
   /** Checks if both --reprocess and --yes are present. If so, prompt the
     * user to be sure this is what they want to do before executing body.
     */
-  private def confirmReprocess(opts: Opts)(body: => IO[Unit]): IO[Unit] = {
-    val warning = IO {
+  private def confirmReprocess(opts: Opts)(body: => Unit): Unit = {
+    import scala.io.StdIn
+
+    def warn(): Boolean = {
       logger.warn("The reprocess flag was passed. All stages")
       logger.warn("will be run; are you sure?")
 
@@ -108,9 +108,8 @@ abstract class Method extends IOApp with LazyLogging {
       StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")
     }
 
-    if (opts.reprocess() && opts.yes()) {
-      warning.flatMap(y => if (!y) IO.unit else body)
-    } else {
+    // warn if needed, or just execute
+    if (!opts.reprocess() || !opts.yes() || warn()) {
       body
     }
   }
@@ -121,56 +120,32 @@ abstract class Method extends IOApp with LazyLogging {
     * instance will inherit this class and be specified as the entry point
     * for the JAR.
     */
-  override def run(args: List[String]): IO[ExitCode] = {
-    val opts = new Opts(args)
+  def main(args: Array[String]): Unit = {
+    implicit val opts: Opts = new Opts(args.toList)
 
-    // TODO: show version information
+    // set implicits for the rest of the execution
+    Context.use(this) {
+      logger.info(s"Connecting to ${opts.config.aws.rds.instance}")
 
-    if (opts.version()) {
-      IO.pure(ExitCode.Success)
-    } else {
+      // ensure the runs table exists
+      Runs.migrate()
+
+      // add all the stages to the method
       initStages()
 
-      // make this method current
-      DbPool.withConnection(opts) {
-        Method.withMethod(this, opts) {
-          val action = confirmReprocess(opts) {
+      // verify the action and execute it
+      confirmReprocess(opts) {
+        implicit val method: Method = this
 
-            opts.stage.toOption match {
-              case Some(name) => if (opts.yes()) executeStage(name, opts) else showWork(opts, Some(name))
-              case _          => if (opts.yes()) execute(opts) else showWork(opts)
-            }
-          }
+        logger.info(s"Running $getName...")
 
-          // succeed when the action finishes successfully
-          for {
-            _ <- Run.migrate(Method.pool.value)
-            _ <- action
-          } yield ExitCode.Success
+        opts.stage.toOption match {
+          case Some(name) => if (opts.yes()) executeStage(name, opts) else showWork(opts, Some(name))
+          case _          => if (opts.yes()) execute(opts) else showWork(opts)
         }
       }
     }
-  }
-}
 
-/** Companion object with shared state for the currently running method.
-  */
-object Method {
-  import scala.util.DynamicVariable
-
-  /** Dynamic variables, global state to the currently running method. */
-  val current: DynamicVariable[Method] = new DynamicVariable(null)
-  val aws: DynamicVariable[AWS]        = new DynamicVariable(null)
-  val pool: DynamicVariable[DbPool]    = new DynamicVariable(null)
-
-  /** Set dynamic variables from a method and configuration being executed. */
-  def withMethod[M <: Method, T](method: M, opts: Opts)(body: => T): T = {
-    current.withValue(method) {
-      aws.withValue(new AWS(opts.config.aws)) {
-        pool.withValue(DbPool.fromOpts(opts)) {
-          body
-        }
-      }
-    }
+    ()
   }
 }

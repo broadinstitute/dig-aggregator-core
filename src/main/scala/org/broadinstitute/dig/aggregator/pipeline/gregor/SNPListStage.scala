@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.gregor
 
-import org.broadinstitute.dig.aggregator.core.{Glob, Run, Stage}
+import org.broadinstitute.dig.aggregator.core.{Glob, Input, Outputs, Stage}
 import org.broadinstitute.dig.aws.JobStep
 
 /** Gathers all the output variants from the trans-ethnic, meta-analysis results
@@ -18,18 +18,18 @@ class SNPListStage extends Stage {
 
   /** All the processors this processor depends on.
     */
-  override val dependencies: Seq[Run.Input.Source] = Seq(
-    Run.Input.Source.Success("out/metaanalysis/trans-ethnic/"),
+  override val dependencies: Seq[Input.Source] = Seq(
+    Input.Source.Success("out/metaanalysis/trans-ethnic/"),
   )
 
   /** The output of MetaAnalysis is the phenotype, which is also the output
     * of this processor.
     */
-  override def getOutputs(input: Run.Input): Stage.Outputs = {
+  override def getOutputs(input: Input): Outputs = {
     val pattern = Glob("out/metaanalysis/trans-ethnic/*/...")
 
     input.key match {
-      case pattern(phenotype) => Stage.Outputs.Set(phenotype)
+      case pattern(phenotype) => Outputs.Named(phenotype)
     }
   }
 

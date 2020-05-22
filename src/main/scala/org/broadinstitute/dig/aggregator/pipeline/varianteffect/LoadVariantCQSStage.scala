@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
-import org.broadinstitute.dig.aggregator.core.{Stage, Run}
+import org.broadinstitute.dig.aggregator.core.{Stage, Input, Outputs}
 import org.broadinstitute.dig.aws.JobStep
 
 /** After all the variants across all datasets have had VEP run on them in the
@@ -24,14 +24,14 @@ class LoadVariantCQSStage extends Stage {
 
   /** All the processors this processor depends on.
     */
-  override val dependencies: Seq[Run.Input.Source] = Seq(
-    Run.Input.Source.Success("out/varianteffect/effects/"),
+  override val dependencies: Seq[Input.Source] = Seq(
+    Input.Source.Success("out/varianteffect/effects/"),
   )
 
   /** Only a single output for VEP that uses ALL effects.
     */
-  override def getOutputs(input: Run.Input): Stage.Outputs = {
-    Stage.Outputs.Set("VEP/CQS")
+  override def getOutputs(input: Input): Outputs = {
+    Outputs.Named("VEP/CQS")
   }
 
   /** All effect results are combined together, so the results list is ignored.

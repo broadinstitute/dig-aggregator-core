@@ -1,20 +1,20 @@
 package org.broadinstitute.dig.aggregator.pipeline.gregor
 
-import org.broadinstitute.dig.aggregator.core.{Stage, Run}
+import org.broadinstitute.dig.aggregator.core.{Stage, Input, Outputs}
 import org.broadinstitute.dig.aws.JobStep
 
 class SortRegionsStage extends Stage {
 
   /** Dependencies.
     */
-  override val dependencies: Seq[Run.Input.Source] = Seq(
-    Run.Input.Source.Dataset("annotated_regions/"),
+  override val dependencies: Seq[Input.Source] = Seq(
+    Input.Source.Dataset("annotated_regions/"),
   )
 
   /** All input datasets map to a single output.
     */
-  override def getOutputs(input: Run.Input): Stage.Outputs = {
-    Stage.Outputs.Set("regions")
+  override def getOutputs(input: Input): Outputs = {
+    Outputs.Named("regions")
   }
 
   /** Take any new datasets and convert them from JSON-list to BED file

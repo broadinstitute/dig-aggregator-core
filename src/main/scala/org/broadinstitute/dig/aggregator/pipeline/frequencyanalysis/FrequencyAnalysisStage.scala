@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.frequencyanalysis
 
-import org.broadinstitute.dig.aggregator.core.{Stage, Run}
+import org.broadinstitute.dig.aggregator.core.{Input, Outputs, Stage}
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType}
 
@@ -21,8 +21,8 @@ class FrequencyAnalysisStage extends Stage {
 
   /** Source data to consume.
     */
-  override val dependencies: Seq[Run.Input.Source] = Seq(
-    Run.Input.Source.Dataset("variants/"),
+  override val dependencies: Seq[Input.Source] = Seq(
+    Input.Source.Dataset("variants/"),
   )
 
   /* Cluster configuration used to process frequency.
@@ -41,8 +41,8 @@ class FrequencyAnalysisStage extends Stage {
 
   /** Each ancestry gets its own output.
     */
-  override def getOutputs(input: Run.Input): Stage.Outputs = {
-    Stage.Outputs.Set(ancestries: _*)
+  override def getOutputs(input: Input): Outputs = {
+    Outputs.Named(ancestries: _*)
   }
 
   /** For each phenotype output, process all the datasets for it.

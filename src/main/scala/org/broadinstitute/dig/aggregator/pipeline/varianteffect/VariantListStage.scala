@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
-import org.broadinstitute.dig.aggregator.core.{Stage, Run}
+import org.broadinstitute.dig.aggregator.core.{Stage, Input, Outputs}
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.ClusterDef
 
@@ -15,8 +15,8 @@ class VariantListStage extends Stage {
 
   /** Intake dependencies.
     */
-  override val dependencies: Seq[Run.Input.Source] = Seq(
-    Run.Input.Source.Dataset("variants/"),
+  override val dependencies: Seq[Input.Source] = Seq(
+    Input.Source.Dataset("variants/"),
   )
 
   /* Define settings for the cluster to run the job.
@@ -28,8 +28,8 @@ class VariantListStage extends Stage {
 
   /** Only a single output for VEP that uses ALL datasets.
     */
-  override def getOutputs(input: Run.Input): Stage.Outputs = {
-    Stage.Outputs.Set("VEP/variants")
+  override def getOutputs(input: Input): Outputs = {
+    Outputs.Named("VEP/variants")
   }
 
   /** All that matters is that there are new datasets. The input datasets are

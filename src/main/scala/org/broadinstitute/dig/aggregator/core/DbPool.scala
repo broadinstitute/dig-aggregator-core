@@ -1,55 +1,33 @@
 package org.broadinstitute.dig.aggregator.core
 
-import cats.effect._
-
-import doobie._
-import doobie.implicits._
-import doobie.hikari._
-
-import scala.util.DynamicVariable
+import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
+import io.getquill._
+import org.broadinstitute.dig.aws.config.RdsConfig
 
 /** Hikari connection pool for MySQL. */
-final case class DbPool(driver: String, connectionString: String, user: String, password: String) {
-  import Implicits._
+final case class DbPool(secret: RdsConfig.Secret, schema: String) {
 
-  /** Create a new resource for a DB transactor. */
-  private val transactor: Resource[IO, HikariTransactor[IO]] =
-    for {
-      ce <- ExecutionContexts.fixedThreadPool[IO](32)
-      be <- Blocker[IO]
-      xa <- HikariTransactor.newHikariTransactor[IO](
-        driver,
-        connectionString,
-        user,
-        password,
-        ce,
-        be
-      )
-    } yield xa
+  /** Constructor to use the default schema. */
+  def this(secret: RdsConfig.Secret) = this(secret, secret.dbname)
 
-  /** Get a transactor from the pool and run a query through it. */
-  def exec[A](conn: ConnectionIO[A]): IO[A] = {
-    transactor.use { xa =>
-      conn.transact(xa)
-    }
-  }
-}
+  /** Connection configuration. */
+  val config: HikariConfig = new HikariConfig()
 
-/** Companion object. */
-object DbPool {
+  // initialize the configuration
+  config.setJdbcUrl(secret.connectionString(schema))
+  config.setDriverClassName(secret.driver)
+  config.setUsername(secret.username)
+  config.setPassword(secret.password)
 
-  /** The currently connection pool. */
-  val current: DynamicVariable[DbPool] = new DynamicVariable[DbPool](null)
+  // improve performance of mysql (see: https://github.com/brettwooldridge/HikariCP/wiki/MySQL-Configuration)
+  config.addDataSourceProperty("prepStmtCacheSize", 250)
+  config.addDataSourceProperty("prepStmtCacheSqlLimit", 2048)
+  config.addDataSourceProperty("cachePrepStmts", true)
+  config.addDataSourceProperty("useServerPrepStmts", true)
 
-  /** Create a connection to the database and execute a body of code with it. */
-  def withConnection[A](opts: Opts)(body: => IO[A]): IO[A] = {
-    val conn = opts.config.aws.rds.connection.get
-    val uri  = if (opts.test()) conn.getUri("test") else conn.getUri
-    val pool = DbPool(conn.driver, uri, conn.username, conn.password)
+  /** Connection data source. */
+  lazy val dataSource = new HikariDataSource(config)
 
-    // execute the body with the current connection
-    current.withValue(pool) {
-      body
-    }
-  }
+  /** Quill context. */
+  lazy val ctx = new MysqlJdbcContext(LowerCase, dataSource)
 }

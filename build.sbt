@@ -1,13 +1,12 @@
 lazy val Versions = new {
-  val Cats             = "2.0.0"
-  val CatsEffect       = "2.1.3"
-  val Doobie           = "0.8.8"
   val H2               = "1.4.200"
+  val Hikari           = "3.4.5"
   val Janino           = "3.1.2"
   val Json4s           = "3.6.8"
   val LogbackClassic   = "1.2.3"
   val LogbackColorizer = "1.0.1"
-  val MySQL            = "8.0.11"
+  val MySQL            = "8.0.17"
+  val Quill            = "3.5.1"
   val Scala            = "2.13.2"
   val ScalaLogging     = "3.9.2"
   val ScalaTest        = "3.0.8"
@@ -25,7 +24,8 @@ lazy val scalacOpts = Seq(
   "-feature",
   "-deprecation",
   "-unchecked",
-  "-Ywarn-value-discard"
+  "-Ywarn-value-discard",
+  "-language:existentials"
 )
 
 lazy val mainDeps = Seq(
@@ -33,12 +33,10 @@ lazy val mainDeps = Seq(
   "ch.qos.logback"                 % "logback-classic"      % Versions.LogbackClassic,
   "org.codehaus.janino"            % "janino"               % Versions.Janino,
   "org.json4s"                     %% "json4s-jackson"      % Versions.Json4s,
+  "io.getquill"                    %% "quill-jdbc"          % Versions.Quill,
+  "com.zaxxer"                     % "HikariCP"             % Versions.Hikari,
   "org.rogach"                     %% "scallop"             % Versions.Scallop,
-  "org.tpolecat"                   %% "doobie-core"         % Versions.Doobie,
-  "org.tpolecat"                   %% "doobie-hikari"       % Versions.Doobie,
   "org.tuxdude.logback.extensions" % "logback-colorizer"    % Versions.LogbackColorizer,
-  "org.typelevel"                  %% "cats-core"           % Versions.Cats,
-  "org.typelevel"                  %% "cats-effect"         % Versions.CatsEffect,
   "mysql"                          % "mysql-connector-java" % Versions.MySQL,
   Orgs.DIG                         %% "dig-aws"             % Versions.DigAws
 )

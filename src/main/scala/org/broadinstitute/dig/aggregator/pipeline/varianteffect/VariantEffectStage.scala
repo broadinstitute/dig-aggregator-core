@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
-import org.broadinstitute.dig.aggregator.core.{Method, Run, Stage}
+import org.broadinstitute.dig.aggregator.core.{Context, Input, Outputs, Stage}
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef, InstanceType}
 
@@ -26,8 +26,8 @@ class VariantEffectStage extends Stage {
 
   /** All the processors this processor depends on.
     */
-  override val dependencies: Seq[Run.Input.Source] = Seq(
-    Run.Input.Source.Success("out/varianteffect/variants/"),
+  override val dependencies: Seq[Input.Source] = Seq(
+    Input.Source.Success("out/varianteffect/variants/"),
   )
 
   private lazy val clusterBootstrap = resourceURI("pipeline/varianteffect/cluster-bootstrap.sh")
@@ -46,8 +46,8 @@ class VariantEffectStage extends Stage {
 
   /** Only a single output for VEP that uses ALL variants.
     */
-  override def getOutputs(input: Run.Input): Stage.Outputs = {
-    Stage.Outputs.Set("VEP")
+  override def getOutputs(input: Input): Outputs = {
+    Outputs.Named("VEP")
   }
 
   /** The results are ignored, as all the variants are refreshed and everything
@@ -55,7 +55,7 @@ class VariantEffectStage extends Stage {
     */
   override def getJob(output: String): Seq[JobStep] = {
     val runScript = resourceURI("pipeline/varianteffect/runVEP.pl")
-    val aws       = Method.aws.value
+    val aws       = Context.current.aws
 
     // delete all existing effects
     aws.rmdir("out/varianteffect/effects/")

@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
-import org.broadinstitute.dig.aggregator.core.{Stage, Run}
+import org.broadinstitute.dig.aggregator.core.{Stage, Input, Outputs}
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType, MemorySize, Spark}
 
@@ -22,8 +22,8 @@ class CommonSNPStage extends Stage {
 
   /** All the processors this processor depends on.
     */
-  override val dependencies: Seq[Run.Input.Source] = Seq(
-    Run.Input.Source.Success("out/varianteffect/effects/")
+  override val dependencies: Seq[Input.Source] = Seq(
+    Input.Source.Success("out/varianteffect/effects/")
   )
 
   // EMR cluster to run the job steps on
@@ -41,8 +41,8 @@ class CommonSNPStage extends Stage {
 
   /** Only a single output for VEP that uses ALL effects.
     */
-  override def getOutputs(input: Run.Input): Stage.Outputs = {
-    Stage.Outputs.Set("VEP/common")
+  override def getOutputs(input: Input): Outputs = {
+    Outputs.Named("VEP/common")
   }
 
   /** All effect results are combined together, so the results list is ignored.

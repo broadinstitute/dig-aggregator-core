@@ -2,6 +2,7 @@ package org.broadinstitute.dig.aggregator.core
 
 import java.io.File
 
+import org.broadinstitute.dig.aws.AWS
 import org.broadinstitute.dig.aws.config.AwsConfig
 import org.json4s.{DefaultFormats, Formats}
 import org.json4s.jackson.Serialization.read
@@ -11,7 +12,13 @@ import scala.io.Source
 /** Config is loaded from a JSON configuration file. They detail settings that are
   * used to make connections to databases and spin up machine clusters for processing.
   */
-final case class Config(aws: AwsConfig)
+final case class Config(aws: AwsConfig) {
+
+  /** Database connection pool. */
+  lazy val db: DbPool = {
+    DbPool(aws.rds.secret.get, "test")
+  }
+}
 
 /** Companion object. */
 object Config {

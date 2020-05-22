@@ -2,7 +2,7 @@ package org.broadinstitute.dig.aggregator.pipeline.metaanalysis
 
 import java.net.URI
 
-import org.broadinstitute.dig.aggregator.core.{Glob, Run, Stage}
+import org.broadinstitute.dig.aggregator.core.{Glob, Input, Outputs, Stage}
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef, InstanceType}
 
@@ -31,8 +31,8 @@ class ManhattanPlotStage extends Stage {
 
   /** Processor inputs.
     */
-  override val dependencies: Seq[Run.Input.Source] = Seq(
-    Run.Input.Source.Success("out/metaanalysis/trans-ethnic/"),
+  override val dependencies: Seq[Input.Source] = Seq(
+    Input.Source.Success("out/metaanalysis/trans-ethnic/"),
   )
 
   lazy val installR: URI = resourceURI("pipeline/metaanalysis/install-R.sh")
@@ -46,11 +46,11 @@ class ManhattanPlotStage extends Stage {
 
   /** The phenotype of each input phenotype is a plot for that phenotype.
     */
-  override def getOutputs(input: Run.Input): Stage.Outputs = {
+  override def getOutputs(input: Input): Outputs = {
     val pattern = Glob("out/metaanalysis/trans-ethnic/*/...")
 
     input.key match {
-      case pattern(phenotype) => Stage.Outputs.Set(phenotype)
+      case pattern(phenotype) => Outputs.Named(phenotype)
     }
   }
 

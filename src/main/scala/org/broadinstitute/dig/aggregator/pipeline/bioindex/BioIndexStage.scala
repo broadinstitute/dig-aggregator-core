@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.bioindex
 
-import org.broadinstitute.dig.aggregator.core.{Glob, Run, Stage}
+import org.broadinstitute.dig.aggregator.core.{Glob, Input, Outputs, Stage}
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType}
 
@@ -12,17 +12,17 @@ class BioIndexStage extends Stage {
 
   /** Source data to consume.
     */
-  override val dependencies: Seq[Run.Input.Source] = Seq(
-    Run.Input.Source.Dataset("genes/"),
-    Run.Input.Source.Dataset("tissues/"),
-    Run.Input.Source.Dataset("variants/"),
-    Run.Input.Source.Success("out/frequencyanalysis/"),
-    Run.Input.Source.Success("out/gregor/regions/sorted/"),
-    Run.Input.Source.Success("out/gregor/summary/"),
-    Run.Input.Source.Success("out/metaanalysis/trans-ethnic/"),
-    Run.Input.Source.Success("out/metaanalysis/plots/"),
-    Run.Input.Source.Success("out/transcriptionfactors/"),
-    Run.Input.Source.Success("out/varianteffect/common/"),
+  override val dependencies: Seq[Input.Source] = Seq(
+    Input.Source.Dataset("genes/"),
+    Input.Source.Dataset("tissues/"),
+    Input.Source.Dataset("variants/"),
+    Input.Source.Success("out/frequencyanalysis/"),
+    Input.Source.Success("out/gregor/regions/sorted/"),
+    Input.Source.Success("out/gregor/summary/"),
+    Input.Source.Success("out/metaanalysis/trans-ethnic/"),
+    Input.Source.Success("out/metaanalysis/plots/"),
+    Input.Source.Success("out/transcriptionfactors/"),
+    Input.Source.Success("out/varianteffect/common/"),
   )
 
   /* Cluster configuration.
@@ -36,7 +36,7 @@ class BioIndexStage extends Stage {
 
   /** Each ancestry gets its own output.
     */
-  override def getOutputs(input: Run.Input): Stage.Outputs = {
+  override def getOutputs(input: Input): Outputs = {
     val genes                = Glob("genes/...")
     val tissues              = Glob("tissues/...")
     val variants             = Glob("variants/...")
@@ -49,16 +49,16 @@ class BioIndexStage extends Stage {
     val vep                  = Glob("out/varianteffect/common/...")
 
     input.key match {
-      case genes()                 => Stage.Outputs.Set("genes")
-      case tissues()               => Stage.Outputs.Set("globalEnrichment", "regions")
-      case variants()              => Stage.Outputs.Set("datasets")
-      case metaAnalysis(phenotype) => Stage.Outputs.Set("associations")
-      case plots(phenotype)        => Stage.Outputs.Set("plots")
-      case enrichment(phenotype)   => Stage.Outputs.Set("globalEnrichment")
-      case regions()               => Stage.Outputs.Set("regions")
-      case frequency(ancestry)     => Stage.Outputs.Set("variants")
-      case transcriptionFactors()  => Stage.Outputs.Set("variants")
-      case vep()                   => Stage.Outputs.Set("associations", "variants")
+      case genes()                 => Outputs.Named("genes")
+      case tissues()               => Outputs.Named("globalEnrichment", "regions")
+      case variants()              => Outputs.Named("datasets")
+      case metaAnalysis(phenotype) => Outputs.Named("associations")
+      case plots(phenotype)        => Outputs.Named("plots")
+      case enrichment(phenotype)   => Outputs.Named("globalEnrichment")
+      case regions()               => Outputs.Named("regions")
+      case frequency(ancestry)     => Outputs.Named("variants")
+      case transcriptionFactors()  => Outputs.Named("variants")
+      case vep()                   => Outputs.Named("associations", "variants")
     }
   }
 
