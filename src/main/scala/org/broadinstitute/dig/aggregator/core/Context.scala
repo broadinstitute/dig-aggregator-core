@@ -19,7 +19,7 @@ object Context {
   /** Create a new context and execute a body of code with it. */
   def use[T](method: Method)(body: => T)(implicit opts: Opts): Try[Unit] = Try {
     val secret = opts.config.aws.rds.secret.get
-    val db     = DbPool(secret, "test")
+    val db     = DbPool.fromSecret(secret, if (opts.test()) "test" else "aggregator")
     val aws    = new AWS(opts.config.aws)
 
     // create the new context and execute

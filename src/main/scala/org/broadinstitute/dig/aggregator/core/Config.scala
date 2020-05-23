@@ -2,7 +2,6 @@ package org.broadinstitute.dig.aggregator.core
 
 import java.io.File
 
-import org.broadinstitute.dig.aws.AWS
 import org.broadinstitute.dig.aws.config.AwsConfig
 import org.json4s.{DefaultFormats, Formats}
 import org.json4s.jackson.Serialization.read
@@ -16,7 +15,7 @@ final case class Config(aws: AwsConfig) {
 
   /** Database connection pool. */
   lazy val db: DbPool = {
-    DbPool(aws.rds.secret.get, "test")
+    DbPool.fromSecret(aws.rds.secret.get, "test")
   }
 }
 

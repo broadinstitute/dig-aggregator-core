@@ -45,6 +45,25 @@ object Runs extends LazyLogging {
     ()
   }
 
+  /** Delete the runs table if it exists. Used for testing. */
+  private[core] def drop(): Unit = {
+    val db = Context.current.db
+
+    import db.ctx._
+
+    db.ctx.run(quote(infix"DROP TABLE IF EXISTS runs".as[Action[Unit]]))
+    ()
+  }
+
+  /** Returns a list of all runs in the database. Used for testing. */
+  private[core] def all(): List[Runs] = {
+    val db = Context.current.db
+
+    import db.ctx._
+
+    db.ctx.run(quote(query[Runs]))
+  }
+
   /** Delete outputs from the database. */
   def delete(stage: Stage, output: String): Long = {
     val db     = Context.current.db
@@ -102,7 +121,7 @@ object Runs extends LazyLogging {
   }
 
   /** Lookup all the results of the current method's stage. */
-  def resultsOf(stage: Stage): Seq[Runs] = {
+  def of(stage: Stage): Seq[Runs] = {
     val db     = Context.current.db
     val method = Context.current.method
 

@@ -39,7 +39,7 @@ abstract class Method extends LazyLogging {
   /** Lookup a stage in this method by name. */
   def getStage(name: String): Stage = {
     stages.find(_.getName == name).getOrElse {
-      throw new Exception(s"No such stage $name in method.")
+      throw new NoSuchElementException(name)
     }
   }
 
@@ -50,7 +50,7 @@ abstract class Method extends LazyLogging {
       case None => stages
       case Some(name) =>
         stages.filter(_.getName == name) match {
-          case Nil    => throw new Exception(s"""No stages found in $getName matching "$name"""")
+          case Nil    => throw new NoSuchElementException(name)
           case stages => stages
         }
     }

@@ -1,7 +1,5 @@
 package org.broadinstitute.dig.aggregator.core
 
-import org.broadinstitute.dig.aws.AWS
-
 /** A run Input is a S3 key and eTag (checksum) pair. */
 case class Input(key: String, eTag: String) {
 

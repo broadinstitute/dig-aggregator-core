@@ -4,7 +4,7 @@ import java.net.URI
 
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType, Spark}
+import org.broadinstitute.dig.aws.emr.{ClusterDef, Spark}
 
 /** Each processor has a globally unique name and a run function. */
 abstract class Stage extends LazyLogging {
@@ -38,11 +38,6 @@ abstract class Stage extends LazyLogging {
     */
   def cluster: ClusterDef = ClusterDef(
     name = getName,
-    masterInstanceType = InstanceType.c5_4xlarge,
-    slaveInstanceType = InstanceType.c5_2xlarge,
-    instances = 5,
-    masterVolumeSizeInGB = 100,
-    slaveVolumeSizeInGB = 50,
     configurations = Seq(
       Spark.Env().withPython3,
       Spark.Config().withMaximizeResourceAllocation,
@@ -80,28 +75,23 @@ abstract class Stage extends LazyLogging {
     val jobs = output.map(output => output -> getJob(output))
 
     if (jobs.nonEmpty) {
-      val outPrefix = if (opts.test()) "test" else "out"
-      val method    = Context.current.method
+      val bucket = s"s3://${opts.config.aws.s3.bucket}"
+      val prefix = if (opts.test()) "test" else "out"
+      val method = Context.current.method
 
-      // set the environment for each of the steps in each job
-      for ((job, jobSteps) <- jobs) {
-        val bucket = s"s3://${opts.config.aws.s3.bucket}"
-        val prefix = s"$outPrefix/${method.getName}/$getName/$job"
-
-        jobSteps.foreach { step =>
-          step.setEnv("BUCKET", bucket)         // e.g. s3://dig-analysis-data
-          step.setEnv("METHOD", method.getName) // e.g. MetaAnalysis
-          step.setEnv("STAGE", getName)         // e.g. Plot
-          step.setEnv("JOB", job)               // e.g. T2D
-          step.setEnv("PREFIX", prefix)         // e.g. out/MetaAnalysis/Plot/T2D
-        }
-      }
+      // create a set of environment variables for all the jobs
+      val env = Seq(
+        "JOB_BUCKET" -> bucket,
+        "JOB_METHOD" -> method.getName,
+        "JOB_STAGE"  -> getName,
+        "JOB_PREFIX" -> s"$prefix/${method.getName}/$getName"
+      )
 
       // upload all additional resources before running
       additionalResources.foreach(resourceURI)
 
       // spins up the cluster(s) and runs all the job steps
-      Context.current.aws.runJobs(cluster.copy(name = s"${method.getName}.$getName"), jobs.map(_._2))
+      Context.current.aws.runJobs(cluster, env, jobs.map(_._2))
     }
   }
 
@@ -153,7 +143,7 @@ abstract class Stage extends LazyLogging {
     * a mapping of output -> Set[Input].
     */
   def getWork(opts: Opts): Map[String, Set[Input]] = {
-    val lastOutputs = if (opts.reprocess()) Seq.empty else Runs.resultsOf(this)
+    val lastOutputs = if (opts.reprocess()) Seq.empty else Runs.of(this)
 
     // get all the outputs that have already been processed
     val inputs    = dependencies.flatMap(dep => dep.objects)
