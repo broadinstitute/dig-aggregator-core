@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
-import org.broadinstitute.dig.aggregator.core.{Stage, Input, Outputs}
+import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aws.JobStep
 
 /** After all the variants across all datasets have had VEP run on them in the
@@ -20,23 +20,19 @@ import org.broadinstitute.dig.aws.JobStep
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class LoadVariantCQSStage extends Stage {
+class LoadVariantCQSStage(implicit context: Context) extends Stage {
+  val effects: Input.Source = Input.Source.Success("out/varianteffect/effects/")
 
-  /** All the processors this processor depends on.
-    */
-  override val dependencies: Seq[Input.Source] = Seq(
-    Input.Source.Success("out/varianteffect/effects/"),
-  )
+  /** Input sources. */
+  override val sources: Seq[Input.Source] = Seq(effects)
 
-  /** Only a single output for VEP that uses ALL effects.
-    */
-  override def getOutputs(input: Input): Outputs = {
-    Outputs.Named("VEP/CQS")
+  /** Mapping inputs to outputs. */
+  override val rules: PartialFunction[Input, Outputs] = {
+    case effects() => Outputs.Named("VEP/CQS")
   }
 
-  /** All effect results are combined together, so the results list is ignored.
-    */
-  override def getJob(output: String): Seq[JobStep] = {
+  /** All effect results are combined together, so the results list is ignored. */
+  override def make(output: String): Seq[JobStep] = {
     val scriptUri = resourceURI("pipeline/varianteffect/loadCQS.py")
 
     Seq(JobStep.PySpark(scriptUri))

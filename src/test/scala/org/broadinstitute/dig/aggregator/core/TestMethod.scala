@@ -4,33 +4,27 @@ import org.broadinstitute.dig.aws.JobStep
 
 object TestMethod extends Method {
 
-  // define a simple stage
-  object TestStage extends Stage {
+  // define a simple stage class
+  class TestStage(implicit context: Context) extends Stage {
+    val sourceA: Input.Source = Input.Source("a/*/", "*")
+    val sourceB: Input.Source = Input.Source("b/*/", "*")
 
     /** No dependencies to upload. */
-    override val dependencies: Seq[Input.Source] = Seq.empty
+    override val sources: Seq[Input.Source] = Seq.empty
 
     /** Don't actually do any work. */
-    override def getJob(output: String): Seq[JobStep] = Seq.empty
+    override def make(output: String): Seq[JobStep] = Seq.empty
 
     /** Match some fake inputs to dummy outputs. */
-    override def getOutputs(input: Input): Outputs = {
-      val testA = Glob("a/*/...")
-      val testB = Glob("b/*/...")
-
-      input.key match {
-        case testA(a) => Outputs.Named(a)
-        case testB(b) => Outputs.Named(b)
-        case _        => Outputs.All
-      }
+    override val rules: PartialFunction[Input, Outputs] = {
+      case sourceA(a, _) => Outputs.Named(a)
+      case sourceB(b, _) => Outputs.Named(b)
+      case _             => Outputs.All
     }
   }
 
   // create some test stages
-  override def initStages(): Unit = {
-    addStage(TestStage)
+  override def initStages(implicit context: Context): Unit = {
+    addStage(new TestStage)
   }
-
-  // automatically add stages for testing later
-  initStages()
 }

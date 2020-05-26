@@ -1,21 +1,19 @@
 package org.broadinstitute.dig.aggregator.core
 
+import Implicits._
+
 /** A run Input is a S3 key and eTag (checksum) pair. */
-case class Input(key: String, eTag: String) {
+case class Input(key: String, version: String) {
 
-  /** It's common to split an S3 key by path separator. */
-  lazy val splitKeys: Array[String] = key.split('/')
-
-  /** Basename is the actual filename of the key. */
-  lazy val basename: String = splitKeys.last
+  /** Basename is the filename portion of the key. */
+  lazy val basename: String = key.basename
 
   /** Prefix is the directory name of the key. */
-  lazy val prefix: String = splitKeys.dropRight(1).mkString("/")
+  lazy val dirname: String = key.dirname
 }
 
-/** Companion Input object for sources. */
+/** Companion object with source locations. */
 object Input {
-  import org.broadinstitute.dig.aws.Implicits._
 
   /* An input source an S3 object used to identify all sibling and
    * child objects that can be processed. Typically the key is either
@@ -26,37 +24,49 @@ object Input {
    * The ETag of those objects is compared against the ETag of the
    * last time it was processed by the stage.
    */
-  sealed trait Source {
-    val prefix: String
+  case class Source(prefix: String, basename: String) {
+    require(prefix.endsWith("/"))
+    require(!basename.endsWith("/"))
 
-    /** Returns true if the key matches the source. */
-    def matches(key: String): Boolean
+    /** Pattern matching globs for the prefix and basename of inputs. */
+    val prefixGlob: Glob   = Glob(prefix)
+    val basenameGlob: Glob = Glob(basename)
 
-    /** Fetch all the keys matching the input and their e-tags. */
-    def objects: Seq[Input] = {
-      Context.current.aws
-        .ls(prefix)
-        .filter(obj => matches(obj.key))
-        .map(obj => Input(obj.key, obj.eTagStripped))
+    /** Create inputs for all keys in the bucket matching the prefix + basename. */
+    def inputs()(implicit context: Context): Seq[Input] = {
+      context.s3
+        .ls(prefix.commonPrefix)
+        .view
+        .map(s3ObjToInput)
+        .filter(matches)
+        .toSeq
+    }
+
+    /** True if an input matches this source. */
+    def matches(input: Input): Boolean = {
+      basenameGlob.matches(input.basename) && prefixGlob.matches(input.dirname)
+    }
+
+    /** Extractor method for pattern matching.
+      *
+      * Allows taking a input and matching the elements of the prefix and
+      * basename globs. Wildcard elements are captured and returned in the
+      * match. Everything else is an exact match and ignored.
+      */
+    def unapplySeq(input: Input): Option[List[String]] = {
+      prefixGlob.unapplySeq(input.dirname).flatMap { prefixCaptures =>
+        basenameGlob.unapplySeq(input.basename).map(prefixCaptures ++ _)
+      }
     }
   }
 
   /** Companion source object for types of input sources. */
   object Source {
 
-    /** Dataset inputs. */
-    final case class Dataset(prefix: String) extends Source {
-      override def matches(key: String): Boolean = key.endsWith("/metadata")
-    }
+    /** Dataset inputs match a prefix to the metadata basename. */
+    def Dataset(prefix: String): Source = Source(prefix, "metadata")
 
-    /** SUCCESS spark job results. */
-    final case class Success(prefix: String) extends Source {
-      override def matches(key: String): Boolean = key.endsWith("/_SUCCESS")
-    }
-
-    /** Binary inputs are programs and raw data files. */
-    final case class Binary(prefix: String) extends Source {
-      override def matches(key: String): Boolean = key == prefix
-    }
+    /** Successful job results match a prefix to the _SUCCESS basename. */
+    def Success(prefix: String): Source = Source(prefix, "_SUCCESS")
   }
 }

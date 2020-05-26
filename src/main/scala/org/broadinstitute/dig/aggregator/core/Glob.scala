@@ -1,70 +1,74 @@
 package org.broadinstitute.dig.aggregator.core
 
-import java.nio.file.FileSystems
-import java.nio.file.Paths
+/** A simple, glob-like, pattern matcher for strings. */
+case class Glob(glob: String, pathSep: Char = '/') {
+  import atto._, Atto._
 
-import scala.util.matching.Regex
+  /** Create a parse combinator for a prefix pattern. */
+  private val parser =
+    if (glob.isEmpty) {
+      err("Empty glob")
+    } else {
+      val validChar = letterOrDigit | oneOf("-._~:/?#[]@!$&'()+,;=")
 
-/** A simple "glob-like" pattern matcher for strings. */
-case class Glob(pattern: String) {
+      // exact text match
+      val exact = validChar.many1.map { s =>
+        string(s.toList.mkString) ~> ok(None: Option[String])
+      }
 
-  // the matcher used to compare against strings
-  private lazy val matcher = FileSystems.getDefault.getPathMatcher(s"glob:$pattern")
+      // wildcard capture glob text up to next character or path separator
+      val capture = char('*') ~> opt(validChar).map {
+        case Some(c) => takeWhile(n => n != c && n != pathSep).map(Some(_)) <~ char(c)
+        case _       => takeWhile(_ != pathSep).map(Some(_))
+      }
 
-  // used for pattern extraction of a path
-  private lazy val matchPattern = {
-    val wild = "([^*]*)\\*".r
-    val paths = pattern.split('/').map {
-      case "*"          => "([^/]+)"
-      case "..."        => "[^/]+(?:/[^/]+)*"
-      case wild(prefix) => Regex.quote(prefix) + "([^/]+)"
-      case path         => Regex.quote(path)
+      // start with an exact match, intersperse captures
+      val ParseResult.Done("", parts) = ((exact | capture).many1 <~ endOfInput).parseOnly(glob)
+
+      // fold all the parts together into a single parser
+      parts.foldLeft(ok(List.empty[String])) { (a, p) =>
+        for (xs <- a; capture <- p) yield {
+          capture match {
+            case Some(s) => xs :+ s
+            case None    => xs
+          }
+        }
+      }
     }
-
-    paths.mkString("/").r
-  }
-
-  /** Returns true if the pattern successfully matches the string. */
-  def matches(s: String): Boolean = matcher.matches(Paths.get(s))
 
   /** Extractor method for pattern matching.
     *
     * Allows taking a path-like string and matching path elements with
-    * the glob. For example:
-    *
-    * val pattern = Glob("out/*/phenotype=*/.../log/...")
-    *
-    * "out/regions/phenotype=T2D/gregor/summary/log/warnings.txt" match {
-    *   case pattern(source, phenotype) => println(source, phenotype)
-    * }
-    *
-    * The above will output "(regions, T2D)".
-    *
-    * Path elements are matched exactly. Wildcard elements are matched
-    * and returned in the pattern. Ellipses are ignored, but allow for
-    * matching of an arbitrary number of path elements until the next
-    * path element is matched.
+    * the glob. Wildcard elements are captured and returned in the match.
+    * Everything else is an exact match and ignored.
     */
   def unapplySeq(path: String): Option[List[String]] = {
-    matchPattern.unapplySeq(path)
+    (parser <~ endOfInput).parseOnly(path) match {
+      case ParseResult.Done(_, captures) => Some(captures)
+      case _                             => None
+    }
   }
+
+  /** Returns true if the pattern successfully matches the string. */
+  def matches(path: String): Boolean = unapplySeq(path).isDefined
 }
 
 /** Companion object for constructing globs. */
 object Glob {
 
-  /** A glob that matches everything. */
-  object True extends Glob("*") {
-    override def matches(s: String): Boolean = true
-  }
+  /** A glob that matches everything.
+    *
+    * This is a special case since Glob.parsers would fail to parse this
+    * pattern. This is intentional, though, so that stage input sources
+    * cannot match everything.
+    */
+  object True extends Glob("*")
 
-  /** A glob that matches nothing. */
-  object False extends Glob("") {
-    override def matches(s: String): Boolean = false
-  }
-
-  /** Helper implicit so "foo".toGlob is possible. */
-  final implicit class String2Glob(val s: String) extends AnyVal {
-    def toGlob: Glob = new Glob(s)
-  }
+  /** A glob that matches nothing.
+    *
+    * This is a special case since Glob.parsers would fail to parse this
+    * pattern. This is intentional, though, so that stage input sources
+    * cannot match nothing.
+    */
+  object False extends Glob("")
 }

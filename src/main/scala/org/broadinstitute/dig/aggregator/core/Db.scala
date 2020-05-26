@@ -5,7 +5,22 @@ import io.getquill._
 import org.broadinstitute.dig.aws.config.RdsConfig
 
 /** Hikari connection pool for MySQL. */
-final case class DbPool(connectionString: String, engine: String, username: String, password: String) {
+final class Db(connectionString: String, engine: String, username: String, password: String) {
+
+  /** Create a new connection pool from a secret and a schema name */
+  def this(secret: RdsConfig.Secret, schema: String) = {
+    this(secret.connectionString(schema), secret.engine, secret.username, secret.password)
+  }
+
+  /** Create a new connection pool from a secret using the default schema. */
+  def this(secret: RdsConfig.Secret) = {
+    this(secret.connectionString, secret.engine, secret.username, secret.password)
+  }
+
+  /** Create an in-memory H2 database (mostly used for testing). */
+  def this() = {
+    this(s"jdbc:h2:mem:${java.util.UUID.randomUUID};DB_CLOSE_DELAY=-1;mode=MySQL", "h2", "", "")
+  }
 
   /** Connection configuration. */
   val config: HikariConfig = new HikariConfig()
@@ -39,18 +54,4 @@ final case class DbPool(connectionString: String, engine: String, username: Stri
 
   /** Close pool connections. */
   def close(): Unit = ctx.close()
-}
-
-/** Companion object for creating database connection pools */
-object DbPool {
-
-  /** Create a connection pool from an AWS secret using a different schema. */
-  def fromSecret(secret: RdsConfig.Secret, schema: String): DbPool = {
-    DbPool(secret.connectionString(schema), secret.engine, secret.username, secret.password)
-  }
-
-  /** Create a connection pool from a AWS secret for an RDS instance. */
-  def fromSecret(secret: RdsConfig.Secret): DbPool = {
-    DbPool(secret.connectionString, secret.engine, secret.username, secret.password)
-  }
 }

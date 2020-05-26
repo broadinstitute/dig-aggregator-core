@@ -1,31 +1,22 @@
 package org.broadinstitute.dig.aggregator.core
 
-import org.broadinstitute.dig.aws.AWS
+import org.broadinstitute.dig.aws.Emr
+import org.broadinstitute.dig.aws.S3
 
-/** Context holds global state for the running method to use. */
-case class Context(aws: AWS, db: DbPool, method: Method)
+/** Method execution context. */
+class Context(val method: Method) {
 
-/** Companion object for creating a context. */
-object Context {
-  import scala.util.DynamicVariable
-  import scala.util.Try
+  /** Override to provide a valid database connection. */
+  lazy val db: Db = throw new NotImplementedError("No DB defined in context!")
 
-  /** Private context. */
-  private val _current = new DynamicVariable[Context](null)
+  /** Override to provide a valid S3 bucket. */
+  lazy val s3: S3.Bucket = throw new NotImplementedError("No S3 client in context!")
 
-  /** Get the current context. */
-  def current: Context = _current.value
+  /** Override to provide a valid EMR job runner. */
+  lazy val emr: Emr.Runner = throw new NotImplementedError("No EMR client in context!")
+}
 
-  /** Create a new context and execute a body of code with it. */
-  def use[T](method: Method)(body: => T)(implicit opts: Opts): Try[Unit] = Try {
-    val secret = opts.config.aws.rds.secret.get
-    val db     = DbPool.fromSecret(secret, if (opts.test()) "test" else "aggregator")
-    val aws    = new AWS(opts.config.aws)
-
-    // create the new context and execute
-    _current.withValue(Context(aws, db, method))(body)
-
-    // close the db connection
-    db.close()
-  }
+/** Method execution context for testing. */
+class TestContext(override val method: Method) extends Context(method) {
+  override lazy val db: Db = new Db()
 }

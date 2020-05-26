@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
-import org.broadinstitute.dig.aggregator.core.{Stage, Input, Outputs}
+import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.ClusterDef
 
@@ -11,13 +11,11 @@ import org.broadinstitute.dig.aws.emr.ClusterDef
   *
   *  s3://dig-analysis-data/out/varianteffect/variants/<dataset>
   */
-class VariantListStage extends Stage {
+class VariantListStage(implicit context: Context) extends Stage {
+  val variants: Input.Source = Input.Source.Dataset("variants/")
 
-  /** Intake dependencies.
-    */
-  override val dependencies: Seq[Input.Source] = Seq(
-    Input.Source.Dataset("variants/"),
-  )
+  /** Source inputs. */
+  override val sources: Seq[Input.Source] = Seq(variants)
 
   /* Define settings for the cluster to run the job.
    */
@@ -26,17 +24,16 @@ class VariantListStage extends Stage {
     slaveVolumeSizeInGB = 400,
   )
 
-  /** Only a single output for VEP that uses ALL datasets.
-    */
-  override def getOutputs(input: Input): Outputs = {
-    Outputs.Named("VEP/variants")
+  /** Map inputs to outputs. */
+  override val rules: PartialFunction[Input, Outputs] = {
+    case variants() => Outputs.Named("VEP/variants")
   }
 
   /** All that matters is that there are new datasets. The input datasets are
     * actually ignored, and _everything_ is reprocessed. This is done because
     * there is only a single analysis node for all variants.
     */
-  override def getJob(output: String): Seq[JobStep] = {
+  override def make(output: String): Seq[JobStep] = {
     val pyScript = resourceURI("pipeline/varianteffect/listVariants.py")
 
     Seq(JobStep.PySpark(pyScript))

@@ -2,7 +2,7 @@ package org.broadinstitute.dig.aggregator.pipeline.metaanalysis
 
 import java.net.URI
 
-import org.broadinstitute.dig.aggregator.core.{Glob, Input, Outputs, Stage}
+import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef, InstanceType}
 
@@ -27,13 +27,16 @@ import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef, InstanceType
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class ManhattanPlotStage extends Stage {
+class ManhattanPlotStage(implicit context: Context) extends Stage {
+  val bottomLine: Input.Source = Input.Source.Success("out/metaanalysis/trans-ethnic/*/")
 
-  /** Processor inputs.
-    */
-  override val dependencies: Seq[Input.Source] = Seq(
-    Input.Source.Success("out/metaanalysis/trans-ethnic/"),
-  )
+  /** Input sources. */
+  override val sources: Seq[Input.Source] = Seq(bottomLine)
+
+  /** Rules for mapping inputs to outputs. */
+  override val rules: PartialFunction[Input, Outputs] = {
+    case bottomLine(phenotype) => Outputs.Named(phenotype)
+  }
 
   lazy val installR: URI = resourceURI("pipeline/metaanalysis/install-R.sh")
 
@@ -44,19 +47,9 @@ class ManhattanPlotStage extends Stage {
     bootstrapScripts = Seq(new BootstrapScript(installR)),
   )
 
-  /** The phenotype of each input phenotype is a plot for that phenotype.
-    */
-  override def getOutputs(input: Input): Outputs = {
-    val pattern = Glob("out/metaanalysis/trans-ethnic/*/...")
-
-    input.key match {
-      case pattern(phenotype) => Outputs.Named(phenotype)
-    }
-  }
-
   /** Take all the phenotype results from the dependencies and process them.
     */
-  override def getJob(output: String): Seq[JobStep] = {
+  override def make(output: String): Seq[JobStep] = {
     val plotScript = resourceURI("pipeline/metaanalysis/makePlot.sh")
     val _          = resourceURI("pipeline/metaanalysis/manhattan.R")
     val phenotype  = output

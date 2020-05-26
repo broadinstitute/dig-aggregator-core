@@ -1,13 +1,12 @@
 package org.broadinstitute.dig.aggregator.pipeline.transcriptionfactors
 
-import org.broadinstitute.dig.aggregator.core.{Input, Outputs, Stage}
+import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aws.JobStep
 
-class TranscriptionFactorsStage extends Stage {
+class TranscriptionFactorsStage(implicit context: Context) extends Stage {
 
-  /** Dependency processors.
-    */
-  override val dependencies: Seq[Input.Source] = Seq(
+  /** Input sources. */
+  override val sources: Seq[Input.Source] = Seq(
     Input.Source.Dataset("transcription_factors/"),
     Input.Source.Success("out/varianteffect/variants/"),
   )
@@ -15,14 +14,14 @@ class TranscriptionFactorsStage extends Stage {
   /** All transcriptions factors are run across all variants all the time.
     * We use the variant list produced by VEP to do this.
     */
-  override def getOutputs(input: Input): Outputs = {
-    Outputs.Named("TranscriptionFactors")
+  override val rules: PartialFunction[Input, Outputs] = {
+    case _ => Outputs.Named("TranscriptionFactors")
   }
 
   /** With a new variants list or new regions, need to reprocess and
     * get a list of all regions with the variants that they overlap.
     */
-  override def getJob(output: String): Seq[JobStep] = {
+  override def make(output: String): Seq[JobStep] = {
     val script = resourceURI("pipeline/transcriptionfactors/transcriptionFactors.py")
 
     // there's only a single output that ever needs processed.

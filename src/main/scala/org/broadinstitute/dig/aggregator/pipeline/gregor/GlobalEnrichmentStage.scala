@@ -1,17 +1,16 @@
 package org.broadinstitute.dig.aggregator.pipeline.gregor
 
-import org.broadinstitute.dig.aggregator.core.{Glob, Input, Outputs, Stage}
+import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef, InstanceType}
 
-class GlobalEnrichmentStage extends Stage {
+class GlobalEnrichmentStage(implicit context: Context) extends Stage {
+  val regions: Input.Source = Input.Source.Success("out/gregor/regions/sorted/")
+  val snp: Input.Source     = Input.Source.Success("out/gregor/snp/*/")
 
   /** All the processors this processor depends on.
     */
-  override val dependencies: Seq[Input.Source] = Seq(
-    Input.Source.Success("out/gregor/regions/sorted/"),
-    Input.Source.Success("out/gregor/snp/"),
-  )
+  override val sources: Seq[Input.Source] = Seq(regions, snp)
 
   /* Install scripts. */
   private lazy val bootstrap = resourceURI("pipeline/gregor/cluster-bootstrap.sh")
@@ -42,19 +41,14 @@ class GlobalEnrichmentStage extends Stage {
   /** The outputs from the SNPListProcessor (phenotypes) are the outputs of this
     * processor, but all the sorted regions are processed with each as well.
     */
-  override def getOutputs(input: Input): Outputs = {
-    val regions = Glob("out/gregor/regions/...")
-    val snp     = Glob("out/gregor/snp/*/...")
-
-    input.key match {
-      case regions()      => Outputs.All
-      case snp(phenotype) => Outputs.Named(phenotype)
-    }
+  override val rules: PartialFunction[Input, Outputs] = {
+    case regions()      => Outputs.All
+    case snp(phenotype) => Outputs.Named(phenotype)
   }
 
   /** Run GREGOR over the results of the SNP list and regions.
     */
-  override def getJob(output: String): Seq[JobStep] = {
+  override def make(output: String): Seq[JobStep] = {
     val run       = resourceURI("pipeline/gregor/runGREGOR.sh")
     val phenotype = output
 

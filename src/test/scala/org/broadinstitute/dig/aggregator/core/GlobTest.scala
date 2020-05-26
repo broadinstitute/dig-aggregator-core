@@ -3,22 +3,21 @@ package org.broadinstitute.dig.aggregator.core
 import org.scalatest.funsuite.AnyFunSuite
 
 final class GlobTest extends AnyFunSuite {
-  import Glob.String2Glob
+  import Implicits._
 
-  test("basic globs - should match") {
-    val glob = "*/foo*/*/baz".toGlob
+  test("should match") {
+    val glob: Glob = "*/foo*/*/baz"
 
     assert(glob.matches("/foobar/ack/baz"))
     assert(glob.matches("some/foo/anything=here/baz"))
   }
 
-  test("basic globs - should not match") {
-    val glob = "*/foo*/*/baz".toGlob
+  test("should not match") {
+    val glob: Glob = "*/foo*/*/baz"
 
     assert(!glob.matches("/foo"))
     assert(!glob.matches("bar/foo"))
     assert(!glob.matches("zoo/whee/foo"))
-    assert(!glob.matches("/foobar//baz"))
     assert(!glob.matches("foo"))
     assert(!glob.matches("ack/foo/bar"))
     assert(!glob.matches("/foobar/ack/baz/whee"))
@@ -32,7 +31,9 @@ final class GlobTest extends AnyFunSuite {
 
     assert(glob.matches(""))
     assert(glob.matches("anything"))
-    assert(glob.matches("anything/else/super/deep"))
+
+    // "*" only matches to a path separator
+    assert(!glob.matches("anything/path"))
   }
 
   test("false globs") {
@@ -43,23 +44,15 @@ final class GlobTest extends AnyFunSuite {
     assert(!glob.matches("anything/else/super/deep"))
   }
 
-  test("unapply globs") {
-    val glob  = "foo/bar=*/baz".toGlob
-    val crazy = "*/wow=*/.../ancestor=*/*/this/...".toGlob
+  test("pattern matching globs") {
+    val glob: Glob = "*/wow=*/ancestor=*/*/this"
 
-    "foo/bar=hello/baz" match {
-      case glob(hello) => assert(hello == "hello")
-      case _           => fail("glob pattern match failed")
-    }
-
-    "foo/wow=awesome/ignore/all/this/ancestor=child/again/this/ignore/even/more" match {
-      case crazy(foo, awesome, child, again) =>
-        assert(foo == "foo")
-        assert(awesome == "awesome")
-        assert(child == "child")
-        assert(again == "again")
-      case _ =>
-        fail("crazy pattern match failed")
+    "foo/wow=awesome/ancestor=grandfather//this" match {
+      case glob(start, wow, ancestor, end) =>
+        assert(start == "foo")
+        assert(wow == "awesome")
+        assert(ancestor == "grandfather")
+        assert(end.isEmpty)
     }
   }
 }

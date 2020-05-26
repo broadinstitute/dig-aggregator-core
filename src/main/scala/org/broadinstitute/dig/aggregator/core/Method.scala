@@ -1,8 +1,10 @@
 package org.broadinstitute.dig.aggregator.core
 
 import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dig.aws.{Emr, S3}
 
-import scala.util.Failure
+import scala.collection.mutable
+import scala.util.{Failure, Try}
 
 /** A method is an object that is broken down into one or more stages and
   * run on data that has been loaded into S3, producing new data, which
@@ -10,18 +12,17 @@ import scala.util.Failure
   */
 abstract class Method extends LazyLogging {
 
-  /** All the stages of this method. */
-  private var stages = List.empty[Stage]
-
-  /** Called right at startup, before the method is actually run.
-    *
-    * Stages are added - in the order they should execute - using the
-    * addStage function, from within here.
-    */
-  def initStages(): Unit
-
   /** The provenance data for this method. */
   val provenance: Option[Provenance] = None
+
+  /** All the stages of this method. */
+  val stages = new mutable.ListBuffer[Stage]()
+
+  /** Add a new stage to the method. */
+  def addStage[S <: Stage](stage: S): Unit = stages += stage
+
+  /** Called immediately before method execution to instantiate stages. */
+  def initStages(implicit context: Context): Unit
 
   /** Unique name of this method, which defaults to the name of the class.
     *
@@ -30,11 +31,6 @@ abstract class Method extends LazyLogging {
     * their results.
     */
   def getName: String = getClass.getSimpleName.stripSuffix("$")
-
-  /** Add a new stage to the method. */
-  def addStage(stage: Stage): Unit = {
-    stages +:= stage
-  }
 
   /** Lookup a stage in this method by name. */
   def getStage(name: String): Stage = {
@@ -47,11 +43,11 @@ abstract class Method extends LazyLogging {
     */
   def filterStages(opts: Opts): Seq[Stage] = {
     opts.stage.toOption match {
-      case None => stages
+      case None => stages.result
       case Some(name) =>
-        stages.filter(_.getName == name) match {
-          case Nil    => throw new NoSuchElementException(name)
-          case stages => stages
+        stages.result.filter(_.getName == name) match {
+          case Nil => throw new NoSuchElementException(name)
+          case seq => seq
         }
     }
   }
@@ -105,17 +101,26 @@ abstract class Method extends LazyLogging {
     * for the JAR.
     */
   def main(args: Array[String]): Unit = {
-    implicit val opts: Opts = new Opts(args.toList)
+    val opts: Opts = new Opts(args.toList)
 
-    // set implicits for the rest of the execution
-    val result = Context.use(this) {
-      logger.info(s"Connecting to ${opts.config.aws.rds.instance}")
+    // which schema will be connected to
+    val schema = if (opts.test()) "test" else "aggregator"
+
+    // create the execution context
+    implicit val context: Context = new Context(this) {
+      override lazy val db: Db          = new Db(opts.config.aws.rds.secret.get, schema)
+      override lazy val s3: S3.Bucket   = new S3.Bucket(opts.config.aws.s3.bucket)
+      override lazy val emr: Emr.Runner = new Emr.Runner(opts.config.aws.emr)
+    }
+
+    // execute the method
+    val result = Try {
+      logger.info(s"Initializing stages...")
+      initStages(context)
 
       // ensure the runs table exists
+      logger.info(s"Connecting to ${opts.config.aws.rds.instance}...")
       Runs.migrate()
-
-      // add all the stages to the method
-      initStages()
 
       // verify the action and execute it
       confirmReprocess(opts) {
@@ -126,6 +131,7 @@ abstract class Method extends LazyLogging {
         if (opts.yes()) run(opts) else showWork(opts)
       }
 
+      // finished successfully
       logger.info("Done")
     }
 

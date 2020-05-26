@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.metaanalysis
 
-import org.broadinstitute.dig.aggregator.core.{Stage, Input, Outputs}
+import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef}
 
@@ -25,13 +25,16 @@ import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef}
   *
   * The inputs and outputs for this processor are expected to be phenotypes.
   */
-class MetaAnalysisStage extends Stage {
+class MetaAnalysisStage(implicit context: Context) extends Stage {
+  val variants: Input.Source = Input.Source.Dataset("variants/*/*/")
 
-  /** Processor inputs.
-    */
-  override val dependencies: Seq[Input.Source] = Seq(
-    Input.Source.Dataset("variants/"),
-  )
+  /** Input sources. */
+  override val sources: Seq[Input.Source] = Seq(variants)
+
+  /** Rules for mapping input -> output. */
+  override val rules: PartialFunction[Input, Outputs] = {
+    case variants(_, phenotype) => Outputs.Named(phenotype)
+  }
 
   /** Additional resources to upload. */
   override def additionalResources: Seq[String] = Seq(
@@ -39,26 +42,14 @@ class MetaAnalysisStage extends Stage {
     "scripts/getmerge-strip-headers.sh",
   )
 
-  /* Cluster definition to run jobs.
-   */
+  /** Cluster definition to run jobs.  */
   override def cluster: ClusterDef = super.cluster.copy(
     masterVolumeSizeInGB = 800,
     bootstrapScripts = Seq(new BootstrapScript(resourceURI("pipeline/metaanalysis/cluster-bootstrap.sh"))),
   )
 
-  /** The phenotype of each dataset is the output.
-    */
-  override def getOutputs(input: Input): Outputs = {
-    val pattern = raw"variants/([^/]+)/([^/]+)/.*".r
-
-    input.key match {
-      case pattern(_, phenotype) => Outputs.Named(phenotype)
-    }
-  }
-
-  /** Take all the phenotype results from the dependencies and process them.
-    */
-  override def getJob(output: String): Seq[JobStep] = {
+  /** Take all the phenotype results from the dependencies and process them. */
+  override def make(output: String): Seq[JobStep] = {
     val partition        = resourceURI("pipeline/metaanalysis/partitionVariants.py")
     val ancestrySpecific = resourceURI("pipeline/metaanalysis/runAncestrySpecific.sh")
     val transEthnic      = resourceURI("pipeline/metaanalysis/runTransEthnic.sh")

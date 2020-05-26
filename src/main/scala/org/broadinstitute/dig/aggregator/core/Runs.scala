@@ -35,45 +35,39 @@ case class Runs(
 object Runs extends LazyLogging {
 
   /** Create the runs table if it doesn't already exist. */
-  def migrate(): Unit = {
-    val db  = Context.current.db
+  def migrate()(implicit context: Context): Unit = {
+    import context.db.ctx._
+
+    // load the create table query
     val sql = Source.fromResource("runs.sql").mkString
 
-    import db.ctx._
-
-    db.ctx.run(quote(infix"#$sql".as[Action[Unit]]))
+    // create the table if it doesn't exist
+    context.db.ctx.run(quote(infix"#$sql".as[Action[Unit]]))
     ()
   }
 
   /** Delete the runs table if it exists. Used for testing. */
-  private[core] def drop(): Unit = {
-    val db = Context.current.db
+  private[core] def drop()(implicit context: Context): Unit = {
+    import context.db.ctx._
 
-    import db.ctx._
-
-    db.ctx.run(quote(infix"DROP TABLE IF EXISTS runs".as[Action[Unit]]))
+    context.db.ctx.run(quote(infix"DROP TABLE IF EXISTS runs".as[Action[Unit]]))
     ()
   }
 
   /** Returns a list of all runs in the database. Used for testing. */
-  private[core] def all(): List[Runs] = {
-    val db = Context.current.db
+  private[core] def all()(implicit context: Context): List[Runs] = {
+    import context.db.ctx._
 
-    import db.ctx._
-
-    db.ctx.run(quote(query[Runs]))
+    context.db.ctx.run(quote(query[Runs]))
   }
 
   /** Delete outputs from the database. */
-  def delete(stage: Stage, output: String): Long = {
-    val db     = Context.current.db
-    val method = Context.current.method
+  def delete(stage: Stage, output: String)(implicit context: Context): Long = {
+    import context.db.ctx._
 
-    import db.ctx._
-
-    db.ctx.run(quote {
+    context.db.ctx.run(quote {
       query[Runs].filter { r =>
-        r.method == lift(method.getName) &&
+        r.method == lift(context.method.getName) &&
         r.stage == lift(stage.getName) &&
         r.output == lift(output)
       }.delete
@@ -81,24 +75,21 @@ object Runs extends LazyLogging {
   }
 
   /** Add outputs to the database with all input versions and provenance data. */
-  def insert(stage: Stage, output: String, inputs: Seq[Input]): List[Long] = {
-    val db     = Context.current.db
-    val method = Context.current.method
-
-    import db.ctx._
+  def insert(stage: Stage, output: String, inputs: Seq[Input])(implicit context: Context): List[Long] = {
+    import context.db.ctx._
 
     // provenance data for method
-    val source = method.provenance.flatMap(_.source)
-    val branch = method.provenance.flatMap(_.branch)
-    val commit = method.provenance.flatMap(_.commit)
+    val source = context.method.provenance.flatMap(_.source)
+    val branch = context.method.provenance.flatMap(_.branch)
+    val commit = context.method.provenance.flatMap(_.commit)
 
     // generate runs to insert
     val runs = inputs.map { input =>
       Runs(
-        method.getName,
+        context.method.getName,
         stage.getName,
         input.key,
-        input.eTag,
+        input.version,
         output,
         source,
         branch,
@@ -106,7 +97,7 @@ object Runs extends LazyLogging {
       )
     }
 
-    db.ctx.run(quote {
+    context.db.ctx.run(quote {
       liftQuery(runs).foreach { r =>
         query[Runs]
           .insert(r)
@@ -121,14 +112,14 @@ object Runs extends LazyLogging {
   }
 
   /** Lookup all the results of the current method's stage. */
-  def of(stage: Stage): Seq[Runs] = {
-    val db     = Context.current.db
-    val method = Context.current.method
+  def of(stage: Stage)(implicit context: Context): Seq[Runs] = {
+    import context.db.ctx._
 
-    import db.ctx._
-
-    db.ctx.run(quote {
-      query[Runs].filter(r => r.method == lift(method.getName) && r.stage == lift(stage.getName))
+    context.db.ctx.run(quote {
+      query[Runs].filter { r =>
+        r.method == lift(context.method.getName) &&
+        r.stage == lift(stage.getName)
+      }
     })
   }
 }

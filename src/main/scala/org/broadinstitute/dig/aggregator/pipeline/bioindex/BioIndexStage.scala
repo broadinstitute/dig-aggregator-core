@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.bioindex
 
-import org.broadinstitute.dig.aggregator.core.{Glob, Input, Outputs, Stage}
+import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType}
 
@@ -8,25 +8,47 @@ import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType}
   * other data, sorted by locus, and written to the bio index bucket so they
   * can be queried.
   */
-class BioIndexStage extends Stage {
+class BioIndexStage(implicit context: Context) extends Stage {
+  val genes: Input.Source      = Input.Source.Dataset("genes/")
+  val tissues: Input.Source    = Input.Source.Dataset("tissues/")
+  val variants: Input.Source   = Input.Source.Dataset("variants/")
+  val freq: Input.Source       = Input.Source.Success("out/frequencyanalysis/")
+  val regions: Input.Source    = Input.Source.Success("out/gregor/regions/sorted/")
+  val gregor: Input.Source     = Input.Source.Success("out/gregor/summary/")
+  val bottomLine: Input.Source = Input.Source.Success("out/metaanalysis/trans-ethnic/*/")
+  val plots: Input.Source      = Input.Source.Success("out/metaanalysis/plots/*/")
+  val motifs: Input.Source     = Input.Source.Success("out/transcriptionfactors/")
+  val vep: Input.Source        = Input.Source.Success("out/varianteffect/common/")
 
-  /** Source data to consume.
-    */
-  override val dependencies: Seq[Input.Source] = Seq(
-    Input.Source.Dataset("genes/"),
-    Input.Source.Dataset("tissues/"),
-    Input.Source.Dataset("variants/"),
-    Input.Source.Success("out/frequencyanalysis/"),
-    Input.Source.Success("out/gregor/regions/sorted/"),
-    Input.Source.Success("out/gregor/summary/"),
-    Input.Source.Success("out/metaanalysis/trans-ethnic/"),
-    Input.Source.Success("out/metaanalysis/plots/"),
-    Input.Source.Success("out/transcriptionfactors/"),
-    Input.Source.Success("out/varianteffect/common/"),
+  /** Input sources. */
+  override val sources: Seq[Input.Source] = Seq(
+    genes,
+    tissues,
+    variants,
+    freq,
+    regions,
+    gregor,
+    bottomLine,
+    plots,
+    motifs,
+    vep,
   )
 
-  /* Cluster configuration.
-   */
+  /** Rules for mapping input to outputs. */
+  override val rules: PartialFunction[Input, Outputs] = {
+    case genes()               => Outputs.Named("genes")
+    case tissues()             => Outputs.Named("globalEnrichment", "regions")
+    case variants()            => Outputs.Named("datasets")
+    case freq()                => Outputs.Named("variants")
+    case bottomLine(phenotype) => Outputs.Named(s"associations/$phenotype")
+    case plots(phenotype)      => Outputs.Named(s"plots/$phenotype")
+    case regions()             => Outputs.Named("regions")
+    case gregor()              => Outputs.Named("globalEnrichment")
+    case motifs()              => Outputs.Named("variants")
+    case vep()                 => Outputs.Named("associations", "variants")
+  }
+
+  /* Cluster configuration. */
   override def cluster: ClusterDef = super.cluster.copy(
     masterInstanceType = InstanceType.r5_4xlarge,
     slaveInstanceType = InstanceType.r5_2xlarge,
@@ -34,37 +56,9 @@ class BioIndexStage extends Stage {
     slaveVolumeSizeInGB = 800,
   )
 
-  /** Each ancestry gets its own output.
-    */
-  override def getOutputs(input: Input): Outputs = {
-    val genes                = Glob("genes/...")
-    val tissues              = Glob("tissues/...")
-    val variants             = Glob("variants/...")
-    val metaAnalysis         = Glob("out/metaanalysis/trans-ethnic/*/...")
-    val plots                = Glob("out/metaanalysis/plots/*/...")
-    val enrichment           = Glob("out/gregor/summary/*/...")
-    val regions              = Glob("out/gregor/regions/sorted/...")
-    val frequency            = Glob("out/frequencyanalysis/*/...")
-    val transcriptionFactors = Glob("out/transcriptionfactors/...")
-    val vep                  = Glob("out/varianteffect/common/...")
-
-    input.key match {
-      case genes()                 => Outputs.Named("genes")
-      case tissues()               => Outputs.Named("globalEnrichment", "regions")
-      case variants()              => Outputs.Named("datasets")
-      case metaAnalysis(phenotype) => Outputs.Named("associations")
-      case plots(phenotype)        => Outputs.Named("plots")
-      case enrichment(phenotype)   => Outputs.Named("globalEnrichment")
-      case regions()               => Outputs.Named("regions")
-      case frequency(ancestry)     => Outputs.Named("variants")
-      case transcriptionFactors()  => Outputs.Named("variants")
-      case vep()                   => Outputs.Named("associations", "variants")
-    }
-  }
-
   /** For each phenotype output, process all the datasets for it.
     */
-  override def getJob(output: String): Seq[JobStep] = {
+  override def make(output: String): Seq[JobStep] = {
     val associationsScript     = resourceURI("pipeline/bioindex/associations.py")
     val datasetsScript         = resourceURI("pipeline/bioindex/datasets.py")
     val genesScript            = resourceURI("pipeline/bioindex/genes.py")

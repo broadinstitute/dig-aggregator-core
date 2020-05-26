@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.frequencyanalysis
 
-import org.broadinstitute.dig.aggregator.core.{Input, Outputs, Stage}
+import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType}
 
@@ -17,16 +17,13 @@ import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType}
   *
   *  s3://dig-analysis-data/out/frequencyanalysis/<ancestry>/part-*
   */
-class FrequencyAnalysisStage extends Stage {
+class FrequencyAnalysisStage(implicit context: Context) extends Stage {
+  var variants: Input.Source = Input.Source.Dataset("variants/")
 
-  /** Source data to consume.
-    */
-  override val dependencies: Seq[Input.Source] = Seq(
-    Input.Source.Dataset("variants/"),
-  )
+  /** Input sources. */
+  override val sources: Seq[Input.Source] = Seq(variants)
 
-  /* Cluster configuration used to process frequency.
-   */
+  /* Cluster configuration used to process frequency. */
   override def cluster: ClusterDef = super.cluster.copy(
     instances = 5,
     masterInstanceType = InstanceType.c5_9xlarge,
@@ -35,19 +32,16 @@ class FrequencyAnalysisStage extends Stage {
     slaveVolumeSizeInGB = 500,
   )
 
-  /** Unique ancestries to process.
-    */
+  /** Unique ancestries to process. */
   private val ancestries = Seq("AA", "AF", "EA", "EU", "HS", "SA")
 
-  /** Each ancestry gets its own output.
-    */
-  override def getOutputs(input: Input): Outputs = {
-    Outputs.Named(ancestries: _*)
+  /** Any new dataset needs to update all ancestries. */
+  override val rules: PartialFunction[Input, Outputs] = {
+    case _ => Outputs.Named(ancestries: _*)
   }
 
-  /** For each phenotype output, process all the datasets for it.
-    */
-  override def getJob(output: String): Seq[JobStep] = {
+  /** For each phenotype output, process all the datasets for it. */
+  override def make(output: String): Seq[JobStep] = {
     val script   = resourceURI("pipeline/frequencyanalysis/frequencyAnalysis.py")
     val ancestry = output
 

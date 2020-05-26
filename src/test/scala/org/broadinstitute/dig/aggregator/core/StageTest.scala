@@ -4,23 +4,27 @@ import java.util.UUID
 
 import org.scalatest.funsuite.AnyFunSuite
 
-final class StageTest extends AnyFunSuite with ProvidesH2Transactor {
+final class StageTest extends AnyFunSuite {
+  implicit val context: Context = new TestContext(TestMethod)
+
+  // instantiate the stage to test
+  private val testStage = new TestMethod.TestStage()
 
   // create a dummy input
   def input(name: String): Input = Input(name, UUID.randomUUID.toString)
 
   // some fake inputs
-  private val inputA1 = input("a/foo/bar") // -> Outputs.Named("foo")
-  private val inputA2 = input("a/foo/baz") // -> Outputs.Named("foo")
-  private val inputB1 = input("b/bar/wow") // -> Outputs.Named("bar")
-  private val inputB2 = input("b/bar/ack") // -> Outputs.Named("bar")
-  private val inputC1 = input("c/any/all") // -> Outputs.All
+  val inputA1 = input("a/foo/bar") // -> Outputs.Named("foo")
+  val inputA2 = input("a/foo/baz") // -> Outputs.Named("foo")
+  val inputB1 = input("b/bar/wow") // -> Outputs.Named("bar")
+  val inputB2 = input("b/bar/ack") // -> Outputs.Named("bar")
+  val inputC1 = input("c/any/all") // -> Outputs.All
 
   // dummy options
   private val opts = new Opts(Seq.empty)
 
   def testInputToOutput(input: Input, expectedOutput: String): Boolean = {
-    TestMethod.TestStage.getOutputs(input) match {
+    testStage.rules(input) match {
       case Outputs.Named(seq @ _*) => seq == Seq(expectedOutput)
       case _                       => false
     }
@@ -34,12 +38,12 @@ final class StageTest extends AnyFunSuite with ProvidesH2Transactor {
   }
 
   test("all outputs") {
-    assert(TestMethod.TestStage.getOutputs(inputC1) == Outputs.All)
+    assert(testStage.rules(inputC1) == Outputs.All)
   }
 
   test("simple (output -> inputs)") {
     val inputs    = Seq(inputA1, inputA2, inputB1, inputB2)
-    val outputMap = TestMethod.TestStage.buildOutputMap(inputs, opts)
+    val outputMap = testStage.buildOutputMap(inputs, opts)
 
     // should only contain the outputs foo and bar
     assert(outputMap.keys.size == 2)
@@ -53,7 +57,7 @@ final class StageTest extends AnyFunSuite with ProvidesH2Transactor {
 
   test("all (output -> inputs)") {
     val inputs    = Seq(inputA1, inputB1, inputC1)
-    val outputMap = TestMethod.TestStage.buildOutputMap(inputs, opts)
+    val outputMap = testStage.buildOutputMap(inputs, opts)
 
     // should only contain the outputs foo and bar
     assert(outputMap.keys.size == 2)

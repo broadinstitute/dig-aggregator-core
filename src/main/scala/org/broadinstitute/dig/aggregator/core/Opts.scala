@@ -7,7 +7,7 @@ import org.rogach.scallop.exceptions.ScallopException
 
 /** Command line and configuration file argument parsing. */
 final class Opts(args: Seq[String]) extends ScallopConf(args) {
-  import Glob.String2Glob
+  import Implicits.stringToGlob
 
   /** Dot-env configuration file where settings are. */
   val configFile: ScallopOption[File] = opt("config", default = Some(new File("config.json")))
@@ -67,12 +67,12 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
 
   /** Returns a glob for the only option. */
   lazy val onlyGlobs: Seq[Glob] = {
-    only.map(_.split(",").map(_.toGlob).toSeq).getOrElse(List(Glob.True))
+    only.map(_.split(",").filter(_.nonEmpty).map(stringToGlob).toSeq).getOrElse(List(Glob.True))
   }
 
   /** Returns a glob for the exclude option. */
   lazy val excludeGlobs: Seq[Glob] = {
-    exclude.map(_.split(",").map(_.toGlob).toSeq).getOrElse(List(Glob.False))
+    exclude.map(_.split(",").filter(_.nonEmpty).map(stringToGlob).toSeq).getOrElse(List(Glob.False))
   }
 
   /** Outputs standard help from Scallop along with an additional message. */

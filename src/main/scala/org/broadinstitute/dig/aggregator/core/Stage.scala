@@ -7,7 +7,7 @@ import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{ClusterDef, Spark}
 
 /** Each processor has a globally unique name and a run function. */
-abstract class Stage extends LazyLogging {
+abstract class Stage(implicit context: Context) extends LazyLogging {
 
   /** Tracks where all the resources were uploaded to so they can be used
     * when building a JobStep.
@@ -28,11 +28,6 @@ abstract class Stage extends LazyLogging {
     */
   def additionalResources: Seq[String] = Seq.empty
 
-  /** All the processors this processor depends on. Root processors should
-    * depend on one (or more) of the processors in the IntakePipeline.
-    */
-  val dependencies: Seq[Input.Source]
-
   /** The cluster definition to instantiate for this processor. This is a
     * very basic configuration that should work for a good number of jobs.
     */
@@ -44,18 +39,21 @@ abstract class Stage extends LazyLogging {
     )
   )
 
-  /** Given an input object, determine what output(s) it maps to.
-    *
-    * Every input should be represented in at least one output, but can be
-    * present in multiple outputs. This method is used to build a map of
-    * output -> seq[(key, eTag)], which is what's written to the database.
+  /** All the new/updated sources that will be checked in S3. These will
+    * be applied to the rules of this stage to determine the final set
+    * of outputs that need to be built.
     */
-  def getOutputs(input: Input): Outputs
+  val sources: Seq[Input.Source]
+
+  /** Rules define what inputs (dependencies) are used to build various
+    * outputs the stage produces. Whenever an input
+    */
+  val rules: PartialFunction[Input, Outputs]
 
   /** Given an output, returns a sequence of job steps to be executed on
     * the cluster.
     */
-  def getJob(output: String): Seq[JobStep]
+  def make(output: String): Seq[JobStep]
 
   /** Get a cached resource file URI.
     *
@@ -63,35 +61,39 @@ abstract class Stage extends LazyLogging {
     * to S3 and cache the URI to it.
     */
   def resourceURI(name: String): URI = {
-    val cachedURI = resourceMap.getOrElse(name, Context.current.aws.upload(name))
+    val key       = s"resources/$name"
+    val contents  = scala.io.Source.fromResource(name).mkString
+    val cachedUri = context.s3.s3UriOf(key)
+
+    // upload the contents of the resource
+    resourceMap.getOrElse(name, context.s3.put(key, contents))
 
     // keep the cache up to date
-    resourceMap += name -> cachedURI
-    cachedURI
+    resourceMap += name -> cachedUri
+    cachedUri
   }
 
   /** Process a set of run results. */
   def processOutputs(output: Seq[String], opts: Opts): Unit = {
-    val jobs = output.map(output => output -> getJob(output))
+    val jobs = output.map(output => output -> make(output))
 
     if (jobs.nonEmpty) {
       val bucket = s"s3://${opts.config.aws.s3.bucket}"
       val prefix = if (opts.test()) "test" else "out"
-      val method = Context.current.method
 
       // create a set of environment variables for all the jobs
       val env = Seq(
         "JOB_BUCKET" -> bucket,
-        "JOB_METHOD" -> method.getName,
+        "JOB_METHOD" -> context.method.getName,
         "JOB_STAGE"  -> getName,
-        "JOB_PREFIX" -> s"$prefix/${method.getName}/$getName"
+        "JOB_PREFIX" -> s"$prefix/${context.method.getName}/$getName"
       )
 
       // upload all additional resources before running
       additionalResources.foreach(resourceURI)
 
       // spins up the cluster(s) and runs all the job steps
-      Context.current.aws.runJobs(cluster, env, jobs.map(_._2))
+      context.emr.runJobs(cluster, env, jobs.map(_._2))
     }
   }
 
@@ -101,7 +103,7 @@ abstract class Stage extends LazyLogging {
     */
   def buildOutputMap(inputs: Seq[Input], opts: Opts): Map[String, Set[Input]] = {
     val inputToOutputs = inputs.map { input =>
-      input -> getOutputs(input)
+      input -> rules.apply(input)
     }
 
     // get the list of output -> input
@@ -124,12 +126,12 @@ abstract class Stage extends LazyLogging {
       (inputs ++ inputsInAllOutputs).toSet
     }
 
-    // get all UUIDs across all outputs
+    // get all inputs represented in all the outputs
     val allOutputInputs = finalMap.values.flatten.toSet
 
     // validate that ALL inputs are represented in at least one output
     inputs.foreach { input =>
-      require(allOutputInputs.exists(_.key == input.key))
+      require(allOutputInputs.contains(input))
     }
 
     // filter by CLI options
@@ -146,7 +148,7 @@ abstract class Stage extends LazyLogging {
     val lastOutputs = if (opts.reprocess()) Seq.empty else Runs.of(this)
 
     // get all the outputs that have already been processed
-    val inputs    = dependencies.flatMap(dep => dep.objects)
+    val inputs    = sources.flatMap(source => source.inputs())
     val outputMap = buildOutputMap(inputs, opts)
 
     /* For every output that would run, remove all the inputs that have
@@ -163,8 +165,8 @@ abstract class Stage extends LazyLogging {
         // filter inputs that are already processed
         output -> inputs.filter { input =>
           results.find(_.input == input.key) match {
-            case Some(result) if result.version == input.eTag => false
-            case _                                            => true
+            case Some(result) if result.version == input.version => false
+            case _                                               => true
           }
         }
     }

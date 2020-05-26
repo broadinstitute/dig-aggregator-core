@@ -11,13 +11,7 @@ import scala.io.Source
 /** Config is loaded from a JSON configuration file. They detail settings that are
   * used to make connections to databases and spin up machine clusters for processing.
   */
-final case class Config(aws: AwsConfig) {
-
-  /** Database connection pool. */
-  lazy val db: DbPool = {
-    DbPool.fromSecret(aws.rds.secret.get, "test")
-  }
-}
+final case class Config(aws: AwsConfig)
 
 /** Companion object. */
 object Config {

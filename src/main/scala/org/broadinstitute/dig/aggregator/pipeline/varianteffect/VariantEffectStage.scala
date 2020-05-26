@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
-import org.broadinstitute.dig.aggregator.core.{Context, Input, Outputs, Stage}
+import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aws.JobStep
 import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef, InstanceType}
 
@@ -17,18 +17,16 @@ import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef, InstanceType
   *
   *  s3://dig-analysis-data/out/varianteffect/effects
   */
-class VariantEffectStage extends Stage {
+class VariantEffectStage(implicit context: Context) extends Stage {
+  val variants: Input.Source = Input.Source.Success("out/varianteffect/variants/")
 
   /** Additional resources that need uploaded to S3. */
   override def additionalResources: Seq[String] = Seq(
     "pipeline/varianteffect/runVEP.sh",
   )
 
-  /** All the processors this processor depends on.
-    */
-  override val dependencies: Seq[Input.Source] = Seq(
-    Input.Source.Success("out/varianteffect/variants/"),
-  )
+  /** Input sources. */
+  override val sources: Seq[Input.Source] = Seq(variants)
 
   private lazy val clusterBootstrap = resourceURI("pipeline/varianteffect/cluster-bootstrap.sh")
   private lazy val installScript    = resourceURI("pipeline/varianteffect/installVEP.sh")
@@ -44,24 +42,22 @@ class VariantEffectStage extends Stage {
     bootstrapSteps = Seq(JobStep.Script(installScript))
   )
 
-  /** Only a single output for VEP that uses ALL variants.
-    */
-  override def getOutputs(input: Input): Outputs = {
-    Outputs.Named("VEP")
+  /** Map inputs to outputs. */
+  override val rules: PartialFunction[Input, Outputs] = {
+    case variants() => Outputs.Named("VEP")
   }
 
   /** The results are ignored, as all the variants are refreshed and everything
     * needs to be run through VEP again.
     */
-  override def getJob(output: String): Seq[JobStep] = {
+  override def make(output: String): Seq[JobStep] = {
     val runScript = resourceURI("pipeline/varianteffect/runVEP.pl")
-    val aws       = Context.current.aws
 
     // delete all existing effects
-    aws.rmdir("out/varianteffect/effects/")
+    context.s3.rm("out/varianteffect/effects/")
 
     // get all the variant part files to process, use only the part filename
-    val objects = aws.ls(s"out/varianteffect/variants/", excludeSuccess = true)
+    val objects = context.s3.ls(s"out/varianteffect/variants/")
     val keys    = objects.map(_.key)
     val parts   = keys.map(_.split('/').last)
 
