@@ -2,7 +2,8 @@ package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType, MemorySize, Spark}
+import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType}
+import org.broadinstitute.dig.aws.emr.configurations.{MemorySize, MapReduce, Spark}
 
 /** After all the variants across all datasets have had VEP run on them in the
   * previous step the rsID for each variant is extracted into its own file.
@@ -30,11 +31,11 @@ class CommonSNPStage(implicit context: Context) extends Stage {
     masterInstanceType = InstanceType.m5_4xlarge,
     slaveInstanceType = InstanceType.m5_8xlarge,
     instances = 4,
-    configurations = Seq(
-      Spark.Env().withPython3,
-      Spark.Config().withMaximizeResourceAllocation,
-      Spark.Defaults().withExecutorMemory(20.gb).withExecutorMemoryOverhead(4.gb),
-      Spark.MapReduce().withMapMemory(8.gb).withReduceMemory(8.gb),
+    applicationConfigurations = Seq(
+      new Spark.Env().usePython3,
+      new Spark.Config().maximizeResourceAllocation,
+      new Spark.Defaults().executorMemory(20.gb).executorMemoryOverhead(4.gb),
+      new MapReduce.Site().mapMemory(8.gb).reduceMemory(8.gb),
     ),
   )
 
@@ -45,7 +46,7 @@ class CommonSNPStage(implicit context: Context) extends Stage {
 
   /** All effect results are combined together, so the results list is ignored. */
   override def make(output: String): Seq[JobStep] = {
-    val scriptUri = resourceURI("pipeline/varianteffect/common.py")
+    val scriptUri = resourceUri("pipeline/varianteffect/common.py")
 
     Seq(JobStep.PySpark(scriptUri))
   }

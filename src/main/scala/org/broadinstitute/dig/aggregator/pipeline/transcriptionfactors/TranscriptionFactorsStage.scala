@@ -22,7 +22,7 @@ class TranscriptionFactorsStage(implicit context: Context) extends Stage {
     * get a list of all regions with the variants that they overlap.
     */
   override def make(output: String): Seq[JobStep] = {
-    val script = resourceURI("pipeline/transcriptionfactors/transcriptionFactors.py")
+    val script = resourceUri("pipeline/transcriptionfactors/transcriptionFactors.py")
 
     // there's only a single output that ever needs processed.
     Seq(JobStep.PySpark(script))

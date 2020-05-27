@@ -31,7 +31,7 @@ class SNPListStage(implicit context: Context) extends Stage {
   /** Find all the unique SNPs from all the output of the meta-analysis processor.
     */
   override def make(output: String): Seq[JobStep] = {
-    val script    = resourceURI("pipeline/gregor/snplist.py")
+    val script    = resourceUri("pipeline/gregor/snplist.py")
     val phenotype = output
 
     // each phenotype gets its own snp list output

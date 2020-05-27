@@ -4,7 +4,8 @@ import java.net.URI
 
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{ClusterDef, Spark}
+import org.broadinstitute.dig.aws.emr.ClusterDef
+import org.broadinstitute.dig.aws.emr.configurations.Spark
 
 /** Each processor has a globally unique name and a run function. */
 abstract class Stage(implicit context: Context) extends LazyLogging {
@@ -33,9 +34,9 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     */
   def cluster: ClusterDef = ClusterDef(
     name = getName,
-    configurations = Seq(
-      Spark.Env().withPython3,
-      Spark.Config().withMaximizeResourceAllocation,
+    applicationConfigurations = Seq(
+      new Spark.Env().usePython3(),
+      new Spark.Config().maximizeResourceAllocation(),
     )
   )
 
@@ -60,16 +61,18 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     * If not already cached, this function will UPLOAD the given resource
     * to S3 and cache the URI to it.
     */
-  def resourceURI(name: String): URI = {
-    val key       = s"resources/$name"
-    val contents  = scala.io.Source.fromResource(name).mkString
-    val cachedUri = context.s3.s3UriOf(key)
+  def resourceUri(resource: String): URI = {
+    val cachedUri = resourceMap.getOrElse(
+      resource, {
+        val key = s"resources/${context.method.getName}/$getName/$resource"
 
-    // upload the contents of the resource
-    resourceMap.getOrElse(name, context.s3.put(key, contents))
+        context.s3.putResource(key, resource)
+        context.s3.s3UriOf(key)
+      }
+    )
 
     // keep the cache up to date
-    resourceMap += name -> cachedUri
+    resourceMap += resource -> cachedUri
     cachedUri
   }
 
@@ -82,7 +85,7 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
       val prefix = if (opts.test()) "test" else "out"
 
       // create a set of environment variables for all the jobs
-      val env = Seq(
+      val env = Map(
         "JOB_BUCKET" -> bucket,
         "JOB_METHOD" -> context.method.getName,
         "JOB_STAGE"  -> getName,
@@ -90,7 +93,7 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
       )
 
       // upload all additional resources before running
-      additionalResources.foreach(resourceURI)
+      additionalResources.foreach(resourceUri)
 
       // spins up the cluster(s) and runs all the job steps
       context.emr.runJobs(cluster, env, jobs.map(_._2))
@@ -145,6 +148,9 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     * a mapping of output -> Set[Input].
     */
   def getWork(opts: Opts): Map[String, Set[Input]] = {
+    logger.info(s"Finding new/updated inputs of stage $getName...")
+
+    // load all the outputs previously written by this stage
     val lastOutputs = if (opts.reprocess()) Seq.empty else Runs.of(this)
 
     // get all the outputs that have already been processed
@@ -185,9 +191,6 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
 
   /** Logs the set of outputs this processor will build if run. */
   def showWork(opts: Opts): Unit = {
-    logger.info(s"Finding new/updated inputs of stage $getName...")
-
-    // find all the outputs that need built
     val outputMap = getWork(opts)
 
     // output them to the log

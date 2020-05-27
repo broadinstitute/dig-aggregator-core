@@ -33,7 +33,7 @@ class LoadVariantCQSStage(implicit context: Context) extends Stage {
 
   /** All effect results are combined together, so the results list is ignored. */
   override def make(output: String): Seq[JobStep] = {
-    val scriptUri = resourceURI("pipeline/varianteffect/loadCQS.py")
+    val scriptUri = resourceUri("pipeline/varianteffect/loadCQS.py")
 
     Seq(JobStep.PySpark(scriptUri))
   }

@@ -20,7 +20,7 @@ class SortRegionsStage(implicit context: Context) extends Stage {
     * input doesn't matter.
     */
   override def make(output: String): Seq[JobStep] = {
-    val script = resourceURI("pipeline/gregor/sortRegions.py")
+    val script = resourceUri("pipeline/gregor/sortRegions.py")
 
     // run all the jobs then update the database
     Seq(JobStep.PySpark(script))

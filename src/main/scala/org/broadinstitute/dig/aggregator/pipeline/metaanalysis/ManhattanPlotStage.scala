@@ -38,7 +38,7 @@ class ManhattanPlotStage(implicit context: Context) extends Stage {
     case bottomLine(phenotype) => Outputs.Named(phenotype)
   }
 
-  lazy val installR: URI = resourceURI("pipeline/metaanalysis/install-R.sh")
+  lazy val installR: URI = resourceUri("pipeline/metaanalysis/install-R.sh")
 
   // cluster definition to run jobs
   override def cluster: ClusterDef = super.cluster.copy(
@@ -50,8 +50,8 @@ class ManhattanPlotStage(implicit context: Context) extends Stage {
   /** Take all the phenotype results from the dependencies and process them.
     */
   override def make(output: String): Seq[JobStep] = {
-    val plotScript = resourceURI("pipeline/metaanalysis/makePlot.sh")
-    val _          = resourceURI("pipeline/metaanalysis/manhattan.R")
+    val plotScript = resourceUri("pipeline/metaanalysis/makePlot.sh")
+    val _          = resourceUri("pipeline/metaanalysis/manhattan.R")
     val phenotype  = output
 
     // create a job for each output (phenotype)

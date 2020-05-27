@@ -34,7 +34,7 @@ class VariantListStage(implicit context: Context) extends Stage {
     * there is only a single analysis node for all variants.
     */
   override def make(output: String): Seq[JobStep] = {
-    val pyScript = resourceURI("pipeline/varianteffect/listVariants.py")
+    val pyScript = resourceUri("pipeline/varianteffect/listVariants.py")
 
     Seq(JobStep.PySpark(pyScript))
   }

@@ -13,8 +13,8 @@ class GlobalEnrichmentStage(implicit context: Context) extends Stage {
   override val sources: Seq[Input.Source] = Seq(regions, snp)
 
   /* Install scripts. */
-  private lazy val bootstrap = resourceURI("pipeline/gregor/cluster-bootstrap.sh")
-  private lazy val install   = resourceURI("pipeline/gregor/installGREGOR.sh")
+  private lazy val bootstrap = resourceUri("pipeline/gregor/cluster-bootstrap.sh")
+  private lazy val install   = resourceUri("pipeline/gregor/installGREGOR.sh")
 
   /* r^2 parameter to scripts */
   private val r2 = "0.7"
@@ -49,7 +49,7 @@ class GlobalEnrichmentStage(implicit context: Context) extends Stage {
   /** Run GREGOR over the results of the SNP list and regions.
     */
   override def make(output: String): Seq[JobStep] = {
-    val run       = resourceURI("pipeline/gregor/runGREGOR.sh")
+    val run       = resourceUri("pipeline/gregor/runGREGOR.sh")
     val phenotype = output
 
     // a phenotype needs processed per ancestry

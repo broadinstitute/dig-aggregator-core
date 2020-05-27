@@ -59,13 +59,13 @@ class BioIndexStage(implicit context: Context) extends Stage {
   /** For each phenotype output, process all the datasets for it.
     */
   override def make(output: String): Seq[JobStep] = {
-    val associationsScript     = resourceURI("pipeline/bioindex/associations.py")
-    val datasetsScript         = resourceURI("pipeline/bioindex/datasets.py")
-    val genesScript            = resourceURI("pipeline/bioindex/genes.py")
-    val globalEnrichmentScript = resourceURI("pipeline/bioindex/globalEnrichment.py")
-    val plotsScript            = resourceURI("pipeline/bioindex/statics/plots.sh")
-    val regionsScript          = resourceURI("pipeline/bioindex/regions.py")
-    val variantsScript         = resourceURI("pipeline/bioindex/variants.py")
+    val associationsScript     = resourceUri("pipeline/bioindex/associations.py")
+    val datasetsScript         = resourceUri("pipeline/bioindex/datasets.py")
+    val genesScript            = resourceUri("pipeline/bioindex/genes.py")
+    val globalEnrichmentScript = resourceUri("pipeline/bioindex/globalEnrichment.py")
+    val plotsScript            = resourceUri("pipeline/bioindex/statics/plots.sh")
+    val regionsScript          = resourceUri("pipeline/bioindex/regions.py")
+    val variantsScript         = resourceUri("pipeline/bioindex/variants.py")
 
     output match {
       case "associations"     => Seq(JobStep.PySpark(associationsScript))

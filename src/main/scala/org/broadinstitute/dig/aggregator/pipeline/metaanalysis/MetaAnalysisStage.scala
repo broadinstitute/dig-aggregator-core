@@ -45,15 +45,15 @@ class MetaAnalysisStage(implicit context: Context) extends Stage {
   /** Cluster definition to run jobs.  */
   override def cluster: ClusterDef = super.cluster.copy(
     masterVolumeSizeInGB = 800,
-    bootstrapScripts = Seq(new BootstrapScript(resourceURI("pipeline/metaanalysis/cluster-bootstrap.sh"))),
+    bootstrapScripts = Seq(new BootstrapScript(resourceUri("pipeline/metaanalysis/cluster-bootstrap.sh"))),
   )
 
   /** Take all the phenotype results from the dependencies and process them. */
   override def make(output: String): Seq[JobStep] = {
-    val partition        = resourceURI("pipeline/metaanalysis/partitionVariants.py")
-    val ancestrySpecific = resourceURI("pipeline/metaanalysis/runAncestrySpecific.sh")
-    val transEthnic      = resourceURI("pipeline/metaanalysis/runTransEthnic.sh")
-    val loadAnalysis     = resourceURI("pipeline/metaanalysis/loadAnalysis.py")
+    val partition        = resourceUri("pipeline/metaanalysis/partitionVariants.py")
+    val ancestrySpecific = resourceUri("pipeline/metaanalysis/runAncestrySpecific.sh")
+    val transEthnic      = resourceUri("pipeline/metaanalysis/runTransEthnic.sh")
+    val loadAnalysis     = resourceUri("pipeline/metaanalysis/loadAnalysis.py")
     val phenotype        = output
 
     Seq(

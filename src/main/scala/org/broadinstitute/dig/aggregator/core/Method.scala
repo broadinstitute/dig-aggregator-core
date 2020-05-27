@@ -110,7 +110,7 @@ abstract class Method extends LazyLogging {
     implicit val context: Context = new Context(this) {
       override lazy val db: Db          = new Db(opts.config.aws.rds.secret.get, schema)
       override lazy val s3: S3.Bucket   = new S3.Bucket(opts.config.aws.s3.bucket)
-      override lazy val emr: Emr.Runner = new Emr.Runner(opts.config.aws.emr)
+      override lazy val emr: Emr.Runner = new Emr.Runner(opts.config.aws.emr, s3.bucket)
     }
 
     // execute the method

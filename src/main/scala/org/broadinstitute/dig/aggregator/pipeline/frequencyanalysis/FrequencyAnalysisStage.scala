@@ -42,7 +42,7 @@ class FrequencyAnalysisStage(implicit context: Context) extends Stage {
 
   /** For each phenotype output, process all the datasets for it. */
   override def make(output: String): Seq[JobStep] = {
-    val script   = resourceURI("pipeline/frequencyanalysis/frequencyAnalysis.py")
+    val script   = resourceUri("pipeline/frequencyanalysis/frequencyAnalysis.py")
     val ancestry = output
 
     // output is an ancestry

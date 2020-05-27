@@ -28,8 +28,8 @@ class VariantEffectStage(implicit context: Context) extends Stage {
   /** Input sources. */
   override val sources: Seq[Input.Source] = Seq(variants)
 
-  private lazy val clusterBootstrap = resourceURI("pipeline/varianteffect/cluster-bootstrap.sh")
-  private lazy val installScript    = resourceURI("pipeline/varianteffect/installVEP.sh")
+  private lazy val clusterBootstrap = resourceUri("pipeline/varianteffect/cluster-bootstrap.sh")
+  private lazy val installScript    = resourceUri("pipeline/varianteffect/installVEP.sh")
 
   /** Definition of each VM "cluster" (of 1 machine) that will run VEP.
     */
@@ -51,7 +51,7 @@ class VariantEffectStage(implicit context: Context) extends Stage {
     * needs to be run through VEP again.
     */
   override def make(output: String): Seq[JobStep] = {
-    val runScript = resourceURI("pipeline/varianteffect/runVEP.pl")
+    val runScript = resourceUri("pipeline/varianteffect/runVEP.pl")
 
     // delete all existing effects
     context.s3.rm("out/varianteffect/effects/")
