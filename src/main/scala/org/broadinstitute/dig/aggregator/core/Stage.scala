@@ -81,17 +81,15 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     val jobs = output.map(output => output -> make(output))
 
     if (jobs.nonEmpty) {
-      val bucket = s"s3://${opts.config.aws.s3.bucket}"
       val prefix = if (opts.test()) "test" else "out"
 
       /* Create a set of environment variables for all the steps.
        *
        * For PySpark steps, this is done using the yarn-env configuration.
-       * But, for Script steps there doesn't appear a way to set environment
-       * variables.
+       * Scripts can also access the environment using `yarn` command.
        */
       val env = Map(
-        "JOB_BUCKET" -> bucket,
+        "JOB_BUCKET" -> s"s3://${context.s3.bucket}",
         "JOB_METHOD" -> context.method.getName,
         "JOB_STAGE"  -> getName,
         "JOB_PREFIX" -> s"$prefix/${context.method.getName}/$getName"
@@ -101,7 +99,7 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
       additionalResources.foreach(resourceUri)
 
       // spins up the cluster(s) and runs all the job steps
-      context.emr.runJobs(cluster, jobs.map(_._2))
+      context.emr.runJobs(cluster, env, jobs.map(_._2))
     }
   }
 
@@ -121,26 +119,22 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     }
 
     // group the inputs together by output name
-    val outputMap = outputs.groupBy(_._1).view.mapValues(_.map(_._2))
+    val outputMap = outputs.groupBy(_._1).view.mapValues(_.map(_._2).toSet)
 
     // find the unique list of inputs that should be in ALL outputs
     val inputsInAllOutputs = inputToOutputs
       .filter(_._2 == Outputs.All)
       .map(_._1)
-      .distinct
+      .toSet
 
     // append any inputs that belong to ALL outputs to each of them
-    val finalMap = outputMap.mapValues { inputs =>
-      (inputs ++ inputsInAllOutputs).toSet
-    }
+    val finalMap = outputMap.mapValues(_ ++ inputsInAllOutputs)
 
     // get all inputs represented in all the outputs
     val allOutputInputs = finalMap.values.flatten.toSet
 
     // validate that ALL inputs are represented in at least one output
-    inputs.foreach { input =>
-      require(allOutputInputs.contains(input))
-    }
+    require(inputs.forall(allOutputInputs.contains))
 
     // filter by CLI options
     finalMap
@@ -189,7 +183,7 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
   /** Complete all work and write to the database what was done. */
   def insertRuns(outputs: Map[String, Set[Input]]): Unit = {
     for ((output, inputs) <- outputs.toList.sortBy(_._1)) {
-      logger.info(s"Updating output $output for $getName ($inputs.size inputs)...")
+      logger.info(s"Updating output $output for $getName (${inputs.size} inputs)...")
       Runs.insert(this, output, inputs.toList)
     }
   }

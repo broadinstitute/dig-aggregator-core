@@ -1,5 +1,7 @@
 package org.broadinstitute.dig.aggregator.core
 
+import java.time.LocalDateTime
+
 import com.typesafe.scalalogging.LazyLogging
 
 import scala.io.Source
@@ -13,10 +15,6 @@ import scala.io.Source
   *
   * A stage may take several inputs to produce a single output. In such
   * an instance, multiple records are inserted.
-  *
-  * This class is only used by quill to insert rows and is never used
-  * outside of insertion. Use `Runs.Result` for getting data out of the
-  * `Runs` table.
   */
 case class Runs(
     method: String,
@@ -24,9 +22,7 @@ case class Runs(
     input: String,
     version: String,
     output: String,
-    source: Option[String],
-    branch: Option[String],
-    commit: Option[String],
+    timestamp: LocalDateTime,
 )
 
 /** Companion object for determining what inputs have been processed and
@@ -78,11 +74,6 @@ object Runs extends LazyLogging {
   def insert(stage: Stage, output: String, inputs: Seq[Input])(implicit context: Context): List[Long] = {
     import context.db.ctx._
 
-    // provenance data for method
-    val source = context.method.provenance.flatMap(_.source)
-    val branch = context.method.provenance.flatMap(_.branch)
-    val commit = context.method.provenance.flatMap(_.commit)
-
     // generate runs to insert
     val runs = inputs.map { input =>
       Runs(
@@ -91,9 +82,7 @@ object Runs extends LazyLogging {
         input.key,
         input.version,
         output,
-        source,
-        branch,
-        commit
+        LocalDateTime.now(),
       )
     }
 
@@ -102,10 +91,8 @@ object Runs extends LazyLogging {
         query[Runs]
           .insert(r)
           .onConflictUpdate(
-            (tbl, values) => tbl.version -> values.version,
-            (tbl, values) => tbl.source  -> values.source,
-            (tbl, values) => tbl.branch  -> values.branch,
-            (tbl, values) => tbl.commit  -> values.commit,
+            (tbl, values) => tbl.version   -> values.version,
+            (tbl, values) => tbl.timestamp -> values.timestamp,
           )
       }
     })

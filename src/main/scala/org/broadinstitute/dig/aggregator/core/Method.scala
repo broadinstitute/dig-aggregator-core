@@ -82,7 +82,7 @@ abstract class Method extends LazyLogging {
 
       // use the stage name if --stage is provided, otherwise the method name
       logger.warn(s"The reprocess flag was passed. All inputs to $task")
-      logger.warn("will be treated as new and updated; are you sure?")
+      logger.warn(s"will be treated as new and updated; are you sure?")
 
       // only succeed if the user types in 'y'
       StdIn.readLine("[y/N]: ").equalsIgnoreCase("y")
@@ -130,6 +130,9 @@ abstract class Method extends LazyLogging {
         // run or just show work that would be run if --yes was provided
         if (opts.yes()) run(opts) else showWork(opts)
       }
+
+      // close connections to the database
+      context.db.close()
 
       // finished successfully
       logger.info("Done")
