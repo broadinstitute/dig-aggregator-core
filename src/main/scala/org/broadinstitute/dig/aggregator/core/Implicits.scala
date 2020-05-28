@@ -6,8 +6,13 @@ object Implicits {
   import scala.language.implicitConversions
 
   /** Implicit conversions. */
-  implicit def stringToGlob(s: String): Glob      = Glob(s)
-  implicit def s3ObjToInput(obj: S3Object): Input = Input(obj.key, obj.eTag)
+  implicit def stringToGlob(s: String): Glob = Glob(s)
+  implicit def s3ObjToInput(obj: S3Object): Input = {
+    import org.broadinstitute.dig.aws.Implicits.RichS3Object
+
+    // need to strip the e-tag of quotes
+    Input(obj.key, RichS3Object(obj).version)
+  }
 
   /** Given an S3 key, extract  */
   final implicit class S3Key(val key: String) extends AnyVal {

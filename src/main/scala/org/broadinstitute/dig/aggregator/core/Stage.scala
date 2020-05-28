@@ -84,7 +84,12 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
       val bucket = s"s3://${opts.config.aws.s3.bucket}"
       val prefix = if (opts.test()) "test" else "out"
 
-      // create a set of environment variables for all the jobs
+      /* Create a set of environment variables for all the steps.
+       *
+       * For PySpark steps, this is done using the yarn-env configuration.
+       * But, for Script steps there doesn't appear a way to set environment
+       * variables.
+       */
       val env = Map(
         "JOB_BUCKET" -> bucket,
         "JOB_METHOD" -> context.method.getName,
@@ -96,7 +101,7 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
       additionalResources.foreach(resourceUri)
 
       // spins up the cluster(s) and runs all the job steps
-      context.emr.runJobs(cluster, env, jobs.map(_._2))
+      context.emr.runJobs(cluster, jobs.map(_._2))
     }
   }
 
