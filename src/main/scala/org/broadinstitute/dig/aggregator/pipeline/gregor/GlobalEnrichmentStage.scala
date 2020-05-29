@@ -6,8 +6,6 @@ import org.broadinstitute.dig.aws.{JobStep, MemorySize}
 import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef}
 
 class GlobalEnrichmentStage(implicit context: Context) extends Stage {
-  import MemorySize.Implicits._
-
   val regions: Input.Source = Input.Source.Success("out/gregor/regions/sorted/")
   val snp: Input.Source     = Input.Source.Success("out/gregor/snp/*/")
 
