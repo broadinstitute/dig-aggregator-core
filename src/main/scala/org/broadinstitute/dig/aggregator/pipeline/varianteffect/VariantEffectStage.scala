@@ -1,8 +1,10 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
 import org.broadinstitute.dig.aggregator.core._
-import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef, InstanceType}
+import org.broadinstitute.dig.aws.Ec2.Strategy
+import org.broadinstitute.dig.aws.{JobStep, MemorySize}
+import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef}
+import MemorySize.Implicits._
 
 /**
   * Once all the distinct bi-allelic variants across all datasets have been
@@ -34,7 +36,7 @@ class VariantEffectStage(implicit context: Context) extends Stage {
   /** Definition of each VM "cluster" (of 1 machine) that will run VEP.
     */
   override def cluster: ClusterDef = super.cluster.copy(
-    masterInstanceType = InstanceType.c5_9xlarge,
+    masterInstanceType = Strategy.computeOptimized(vCPUs = 32),
     instances = 1,
     masterVolumeSizeInGB = 800,
     applications = Seq.empty,

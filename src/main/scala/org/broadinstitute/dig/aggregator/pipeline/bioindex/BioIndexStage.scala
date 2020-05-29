@@ -1,8 +1,10 @@
 package org.broadinstitute.dig.aggregator.pipeline.bioindex
 
 import org.broadinstitute.dig.aggregator.core._
-import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType}
+import org.broadinstitute.dig.aws.{JobStep, MemorySize}
+import org.broadinstitute.dig.aws.Ec2.Strategy
+import org.broadinstitute.dig.aws.emr.ClusterDef
+import MemorySize.Implicits._
 
 /** After running meta-analysis or gregor, the outputs are joined together with
   * other data, sorted by locus, and written to the bio index bucket so they
@@ -50,8 +52,8 @@ class BioIndexStage(implicit context: Context) extends Stage {
 
   /* Cluster configuration. */
   override def cluster: ClusterDef = super.cluster.copy(
-    masterInstanceType = InstanceType.r5_4xlarge,
-    slaveInstanceType = InstanceType.r5_2xlarge,
+    masterInstanceType = Strategy.memoryOptimized(),
+    slaveInstanceType = Strategy.memoryOptimized(),
     masterVolumeSizeInGB = 800,
     slaveVolumeSizeInGB = 800,
   )

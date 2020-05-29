@@ -1,9 +1,10 @@
 package org.broadinstitute.dig.aggregator.pipeline.varianteffect
 
 import org.broadinstitute.dig.aggregator.core._
-import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType}
-import org.broadinstitute.dig.aws.emr.configurations.{MemorySize, MapReduce, Spark}
+import org.broadinstitute.dig.aws.Ec2.Strategy
+import org.broadinstitute.dig.aws.{JobStep, MemorySize}
+import org.broadinstitute.dig.aws.emr.ClusterDef
+import org.broadinstitute.dig.aws.emr.configurations.{MapReduce, Spark}
 
 /** After all the variants across all datasets have had VEP run on them in the
   * previous step the rsID for each variant is extracted into its own file.
@@ -28,8 +29,8 @@ class CommonSNPStage(implicit context: Context) extends Stage {
 
   // EMR cluster to run the job steps on
   override def cluster: ClusterDef = super.cluster.copy(
-    masterInstanceType = InstanceType.m5_4xlarge,
-    slaveInstanceType = InstanceType.m5_8xlarge,
+    masterInstanceType = Strategy.generalPurpose(mem = 128.gb),
+    slaveInstanceType = Strategy.generalPurpose(mem = 64.gb),
     instances = 4,
     applicationConfigurations = Seq(
       new Spark.Env().usePython3,

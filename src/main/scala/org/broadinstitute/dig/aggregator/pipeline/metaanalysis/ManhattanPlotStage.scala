@@ -4,7 +4,7 @@ import java.net.URI
 
 import org.broadinstitute.dig.aggregator.core._
 import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef, InstanceType}
+import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef}
 
 /** After all the variants for a particular phenotype have been processed and
   * partitioned, meta-analysis is run on them.
@@ -42,7 +42,6 @@ class ManhattanPlotStage(implicit context: Context) extends Stage {
 
   // cluster definition to run jobs
   override def cluster: ClusterDef = super.cluster.copy(
-    masterInstanceType = InstanceType.m5_4xlarge,
     instances = 1,
     bootstrapScripts = Seq(new BootstrapScript(installR)),
   )

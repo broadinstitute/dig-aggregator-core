@@ -1,8 +1,9 @@
 package org.broadinstitute.dig.aggregator.pipeline.frequencyanalysis
 
 import org.broadinstitute.dig.aggregator.core._
-import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType}
+import org.broadinstitute.dig.aws.Ec2.Strategy
+import org.broadinstitute.dig.aws.{JobStep, MemorySize}
+import org.broadinstitute.dig.aws.emr.ClusterDef
 
 /** After all the variants for a particular phenotype have been uploaded, the
   * frequency processor runs a Spark job that will calculate the average EAF
@@ -18,6 +19,8 @@ import org.broadinstitute.dig.aws.emr.{ClusterDef, InstanceType}
   *  s3://dig-analysis-data/out/frequencyanalysis/<ancestry>/part-*
   */
 class FrequencyAnalysisStage(implicit context: Context) extends Stage {
+  import MemorySize.Implicits._
+
   var variants: Input.Source = Input.Source.Dataset("variants/")
 
   /** Input sources. */
@@ -26,8 +29,8 @@ class FrequencyAnalysisStage(implicit context: Context) extends Stage {
   /* Cluster configuration used to process frequency. */
   override def cluster: ClusterDef = super.cluster.copy(
     instances = 5,
-    masterInstanceType = InstanceType.c5_9xlarge,
-    slaveInstanceType = InstanceType.c5_9xlarge,
+    masterInstanceType = Strategy.computeOptimized(),
+    slaveInstanceType = Strategy.computeOptimized(),
     masterVolumeSizeInGB = 500,
     slaveVolumeSizeInGB = 500,
   )

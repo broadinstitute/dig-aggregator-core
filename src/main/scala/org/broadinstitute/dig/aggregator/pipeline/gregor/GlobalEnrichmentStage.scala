@@ -1,10 +1,13 @@
 package org.broadinstitute.dig.aggregator.pipeline.gregor
 
 import org.broadinstitute.dig.aggregator.core._
-import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef, InstanceType}
+import org.broadinstitute.dig.aws.Ec2.Strategy
+import org.broadinstitute.dig.aws.{JobStep, MemorySize}
+import org.broadinstitute.dig.aws.emr.{BootstrapScript, ClusterDef}
 
 class GlobalEnrichmentStage(implicit context: Context) extends Stage {
+  import MemorySize.Implicits._
+
   val regions: Input.Source = Input.Source.Success("out/gregor/regions/sorted/")
   val snp: Input.Source     = Input.Source.Success("out/gregor/snp/*/")
 
@@ -21,7 +24,7 @@ class GlobalEnrichmentStage(implicit context: Context) extends Stage {
 
   // cluster configuration used to process each phenotype
   override def cluster: ClusterDef = super.cluster.copy(
-    masterInstanceType = InstanceType.c5_9xlarge,
+    masterInstanceType = Strategy.computeOptimized(),
     instances = 1,
     masterVolumeSizeInGB = 800,
     applications = Seq.empty,
