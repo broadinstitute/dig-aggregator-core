@@ -147,7 +147,7 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     * a mapping of output -> Set[Input].
     */
   def getWork(opts: Opts): Map[String, Set[Input]] = {
-    logger.info(s"Finding new/updated inputs of stage $getName...")
+    logger.info(s"Finding new/updated inputs for $getName...")
 
     // load all the outputs previously written by this stage
     val lastOutputs = if (opts.reprocess()) Seq.empty else Runs.of(this)
