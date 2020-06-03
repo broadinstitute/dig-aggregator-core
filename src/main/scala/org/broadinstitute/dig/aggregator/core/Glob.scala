@@ -41,16 +41,29 @@ case class Glob(glob: String, pathSep: Char = '/') {
     * Allows taking a path-like string and matching path elements with
     * the glob. Wildcard elements are captured and returned in the match.
     * Everything else is an exact match and ignored.
+    *
+    * This is a partial match, which means if the parser matches, but
+    * there is still data left in the path, it is considered a successful
+    * match. This is intentional, so that S3 prefix globs can be as short
+    * as possible and still match. For example:
+    *
+    * Glob("foo/").match("foo/bar/", partial=true)   // == true
+    * Glob("foo/").match("foo/bar/", partial=false)  // == false
     */
   def unapplySeq(path: String): Option[List[String]] = {
-    (parser <~ endOfInput).parseOnly(path) match {
+    parser.parseOnly(path) match {
       case ParseResult.Done(_, captures) => Some(captures)
       case _                             => None
     }
   }
 
-  /** Returns true if the pattern successfully matches the string. */
-  def matches(path: String): Boolean = unapplySeq(path).isDefined
+  /** Returns true if the pattern successfully matches the string. If
+    * partial is true, then only the beginning of the path needs to
+    * match.
+    */
+  def matches(path: String, partial: Boolean = false): Boolean = {
+    (parser <~ (if (partial) ok(()) else endOfInput)).parseOnly(path).option.isDefined
+  }
 }
 
 /** Companion object for constructing globs. */

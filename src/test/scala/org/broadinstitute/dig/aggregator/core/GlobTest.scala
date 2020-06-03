@@ -26,13 +26,23 @@ final class GlobTest extends AnyFunSuite {
     assert(!glob.matches("prefix/more/foo/anything/here/baz"))
   }
 
+  test("partial match") {
+    val glob: Glob = "foo/bar/"
+
+    assert(glob.matches("foo/bar/baz", partial = true))
+    assert(glob.matches("foo/bar/baz/whee", partial = true))
+    assert(!glob.matches("foobar/baz", partial = true))
+    assert(!glob.matches("foo/bar", partial = true))
+    assert(!glob.matches("foo/", partial = true))
+  }
+
   test("true globs") {
     val glob = Glob.True
 
     assert(glob.matches(""))
     assert(glob.matches("anything"))
 
-    // "*" only matches to a path separator
+    // "*" only matches up to a path separator
     assert(!glob.matches("anything/path"))
   }
 

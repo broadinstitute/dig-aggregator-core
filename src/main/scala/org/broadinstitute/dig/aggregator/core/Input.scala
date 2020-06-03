@@ -44,7 +44,7 @@ object Input {
 
     /** True if an input matches this source. */
     def matches(input: Input): Boolean = {
-      basenameGlob.matches(input.basename) && prefixGlob.matches(input.dirname)
+      basenameGlob.matches(input.basename) && prefixGlob.matches(input.dirname, partial = true)
     }
 
     /** Extractor method for pattern matching.

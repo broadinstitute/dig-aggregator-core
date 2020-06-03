@@ -156,6 +156,13 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     val inputs    = sources.flatMap(source => source.inputs())
     val outputMap = buildOutputMap(inputs, opts)
 
+    // optionally show inputs
+    inputs match {
+      case Nil                    => logger.warn("No new or updated inputs found")
+      case _ if opts.showInputs() => inputs.foreach(i => logger.info(s"...found input ${i.key}"))
+      case _                      => ()
+    }
+
     /* For every output that would run, remove all the inputs that have
      * already been processed by the stage for that output.
      *

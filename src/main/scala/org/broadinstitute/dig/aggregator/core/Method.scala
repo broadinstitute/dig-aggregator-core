@@ -103,12 +103,9 @@ abstract class Method extends LazyLogging {
   def main(args: Array[String]): Unit = {
     val opts: Opts = new Opts(args.toList)
 
-    // which schema will be connected to
-    val schema = if (opts.test()) "test" else "aggregator"
-
     // create the execution context
     implicit val context: Context = new Context(this) {
-      override lazy val db: Db          = new Db(opts.config.aws.rds.secret.get, schema)
+      override lazy val db: Db          = if (opts.test()) new Db() else new Db(opts.config.aws.rds.secret.get)
       override lazy val s3: S3.Bucket   = new S3.Bucket(opts.config.aws.s3.bucket)
       override lazy val emr: Emr.Runner = new Emr.Runner(opts.config.aws.emr, s3.bucket)
     }
@@ -140,7 +137,7 @@ abstract class Method extends LazyLogging {
 
     // output any error reported
     result match {
-      case Failure(ex) => logger.error(ex.getMessage)
+      case Failure(ex) => logger.error(s"${ex.getClass.getName}: ${ex.getMessage}"); ex.printStackTrace()
       case _           => ()
     }
   }

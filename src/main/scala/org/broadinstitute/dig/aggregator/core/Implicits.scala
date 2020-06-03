@@ -25,7 +25,7 @@ object Implicits {
 
     /** Extract the common prefix: up to first wildcard or last path separator. */
     def commonPrefix: String = dirname.indexOf('*') match {
-      case n if n >= 0 => key.substring(0, n)
+      case n if n >= 0 => dirname.substring(0, n)
       case _           => dirname
     }
   }
