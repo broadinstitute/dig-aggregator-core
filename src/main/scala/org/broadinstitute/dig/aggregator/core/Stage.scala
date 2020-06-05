@@ -88,12 +88,17 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
        * For PySpark steps, this is done using the yarn-env configuration.
        * Scripts can also access the environment using `yarn` command.
        */
-      val env = Map(
+      var env = Map(
         "JOB_BUCKET" -> s"s3://${context.s3.bucket}",
         "JOB_METHOD" -> context.method.getName,
         "JOB_STAGE"  -> getName,
         "JOB_PREFIX" -> s"$prefix/${context.method.getName}/$getName"
       )
+
+      // if --test, set the dry run environment variable
+      if (opts.test()) {
+        env += "JOB_DRYRUN" -> "true"
+      }
 
       // upload all additional resources before running
       additionalResources.foreach(resourceUri)
