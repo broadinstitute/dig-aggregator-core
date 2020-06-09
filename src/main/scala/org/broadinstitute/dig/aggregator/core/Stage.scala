@@ -64,7 +64,7 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
   def resourceUri(resource: String): URI = {
     val cachedUri = resourceMap.getOrElse(
       resource, {
-        val key = s"resources/${context.method.getName}/$getName/$resource"
+        val key = s"resources/${context.method.getName}/$resource"
 
         context.s3.putResource(key, resource)
         context.s3.s3UriOf(key)
