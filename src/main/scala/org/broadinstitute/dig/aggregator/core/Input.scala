@@ -68,5 +68,13 @@ object Input {
 
     /** Successful job results match a prefix to the _SUCCESS basename. */
     def Success(prefix: String): Source = Source(prefix, "_SUCCESS")
+
+    /** Create a _SUCCESS key with a given prefix that can be used as an input
+      * source for another stage.
+      */
+    def touch(prefix: String)(implicit context: Context): Unit = {
+      context.s3.put(s"${prefix.stripSuffix("/")}/_SUCCESS", "")
+      ()
+    }
   }
 }

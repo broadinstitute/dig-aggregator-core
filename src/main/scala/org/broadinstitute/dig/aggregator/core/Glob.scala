@@ -65,23 +65,3 @@ case class Glob(glob: String, pathSep: Char = '/') {
     (parser <~ (if (partial) ok(()) else endOfInput)).parseOnly(path).option.isDefined
   }
 }
-
-/** Companion object for constructing globs. */
-object Glob {
-
-  /** A glob that matches everything.
-    *
-    * This is a special case since Glob.parsers would fail to parse this
-    * pattern. This is intentional, though, so that stage input sources
-    * cannot match everything.
-    */
-  object True extends Glob("*")
-
-  /** A glob that matches nothing.
-    *
-    * This is a special case since Glob.parsers would fail to parse this
-    * pattern. This is intentional, though, so that stage input sources
-    * cannot match nothing.
-    */
-  object False extends Glob("")
-}

@@ -66,13 +66,13 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   }
 
   /** Returns a glob for the only option. */
-  lazy val onlyGlobs: Seq[Glob] = {
-    only.map(_.split(",").filter(_.nonEmpty).map(stringToGlob).toSeq).getOrElse(List(Glob.True))
+  lazy val onlyGlobs: Option[Seq[Glob]] = {
+    only.map(_.split(",").filter(_.nonEmpty).map(stringToGlob).toSeq).toOption
   }
 
   /** Returns a glob for the exclude option. */
-  lazy val excludeGlobs: Seq[Glob] = {
-    exclude.map(_.split(",").filter(_.nonEmpty).map(stringToGlob).toSeq).getOrElse(List(Glob.False))
+  lazy val excludeGlobs: Option[Seq[Glob]] = {
+    exclude.map(_.split(",").filter(_.nonEmpty).map(stringToGlob).toSeq).toOption
   }
 
   /** Outputs standard help from Scallop along with an additional message. */

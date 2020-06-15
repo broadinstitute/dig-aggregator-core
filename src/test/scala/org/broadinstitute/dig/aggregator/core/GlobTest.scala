@@ -36,24 +36,6 @@ final class GlobTest extends AnyFunSuite {
     assert(!glob.matches("foo/", partial = true))
   }
 
-  test("true globs") {
-    val glob = Glob.True
-
-    assert(glob.matches(""))
-    assert(glob.matches("anything"))
-
-    // "*" only matches up to a path separator
-    assert(!glob.matches("anything/path"))
-  }
-
-  test("false globs") {
-    val glob = Glob.False
-
-    assert(!glob.matches(""))
-    assert(!glob.matches("anything"))
-    assert(!glob.matches("anything/else/super/deep"))
-  }
-
   test("pattern matching globs") {
     val glob: Glob = "*/wow=*/ancestor=*/*/this"
 

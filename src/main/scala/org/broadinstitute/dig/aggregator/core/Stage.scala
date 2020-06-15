@@ -56,6 +56,11 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     */
   def make(output: String): Seq[JobStep]
 
+  /** Final step for a stage that executes after run completes successfully.
+    * Can be implemented to write _SUCCESS files, log, or anything else.
+    */
+  def success(output: String): Unit = ()
+
   /** Get a cached resource file URI.
     *
     * If not already cached, this function will UPLOAD the given resource
@@ -105,6 +110,9 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
 
       // spins up the cluster(s) and runs all the job steps
       context.emr.runJobs(cluster, env, jobs.map(_._2))
+
+      // final, success step
+      output.foreach(success)
     }
   }
 
@@ -133,7 +141,7 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
       .toSet
 
     // append any inputs that belong to ALL outputs to each of them
-    val finalMap = outputMap.mapValues(_ ++ inputsInAllOutputs)
+    val finalMap = outputMap.mapValues(_ ++ inputsInAllOutputs).toMap
 
     // get all inputs represented in all the outputs
     val allOutputInputs = finalMap.values.flatten.toSet
@@ -141,11 +149,10 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     // validate that ALL inputs are represented in at least one output
     require(inputs.forall(allOutputInputs.contains))
 
-    // filter by CLI options
+    // apply CLI filters
     finalMap
-      .filter { case (output, _) => opts.onlyGlobs.exists(_.matches(output)) }
-      .filterNot { case (output, _) => opts.excludeGlobs.exists(_.matches(output)) }
-      .toMap
+      .filter { case (output, _) => opts.onlyGlobs.forall(_.exists(_.matches(output))) }
+      .filterNot { case (output, _) => opts.excludeGlobs.exists(_.exists(_.matches(output))) }
   }
 
   /** Determines the set of things that need to be processed. This is
