@@ -63,6 +63,16 @@ object Input {
   /** Companion source object for types of input sources. */
   object Source {
 
+    /** Raw inputs match a specific file. */
+    def Raw(key: String): Source = {
+      val (prefix, name) = key.lastIndexOf('/') match {
+        case n if n < 0 => throw new Exception(s"Invalid raw Input.Source: $key")
+        case n          => key.splitAt(n)
+      }
+
+      Source(prefix, name)
+    }
+
     /** Dataset inputs match a prefix to the metadata basename. */
     def Dataset(prefix: String): Source = Source(prefix, "metadata")
 

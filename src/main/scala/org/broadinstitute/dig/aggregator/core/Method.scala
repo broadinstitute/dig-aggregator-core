@@ -128,12 +128,12 @@ abstract class Method extends LazyLogging {
         if (opts.yes()) run(opts) else showWork(opts)
       }
 
-      // close connections to the database
-      context.db.close()
-
       // finished successfully
       logger.info("Done")
     }
+
+    // close connections to the database regardless
+    context.db.close()
 
     // output any error reported
     result match {
