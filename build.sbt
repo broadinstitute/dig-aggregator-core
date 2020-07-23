@@ -60,10 +60,13 @@ lazy val root = (project in file("."))
     libraryDependencies ++= (mainDeps ++ testDeps)
   )
 
-//Make integration tests run serially.
+// make integration tests run serially.
 parallelExecution in IntegrationTest := false
 
-//Show full stack traces from unit and integration tests (F); display test run times (D)
+// don't run scaladoc when publishing locally
+publishArtifact in (Compile, packageDoc) := false
+
+// show full stack traces from unit and integration tests (F); display test run times (D)
 testOptions in IntegrationTest += Tests.Argument("-oFD")
 testOptions in Test += Tests.Argument("-oFD")
 

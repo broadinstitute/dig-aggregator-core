@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.core
 
-import org.broadinstitute.dig.aws.JobStep
+import org.broadinstitute.dig.aws.emr.Job
 
 object TestMethod extends Method {
 
@@ -13,7 +13,7 @@ object TestMethod extends Method {
     override val sources: Seq[Input.Source] = Seq.empty
 
     /** Don't actually do any work. */
-    override def make(output: String): Seq[JobStep] = Seq.empty
+    override def make(output: String): Job = new Job(Seq.empty)
 
     /** Match some fake inputs to dummy outputs. */
     override val rules: PartialFunction[Input, Outputs] = {

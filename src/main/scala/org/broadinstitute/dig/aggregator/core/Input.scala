@@ -1,9 +1,11 @@
 package org.broadinstitute.dig.aggregator.core
 
+import java.time.LocalDateTime
+
 import Implicits._
 
 /** A run Input is a S3 key and eTag (checksum) pair. */
-case class Input(key: String, version: String) {
+case class Input(key: String, version: LocalDateTime) {
 
   /** Basename is the filename portion of the key. */
   lazy val basename: String = key.basename
@@ -67,7 +69,7 @@ object Input {
     def Raw(key: String): Source = {
       val (prefix, name) = key.lastIndexOf('/') match {
         case n if n < 0 => throw new Exception(s"Invalid raw Input.Source: $key")
-        case n          => key.splitAt(n)
+        case n          => key.splitAt(n + 1)
       }
 
       Source(prefix, name)
@@ -78,13 +80,5 @@ object Input {
 
     /** Successful job results match a prefix to the _SUCCESS basename. */
     def Success(prefix: String): Source = Source(prefix, "_SUCCESS")
-
-    /** Create a _SUCCESS key with a given prefix that can be used as an input
-      * source for another stage.
-      */
-    def touch(prefix: String)(implicit context: Context): Unit = {
-      context.s3.put(s"${prefix.stripSuffix("/")}/_SUCCESS", "")
-      ()
-    }
   }
 }

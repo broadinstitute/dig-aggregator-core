@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.core
 
-import java.util.UUID
+import java.time.LocalDateTime
 
 import org.scalatest.funsuite.AnyFunSuite
 
@@ -11,7 +11,7 @@ final class StageTest extends AnyFunSuite {
   private val testStage = new TestMethod.TestStage()
 
   // create a dummy input
-  def input(name: String): Input = Input(name, UUID.randomUUID.toString)
+  def input(name: String): Input = Input(name, LocalDateTime.now)
 
   // some fake inputs
   val inputA1 = input("a/foo/bar") // -> Outputs.Named("foo")

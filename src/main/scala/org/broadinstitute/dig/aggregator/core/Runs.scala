@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.core
 
-import java.time.LocalDateTime
+import java.time.{Instant, LocalDateTime, ZoneOffset}
 
 import com.typesafe.scalalogging.LazyLogging
 
@@ -20,7 +20,7 @@ case class Runs(
     method: String,
     stage: String,
     input: String,
-    version: String,
+    version: LocalDateTime,
     output: String,
     timestamp: LocalDateTime,
 )
@@ -30,6 +30,7 @@ case class Runs(
   */
 object Runs extends LazyLogging {
 
+  /** Implicit conversion from Instant -> MySQL. */
   /** Create the runs table if it doesn't already exist. */
   def migrate()(implicit context: Context): Unit = {
     import context.db.ctx._
@@ -82,7 +83,7 @@ object Runs extends LazyLogging {
         input.key,
         input.version,
         output,
-        LocalDateTime.now(),
+        LocalDateTime.ofInstant(Instant.now, ZoneOffset.UTC),
       )
     }
 

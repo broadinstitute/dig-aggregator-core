@@ -58,7 +58,7 @@ abstract class Method extends LazyLogging {
   def showWork(opts: Opts): Unit = {
     filterStages(opts) match {
       case Nil           => logger.warn(s"No stage(s) found in $getName")
-      case stagesToCheck => stagesToCheck.foreach(_.showWork(opts))
+      case stagesToCheck => stagesToCheck.exists(_.showWork(opts)); ()
     }
   }
 

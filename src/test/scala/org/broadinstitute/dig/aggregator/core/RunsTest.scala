@@ -1,6 +1,7 @@
 package org.broadinstitute.dig.aggregator.core
 
-import java.util.UUID
+import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 
 import org.scalatest.funsuite.AnyFunSuite
 
@@ -10,8 +11,11 @@ final class RunsTest extends AnyFunSuite {
   // instantiate a stage to use as a test
   private val testStage = new TestMethod.TestStage()
 
-  // create a dummy input
-  def input(name: String): Input = Input(name, UUID.randomUUID.toString)
+  // create a dummy input with current time
+  def input(name: String): Input = {
+    // truncate to millis for test so == works
+    Input(name, LocalDateTime.now.truncatedTo(ChronoUnit.MILLIS))
+  }
 
   test("migrate") {
     Runs.migrate()
@@ -64,31 +68,32 @@ final class RunsTest extends AnyFunSuite {
   }
 
   test("update output with changed inputs") {
-    val inputs        = (1 to 6).map(_.toString).map(input)
-    val updatedInputs = inputs.map(_.copy(version = UUID.randomUUID.toString))
+    val inputs = (1 to 3).map(_.toString).map(input)
 
     Runs.migrate()
 
     // insert a single output with 3 outputs
-    Runs.insert(testStage, "o", inputs.take(3))
+    Runs.insert(testStage, "o", inputs)
 
     // get all the inputs and verify them
     val i1 = Runs.all().map(r => r.input -> r.version).map((Input.apply _).tupled).toSet
-    assert(i1 == inputs.take(3).toSet)
+    assert(i1 == inputs.toSet)
 
     // insert the same output with 3 new outputs
-    Runs.insert(testStage, "o", inputs.drop(3))
+    val newInputs = (4 to 6).map(_.toString).map(input)
+    Runs.insert(testStage, "o", newInputs)
 
     // get the new inputs and verify them
     val i2 = Runs.all().map(r => r.input -> r.version).map((Input.apply _).tupled).toSet
-    assert(i2 == inputs.toSet)
+    assert(i2 == (inputs ++ newInputs).toSet)
 
     // insert the updated inputs (same key, different version)
+    val updatedInputs = inputs.map(i => input(i.key))
     Runs.insert(testStage, "o", updatedInputs)
 
     // get the new inputs and verify them
     val i3 = Runs.all().map(r => r.input -> r.version).map((Input.apply _).tupled).toSet
-    assert(i3 == updatedInputs.toSet)
+    assert(i3 == (newInputs ++ updatedInputs).toSet)
 
     // clean up
     Runs.delete(testStage, "o")

@@ -1,6 +1,6 @@
 package org.broadinstitute.dig.aggregator.core
 
-import java.util.UUID
+import java.time.LocalDateTime
 
 import org.scalatest.funsuite.AnyFunSuite
 
@@ -8,7 +8,7 @@ final class InputTest extends AnyFunSuite {
   import Implicits.S3Key
 
   // create a dummy input
-  def input(name: String): Input = Input(name, UUID.randomUUID.toString)
+  def input(name: String): Input = Input(name, LocalDateTime.now)
 
   test("s3 key implicits - simple") {
     val key = "foo.txt"

@@ -1,10 +1,9 @@
 package org.broadinstitute.dig.aggregator.core
 
+import com.typesafe.scalalogging.LazyLogging
 import java.net.URI
 
-import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dig.aws.JobStep
-import org.broadinstitute.dig.aws.emr.ClusterDef
+import org.broadinstitute.dig.aws.emr._
 import org.broadinstitute.dig.aws.emr.configurations.Spark
 
 /** Each processor has a globally unique name and a run function. */
@@ -54,10 +53,15 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
   /** Given an output, returns a sequence of job steps to be executed on
     * the cluster.
     */
-  def make(output: String): Seq[JobStep]
+  def make(output: String): Job
 
-  /** Final step for a stage that executes after run completes successfully.
-    * Can be implemented to write _SUCCESS files, log, or anything else.
+  /** Called before actually spinning up clusters and running jobs. If there
+    * is any special work that needs to be done before running, do it here.
+    */
+  def prepareRun(): Unit = ()
+
+  /** For every job that successfully ran, call this function with the
+    * output produced.
     */
   def success(output: String): Unit = ()
 
@@ -67,24 +71,58 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     * to S3 and cache the URI to it.
     */
   def resourceUri(resource: String): URI = {
-    val cachedUri = resourceMap.getOrElse(
-      resource, {
-        val key = s"resources/${context.method.getName}/$resource"
+    val cachedUri = resourceMap.getOrElse(resource, {
+      val key = s"resources/${context.method.getName}/$resource"
 
-        context.s3.putResource(key, resource)
-        context.s3.s3UriOf(key)
-      }
-    )
+      context.s3.putResource(key, resource)
+      context.s3.s3UriOf(key)
+    })
 
     // keep the cache up to date
     resourceMap += resource -> cachedUri
     cachedUri
   }
 
-  /** Process a set of run results. */
-  def processOutputs(output: Seq[String], opts: Opts): Unit = {
-    val jobs = output.map(output => output -> make(output))
+  /** Creates steps that - when run - will commit this run to the aggregator
+    * database. It uses the commitRun.py resource to connect to the database
+    * and write the inputs used to produce the output for this step.
+    *
+    * The commit is broken up into multiple steps because AWS limits the size
+    * of the command line that can be sent to ~10,000 bytes. Each key/version
+    * pair of an input can be upwards of ~200 bytes combined, so we limit each
+    * commit step to ~50 inputs being inserted.
+    *
+    * TODO: AWS keys are allowed to be 1024 bytes long. In the future, this
+    *       code should be updated to slowly build each commit to pack only as
+    *       many inputs as it can into a single step. Right now, in practice,
+    *       keys don't ever get that long.
+    */
+  def commitSteps(output: String, inputs: Set[Input], opts: Opts): Seq[Job.Step] = {
+    val script = resourceUri("commitRun.py")
 
+    // commit in groups
+    inputs.grouped(50).toList.map { inputs =>
+      val payload =
+        s"""|{
+            |  "rds_secret": "${opts.config.aws.rds.instance}",
+            |  "method": "${context.method.getName}",
+            |  "stage": "$getName",
+            |  "output": "$output",
+            |  "inputs": [
+            |    ${inputs.map(i => s"""["${i.key}", "${i.version}"]""").mkString(",")}
+            |  ]
+            |}
+            |""".stripMargin
+
+      Job.Script(script, payload)
+    }
+  }
+
+  /** Build the jobs to produce the output map and run them. */
+  def processOutputs(output: Map[String, Set[Input]], opts: Opts): Unit = {
+    val jobs = output.keys.map(make)
+
+    // special case when there's nothing to do
     if (jobs.nonEmpty) {
       val prefix = if (opts.test()) "test" else "out"
 
@@ -97,7 +135,7 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
         "JOB_BUCKET" -> s"s3://${context.s3.bucket}",
         "JOB_METHOD" -> context.method.getName,
         "JOB_STAGE"  -> getName,
-        "JOB_PREFIX" -> s"$prefix/${context.method.getName}/$getName"
+        "JOB_PREFIX" -> s"$prefix/${context.method.getName}/$getName",
       )
 
       // if --test, set the dry run environment variable
@@ -108,11 +146,19 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
       // upload all additional resources before running
       additionalResources.foreach(resourceUri)
 
-      // spins up the cluster(s) and runs all the job steps
-      context.emr.runJobs(cluster, env, jobs.map(_._2))
+      // add a bootstrap step to the cluster for installing things needed by the aggregator
+      val clusterCommon = {
+        val common  = new BootstrapScript(resourceUri("common-bootstrap.sh"))
+        val scripts = cluster.bootstrapScripts :+ common
 
-      // final, success step
-      output.foreach(success)
+        cluster.copy(bootstrapScripts = scripts)
+      }
+
+      // spins up the cluster(s) and runs all the jobs
+      context.emr.runJobs(clusterCommon, env, jobs.toSeq)
+
+      // jobs all completed successfully, perform success function
+      output.keys.foreach(success)
     }
   }
 
@@ -190,13 +236,16 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
       case (output, inputs) =>
         val results = lastOutputs.filter(_.output == output)
 
-        // filter inputs that are already processed
-        output -> inputs.filter { input =>
+        // remove inputs that have already been processed
+        val newInputs = inputs.filter { input =>
           results.find(_.input == input.key) match {
-            case Some(result) if result.version == input.version => false
-            case _                                               => true
+            case Some(result) if result.timestamp.isAfter(input.version) => false
+            case _                                                       => true
           }
         }
+
+        // update the map of outputs to new and updated inputs
+        output -> newInputs
     }
 
     // remove outputs from the map with no inputs
@@ -211,8 +260,10 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     }
   }
 
-  /** Logs the set of outputs this processor will build if run. */
-  def showWork(opts: Opts): Unit = {
+  /** Logs the set of outputs this processor will build if run. Returns true
+    * if there are new/update inputs that need to be processed.
+    */
+  def showWork(opts: Opts): Boolean = {
     val outputMap = getWork(opts)
 
     // output them to the log
@@ -223,6 +274,9 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
         logger.info(s"Output $output has ${inputs.size} new/updated inputs")
       }
     }
+
+    // true if there is work to do
+    outputMap.nonEmpty
   }
 
   /** Run this stage. */
@@ -230,14 +284,20 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     logger.info(s"${if (opts.test()) "Testing" else "Running"} stage $getName...")
 
     // find all the outputs that need built
-    val outputMap = getWork(opts)
+    getWork(opts) match {
+      case outputMap if outputMap.isEmpty => ()
+      case outputMap if opts.insertRuns() =>
+        insertRuns(outputMap)
+        outputMap.keys.foreach(success)
 
-    // process them
-    if (outputMap.isEmpty) {
-      logger.info(s"$getName is up to date.")
-    } else {
-      if (!opts.insertRuns()) processOutputs(outputMap.keys.toSeq, opts)
-      if (!opts.noInsertRuns()) insertRuns(outputMap)
+      case outputMap =>
+        prepareRun()
+        processOutputs(outputMap, opts)
+
+        // finally, write the runs to the database
+        if (!opts.noInsertRuns()) {
+          insertRuns(outputMap)
+        }
     }
   }
 }

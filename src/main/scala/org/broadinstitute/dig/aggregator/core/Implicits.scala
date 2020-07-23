@@ -1,17 +1,19 @@
 package org.broadinstitute.dig.aggregator.core
 
+import java.time.temporal.ChronoUnit
+import java.time.{LocalDateTime, ZoneOffset}
+
 import software.amazon.awssdk.services.s3.model.S3Object
 
 object Implicits {
   import scala.language.implicitConversions
 
-  /** Implicit conversions. */
+  /** Convert from a string to a glob. */
   implicit def stringToGlob(s: String): Glob = Glob(s)
-  implicit def s3ObjToInput(obj: S3Object): Input = {
-    import org.broadinstitute.dig.aws.Implicits.RichS3Object
 
-    // need to strip the e-tag of quotes
-    Input(obj.key, RichS3Object(obj).version)
+  /** Convert from S3 object to an Input. All times are UTC! */
+  implicit def s3ObjToInput(obj: S3Object): Input = {
+    Input(obj.key, LocalDateTime.ofInstant(obj.lastModified, ZoneOffset.UTC))
   }
 
   /** Given an S3 key, extract  */

@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS `runs` (
     `method` VARCHAR(200) NOT NULL,
     `stage` VARCHAR(200) NOT NULL,
     `input` VARCHAR(1024) NOT NULL,
-    `version` VARCHAR(80) NOT NULL,
+    `version` DATETIME NOT NULL,
     `output` VARCHAR(200) NOT NULL,
     `timestamp` DATETIME NOT NULL DEFAULT NOW(),
     PRIMARY KEY (`id`),
