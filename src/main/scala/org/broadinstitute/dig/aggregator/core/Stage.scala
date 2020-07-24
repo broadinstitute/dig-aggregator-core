@@ -56,9 +56,10 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
   def make(output: String): Job
 
   /** Called before actually spinning up clusters and running jobs. If there
-    * is any special work that needs to be done before running, do it here.
+    * is any special work that needs to be done before building a job output,
+    * do it here.
     */
-  def prepareRun(): Unit = ()
+  def prepareJob(output: String): Unit = ()
 
   /** For every job that successfully ran, call this function with the
     * output produced.
@@ -81,41 +82,6 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     // keep the cache up to date
     resourceMap += resource -> cachedUri
     cachedUri
-  }
-
-  /** Creates steps that - when run - will commit this run to the aggregator
-    * database. It uses the commitRun.py resource to connect to the database
-    * and write the inputs used to produce the output for this step.
-    *
-    * The commit is broken up into multiple steps because AWS limits the size
-    * of the command line that can be sent to ~10,000 bytes. Each key/version
-    * pair of an input can be upwards of ~200 bytes combined, so we limit each
-    * commit step to ~50 inputs being inserted.
-    *
-    * TODO: AWS keys are allowed to be 1024 bytes long. In the future, this
-    *       code should be updated to slowly build each commit to pack only as
-    *       many inputs as it can into a single step. Right now, in practice,
-    *       keys don't ever get that long.
-    */
-  def commitSteps(output: String, inputs: Set[Input], opts: Opts): Seq[Job.Step] = {
-    val script = resourceUri("commitRun.py")
-
-    // commit in groups
-    inputs.grouped(50).toList.map { inputs =>
-      val payload =
-        s"""|{
-            |  "rds_secret": "${opts.config.aws.rds.instance}",
-            |  "method": "${context.method.getName}",
-            |  "stage": "$getName",
-            |  "output": "$output",
-            |  "inputs": [
-            |    ${inputs.map(i => s"""["${i.key}", "${i.version}"]""").mkString(",")}
-            |  ]
-            |}
-            |""".stripMargin
-
-      Job.Script(script, payload)
-    }
   }
 
   /** Build the jobs to produce the output map and run them. */
@@ -153,6 +119,9 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
 
         cluster.copy(bootstrapScripts = scripts)
       }
+
+      // prepare to run all the jobs
+      output.keys.foreach(prepareJob)
 
       // spins up the cluster(s) and runs all the jobs
       context.emr.runJobs(clusterCommon, env, jobs.toSeq)
@@ -291,7 +260,6 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
         outputMap.keys.foreach(success)
 
       case outputMap =>
-        prepareRun()
         processOutputs(outputMap, opts)
 
         // finally, write the runs to the database
