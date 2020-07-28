@@ -42,6 +42,9 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   /** Run the processor, but do NOT insert runs when done. */
   val noInsertRuns: ScallopOption[Boolean] = opt("no-insert-runs")
 
+  /** How many clusters to use when running a job. */
+  val maxClusters: ScallopOption[Int] = opt("max-clusters", default = Some(5), validate = (_ > 0))
+
   // test for options that don't go together
   mutuallyExclusive(insertRuns, noInsertRuns)
 

@@ -11,7 +11,7 @@ lazy val Versions = new {
   val Scala            = "2.13.2"
   val ScalaLogging     = "3.9.2"
   val ScalaTest        = "3.1.2"
-  val Scallop          = "3.4.0"
+  val Scallop          = "3.5.0"
   val DigAws           = "0.3.0-SNAPSHOT"
 }
 

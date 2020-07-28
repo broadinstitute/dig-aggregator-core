@@ -124,7 +124,7 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
       output.keys.foreach(prepareJob)
 
       // spins up the cluster(s) and runs all the jobs
-      context.emr.runJobs(clusterCommon, env, jobs.toSeq)
+      context.emr.runJobs(clusterCommon, env, jobs.toSeq, maxParallel = opts.maxClusters())
 
       // jobs all completed successfully, perform success function
       output.keys.foreach(success)
