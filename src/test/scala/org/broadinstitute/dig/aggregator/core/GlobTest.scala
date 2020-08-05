@@ -1,50 +1,50 @@
 package org.broadinstitute.dig.aggregator.core
 
-import org.scalatest.FunSuite
+import org.scalatest.funsuite.AnyFunSuite
 
-import scala.util._
+final class GlobTest extends AnyFunSuite {
+  import Implicits._
 
-/**
- * Tests for org.broadinstitute.dig.aggregator.core.emr._
- */
-final class GlobTest extends FunSuite {
-  import Glob.String2Glob
+  test("should match") {
+    val glob: Glob = "*/foo*/*/baz"
 
-  test("basic globs - should match") {
-    val glob = "*/foo*/*/baz".toGlob
-
-    assert(glob.matches("/foobar/ack/baz") == true)
-    assert(glob.matches("some/foo/anything=here/baz") == true)
+    assert(glob.matches("/foobar/ack/baz"))
+    assert(glob.matches("some/foo/anything=here/baz"))
   }
 
-  test("basic globs - should not match") {
-    val glob = "*/foo*/*/baz".toGlob
+  test("should not match") {
+    val glob: Glob = "*/foo*/*/baz"
 
-    assert(glob.matches("/foo") == false)
-    assert(glob.matches("bar/foo") == false)
-    assert(glob.matches("zoo/whee/foo") == false)
-    assert(glob.matches("/foobar//baz") == false)
-    assert(glob.matches("foo") == false)
-    assert(glob.matches("ack/foo/bar") == false)
-    assert(glob.matches("/foobar/ack/baz/whee") == false)
-    assert(glob.matches("/foobar/ack/baz-whee") == false)
-    assert(glob.matches("more/foo/anything/here/baz") == false)
-    assert(glob.matches("prefix/more/foo/anything/here/baz") == false)
+    assert(!glob.matches("/foo"))
+    assert(!glob.matches("bar/foo"))
+    assert(!glob.matches("zoo/whee/foo"))
+    assert(!glob.matches("foo"))
+    assert(!glob.matches("ack/foo/bar"))
+    assert(!glob.matches("/foobar/ack/baz/whee"))
+    assert(!glob.matches("/foobar/ack/baz-whee"))
+    assert(!glob.matches("more/foo/anything/here/baz"))
+    assert(!glob.matches("prefix/more/foo/anything/here/baz"))
   }
 
-  test("true globs") {
-    val glob = Glob.True
+  test("partial match") {
+    val glob: Glob = "foo/bar/"
 
-    assert(glob.matches("") == true)
-    assert(glob.matches("anything") == true)
-    assert(glob.matches("anything/else/super/deep") == true)
+    assert(glob.matches("foo/bar/baz", partial = true))
+    assert(glob.matches("foo/bar/baz/whee", partial = true))
+    assert(!glob.matches("foobar/baz", partial = true))
+    assert(!glob.matches("foo/bar", partial = true))
+    assert(!glob.matches("foo/", partial = true))
   }
 
-  test("false globs") {
-    val glob = Glob.False
+  test("pattern matching globs") {
+    val glob: Glob = "*/wow=*/ancestor=*/*/this"
 
-    assert(glob.matches("") == false)
-    assert(glob.matches("anything") == false)
-    assert(glob.matches("anything/else/super/deep") == false)
+    "foo/wow=awesome/ancestor=grandfather//this" match {
+      case glob(start, wow, ancestor, end) =>
+        assert(start == "foo")
+        assert(wow == "awesome")
+        assert(ancestor == "grandfather")
+        assert(end.isEmpty)
+    }
   }
 }
