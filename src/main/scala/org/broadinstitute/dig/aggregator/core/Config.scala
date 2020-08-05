@@ -3,6 +3,7 @@ package org.broadinstitute.dig.aggregator.core
 import java.io.File
 
 import org.broadinstitute.dig.aws.config.AwsConfig
+
 import org.json4s.{DefaultFormats, Formats}
 import org.json4s.jackson.Serialization.read
 

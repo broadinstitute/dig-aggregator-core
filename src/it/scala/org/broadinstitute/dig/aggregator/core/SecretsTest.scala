@@ -1,12 +1,12 @@
 package org.broadinstitute.dig.aggregator.core
 
-import org.scalatest.FunSuite
+import org.scalatest.funsuite.AnyFunSuite
 import org.broadinstitute.dig.aws.config.Secrets
 
 /**
- * @author jmassung
- */
-final class SecretsTest extends FunSuite {
+  * @author jmassung
+  */
+final class SecretsTest extends AnyFunSuite {
   test("secrets") {
     val secret = Secrets.get[SecretsTest.TestSecret]("hello")
 
