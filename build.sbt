@@ -8,11 +8,11 @@ lazy val Versions = new {
   val LogbackColorizer = "1.0.1"
   val MySQL            = "8.0.17"
   val Quill            = "3.5.1"
-  val Scala            = "2.13.2"
+  val Scala            = "2.13.5"
   val ScalaLogging     = "3.9.2"
   val ScalaTest        = "3.1.2"
   val Scallop          = "3.5.0"
-  val DigAws           = "0.3.0-SNAPSHOT"
+  val DigAws           = "0.3.1-SNAPSHOT"
 }
 
 lazy val Orgs = new {
@@ -30,22 +30,22 @@ lazy val scalacOpts = Seq(
 )
 
 lazy val mainDeps = Seq(
-  "com.h2database"                 % "h2"                        % Versions.H2,
-  "com.typesafe.scala-logging"     %% "scala-logging"            % Versions.ScalaLogging,
-  "ch.qos.logback"                 % "logback-classic"           % Versions.LogbackClassic,
-  "org.codehaus.janino"            % "janino"                    % Versions.Janino,
-  "org.json4s"                     %% "json4s-jackson"           % Versions.Json4s,
-  "io.getquill"                    %% "quill-jdbc"               % Versions.Quill,
-  "com.zaxxer"                     % "HikariCP"                  % Versions.Hikari,
-  "org.rogach"                     %% "scallop"                  % Versions.Scallop,
-  "org.tpolecat"                   %% "atto-core"                % Versions.Atto,
-  "org.tuxdude.logback.extensions" % "logback-colorizer"         % Versions.LogbackColorizer,
-  "mysql"                          % "mysql-connector-java"      % Versions.MySQL,
-  Orgs.DIG                         %% "dig-aws"                  % Versions.DigAws
+  "com.h2database"                 % "h2"                   % Versions.H2,
+  "com.typesafe.scala-logging"     %% "scala-logging"       % Versions.ScalaLogging,
+  "ch.qos.logback"                 % "logback-classic"      % Versions.LogbackClassic,
+  "org.codehaus.janino"            % "janino"               % Versions.Janino,
+  "org.json4s"                     %% "json4s-jackson"      % Versions.Json4s,
+  "io.getquill"                    %% "quill-jdbc"          % Versions.Quill,
+  "com.zaxxer"                     % "HikariCP"             % Versions.Hikari,
+  "org.rogach"                     %% "scallop"             % Versions.Scallop,
+  "org.tpolecat"                   %% "atto-core"           % Versions.Atto,
+  "org.tuxdude.logback.extensions" % "logback-colorizer"    % Versions.LogbackColorizer,
+  "mysql"                          % "mysql-connector-java" % Versions.MySQL,
+  Orgs.DIG                         %% "dig-aws"             % Versions.DigAws
 )
 
 lazy val testDeps = Seq(
-  "org.scalatest"  %% "scalatest" % Versions.ScalaTest % "it,test"
+  "org.scalatest" %% "scalatest" % Versions.ScalaTest % "it,test"
 )
 
 lazy val root = (project in file("."))
