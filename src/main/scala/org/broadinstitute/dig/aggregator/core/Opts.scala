@@ -49,7 +49,7 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   mutuallyExclusive(insertRuns, noInsertRuns)
 
   // parse the command line options
-  verify
+  verify()
 
   /** By default, Scallop will terminate the JVM on any ScallopExceptions, which
     * is very bad for testing. Provide new behavior, where ScallopExceptions

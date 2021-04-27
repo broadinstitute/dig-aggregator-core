@@ -43,9 +43,9 @@ abstract class Method extends LazyLogging {
     */
   def filterStages(opts: Opts): Seq[Stage] = {
     opts.stage.toOption match {
-      case None => stages.result
+      case None => stages.result()
       case Some(name) =>
-        stages.result.filter(_.getName == name) match {
+        stages.result().filter(_.getName == name) match {
           case Nil => throw new NoSuchElementException(name)
           case seq => seq
         }
