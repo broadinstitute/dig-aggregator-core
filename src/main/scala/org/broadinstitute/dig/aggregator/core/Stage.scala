@@ -35,7 +35,7 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     name = getName,
     applicationConfigurations = Seq(
       new Spark.Env().usePython3(),
-      new Spark.Config().maximizeResourceAllocation(),
+      new Spark.Config().maximizeResourceAllocation()
     )
   )
 
@@ -101,7 +101,7 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
         "JOB_BUCKET" -> s"s3://${context.s3.bucket}",
         "JOB_METHOD" -> context.method.getName,
         "JOB_STAGE"  -> getName,
-        "JOB_PREFIX" -> s"$prefix/${context.method.getName}/$getName",
+        "JOB_PREFIX" -> s"$prefix/${context.method.getName}/$getName"
       )
 
       // if --test, set the dry run environment variable
@@ -136,14 +136,17 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     * after a successful stage run.
     */
   def buildOutputMap(inputs: Seq[Input], opts: Opts): Map[String, Set[Input]] = {
-    val inputToOutputs = inputs.map { input =>
-      input -> rules.apply(input)
-    }
+    val inputToOutputs = inputs.map { input => input -> rules.apply(input) }
 
     // get the list of output -> input
     val outputs = inputToOutputs.flatMap {
       case (input, Outputs.Named(out @ _*)) => out.toList.map(_ -> input)
       case _                                => Seq.empty
+    }
+
+    // get the list of all inputs that mapped to the null output
+    val ignoredInputs = inputToOutputs.collect {
+      case (input, Outputs.Null) => input
     }
 
     // group the inputs together by output name
@@ -161,13 +164,25 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     // get all inputs represented in all the outputs
     val allOutputInputs = finalMap.values.flatten.toSet
 
-    // validate that ALL inputs are represented in at least one output
-    require(inputs.forall(allOutputInputs.contains))
+    // get all the inputs that are NOT in at least one output
+    val missedInputs = inputs.filterNot(allOutputInputs.contains)
 
-    // apply CLI filters
-    finalMap
-      .filter { case (output, _) => opts.onlyGlobs.forall(_.exists(_.matches(output))) }
-      .filterNot { case (output, _) => opts.excludeGlobs.exists(_.exists(_.matches(output))) }
+    // validate that ALL missed inputs are intentionally ignored
+    if (!missedInputs.forall(ignoredInputs.contains)) {
+      logger.error("Some inputs are NOT represented in the final outputs:")
+
+      // dump the list of inputs not represented
+      for (input <- missedInputs.filterNot(ignoredInputs.contains)) {
+        logger.error(input.key)
+      }
+
+      // no work will be done!
+      Map.empty
+    } else {
+      finalMap
+        .filter { case (output, _) => opts.onlyGlobs.forall(_.exists(_.matches(output))) }
+        .filterNot { case (output, _) => opts.excludeGlobs.exists(_.exists(_.matches(output))) }
+    }
   }
 
   /** Determines the set of things that need to be processed. This is

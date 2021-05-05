@@ -19,4 +19,7 @@ object Outputs {
 
   /** Hand-named outputs. */
   final case class Named(seq: String*) extends Outputs
+
+  /** Special case to identify an output that isn't generated. */
+  final object Null extends Outputs
 }
