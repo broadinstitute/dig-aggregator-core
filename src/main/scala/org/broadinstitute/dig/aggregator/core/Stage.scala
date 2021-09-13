@@ -31,13 +31,35 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
   /** The cluster definition to instantiate for this processor. This is a
     * very basic configuration that should work for a good number of jobs.
     */
-  def cluster: ClusterDef = ClusterDef(
-    name = getName,
-    applicationConfigurations = Seq(
+  def cluster: ClusterDef = {
+    val applicationConfigurations = Seq(
       new Spark.Env().usePython3(),
       new Spark.Config().maximizeResourceAllocation()
     )
-  )
+
+    context.config match {
+      case Some(config) => {
+        import config.aws.emr
+
+        ClusterDef(
+          name = getName,
+          applicationConfigurations = applicationConfigurations,
+          masterEbsVolumeType = emr.masterEbsVolumeType,
+          slaveEbsVolumeType = emr.slaveEbsVolumeType
+        )
+      }
+      case None => {
+        logger.warn("Config instance missing; assuming default values for needed fields")
+
+        ClusterDef(
+          name = getName,
+          applicationConfigurations = applicationConfigurations,
+        )
+      }
+    }
+  }
+
+    
 
   /** All the new/updated sources that will be checked in S3. These will
     * be applied to the rules of this stage to determine the final set

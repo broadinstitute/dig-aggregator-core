@@ -4,7 +4,7 @@ import org.broadinstitute.dig.aws.Emr
 import org.broadinstitute.dig.aws.S3
 
 /** Method execution context. */
-class Context(val method: Method) {
+abstract class Context(val method: Method, val config: Option[Config]) {
 
   /** Override to provide a valid database connection. */
   lazy val db: Db = throw new NotImplementedError("No DB defined in context!")
@@ -17,6 +17,6 @@ class Context(val method: Method) {
 }
 
 /** Method execution context for testing. */
-class TestContext(override val method: Method) extends Context(method) {
+class TestContext(override val method: Method) extends Context(method, None) {
   override lazy val db: Db = new Db()
 }
