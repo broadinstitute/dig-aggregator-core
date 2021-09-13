@@ -33,3 +33,6 @@ out/
 # config files
 src/it/resources/config.json
 config.json
+.bsp/
+.history/
+.pydevproject
