@@ -101,39 +101,41 @@ abstract class Method extends LazyLogging {
     * for the JAR.
     */
   def main(args: Array[String]): Unit = {
-    val opts: Opts = new Opts(args.toList)
+    val result = Util.time(s"Running Method '${getName}'", logger.info(_)) {
+      val opts: Opts = new Opts(args.toList)
 
-    // create the execution context
-    implicit val context: Context = new Context(this) {
-      override lazy val db: Db          = if (opts.test()) new Db() else new Db(opts.config.aws.rds.secret.get)
-      override lazy val s3: S3.Bucket   = new S3.Bucket(opts.config.aws.s3.bucket)
-      override lazy val emr: Emr.Runner = new Emr.Runner(opts.config.aws.emr, s3.bucket)
-    }
-
-    // execute the method
-    val result = Try {
-      logger.info(s"Initializing stages...")
-      initStages(context)
-
-      // ensure the runs table exists
-      logger.info(s"Connecting to ${opts.config.aws.rds.instance}...")
-      Runs.migrate()
-
-      // verify the action and execute it
-      confirmReprocess(opts) {
-        if (opts.dryRun()) logger.warn("Dry run; no outputs will be built")
-        if (opts.yes() && opts.test()) logger.warn("Test run; outputs will be built to test location")
-
-        // run or just show work that would be run if --yes was provided
-        if (opts.yes()) run(opts) else showWork(opts)
+      // create the execution context
+      implicit val context: Context = new Context(this, Option(opts.config)) {
+        override lazy val db: Db          = if (opts.test()) new Db() else new Db(opts.config.aws.rds.secret.get)
+        override lazy val s3: S3.Bucket   = new S3.Bucket(opts.config.aws.s3.bucket)
+        override lazy val emr: Emr.Runner = new Emr.Runner(opts.config.aws.emr, s3.bucket)
       }
 
-      // finished successfully
-      logger.info("Done")
-    }
+      // execute the method
+      val result = Try {
+        logger.info(s"Initializing stages...")
+        initStages(context)
 
-    // close connections to the database regardless
-    context.db.close()
+        // ensure the runs table exists
+        logger.info(s"Connecting to ${opts.config.aws.rds.instance}...")
+        Runs.migrate()
+
+        // verify the action and execute it
+        confirmReprocess(opts) {
+          if (opts.dryRun()) logger.warn("Dry run; no outputs will be built")
+          if (opts.yes() && opts.test()) logger.warn("Test run; outputs will be built to test location")
+
+          // run or just show work that would be run if --yes was provided
+          if (opts.yes()) run(opts) else showWork(opts)
+        }
+
+        // finished successfully
+        logger.info("Done")
+      }
+
+      // close connections to the database regardless
+      try { result } finally { context.db.close() }
+    }
 
     // output any error reported
     result match {
