@@ -36,3 +36,4 @@ config.json
 .bsp/
 .history/
 .pydevproject
+.vscode
