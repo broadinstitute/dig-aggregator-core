@@ -16,6 +16,11 @@ final class OptsTest extends AnyFunSuite {
     assert(new Opts(Seq.empty).dryRun())
   }
 
+  test("non-interactive") {
+    assert((new Opts(Seq("--non-interactive"))).nonInteractive())
+    assert((new Opts(Seq("--yes"))).nonInteractive() === false)
+  }
+
   test("only and exclude") {
     val opts  = new Opts(Seq("--only", "FG*,T2D*", "--exclude", "*adj*"))
     val tests = Seq("BMI", "FG", "FGadjBMI", "T2D", "T2DadjBMI", "FI", "WHR")

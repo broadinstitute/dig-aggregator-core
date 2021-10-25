@@ -63,6 +63,8 @@ final class Opts(args: Seq[String]) extends ScallopConf(args) {
   /** Just the opposite of --yes. */
   lazy val dryRun: ScallopOption[Boolean] = yes.map(!_)
 
+  lazy val nonInteractive: ScallopOption[Boolean] = opt("non-interactive")
+
   /** Private (not in version control) configuration settings. */
   lazy val config: Config = {
     configFile.toOption.map(Config.load).get

@@ -77,6 +77,8 @@ abstract class Method extends LazyLogging {
   private def confirmReprocess(opts: Opts)(body: => Unit): Unit = {
     import scala.io.StdIn
 
+    //TODO: Get rid of this, or run a different way.  When running from SBT, piping in 'y', as
+    //in `$ yes | some-command` results in an NPE. :\
     def confirm(): Boolean = {
       val task = opts.stage.toOption.map(getStage).map(_.getName).getOrElse(getName)
 
@@ -89,7 +91,7 @@ abstract class Method extends LazyLogging {
     }
 
     // warn if needed, or just execute
-    if (opts.dryRun() || !opts.reprocess() || confirm()) {
+    if (opts.dryRun() || !opts.reprocess() || opts.nonInteractive() || confirm()) {
       body
     }
   }
@@ -105,42 +107,51 @@ abstract class Method extends LazyLogging {
       val opts: Opts = new Opts(args.toList)
 
       // create the execution context
-      implicit val context: Context = new Context(this, Option(opts.config)) {
+      implicit object context extends Context(this, Option(opts.config)) {
         override lazy val db: Db          = if (opts.test()) new Db() else new Db(opts.config.aws.rds.secret.get)
         override lazy val s3: S3.Bucket   = new S3.Bucket(opts.config.aws.s3.bucket)
         override lazy val emr: Emr.Runner = new Emr.Runner(opts.config.aws.emr, s3.bucket)
+
+        def closeDbAfter[A](f: => A): A = try { f } finally { db.close() } 
       }
 
       // execute the method
-      val result = Try {
-        logger.info(s"Initializing stages...")
-        initStages(context)
+      Try {
+        context.closeDbAfter {
+          logger.info(s"Initializing stages...")
+          initStages(context)
 
-        // ensure the runs table exists
-        logger.info(s"Connecting to ${opts.config.aws.rds.instance}...")
-        Runs.migrate()
+          // ensure the runs table exists
+          logger.info(s"Connecting to ${opts.config.aws.rds.instance}...")
+          Runs.migrate()
 
-        // verify the action and execute it
-        confirmReprocess(opts) {
-          if (opts.dryRun()) logger.warn("Dry run; no outputs will be built")
-          if (opts.yes() && opts.test()) logger.warn("Test run; outputs will be built to test location")
+          // verify the action and execute it
+          confirmReprocess(opts) {
+            if (opts.dryRun()) logger.warn("Dry run; no outputs will be built")
+            if (opts.yes() && opts.test()) logger.warn("Test run; outputs will be built to test location")
 
-          // run or just show work that would be run if --yes was provided
-          if (opts.yes()) run(opts) else showWork(opts)
+            // run or just show work that would be run if --yes was provided
+            if (opts.yes()) run(opts) else showWork(opts)
+          }
+
+          // finished successfully
+          logger.info("Done")
         }
-
-        // finished successfully
-        logger.info("Done")
       }
-
-      // close connections to the database regardless
-      try { result } finally { context.db.close() }
     }
 
     // output any error reported
     result match {
-      case Failure(ex) => logger.error(s"${ex.getClass.getName}: ${ex.getMessage}"); ex.printStackTrace()
+      case Failure(ex) => {
+        logger.error(s"${ex.getClass.getName}: ${ex.getMessage}", ex)
+
+        onFatalError(ex)
+      }
       case _           => ()
     }
   }
+
+  //Allow overriding behavior on a fatal exception.  When running for real, we want to exit with a non-zero status 
+  //to facilitate automation.  Tests wouldn't want to shut down the whole JVM, on the other hand.
+  protected def onFatalError(e: Throwable): Unit = System.exit(1)
 }
