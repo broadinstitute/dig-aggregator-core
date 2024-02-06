@@ -1,6 +1,7 @@
 package org.broadinstitute.dig.aggregator.core
 
 import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dig.aws.config.RdsConfig
 import org.broadinstitute.dig.aws.{Emr, S3}
 
 import scala.collection.mutable
@@ -106,9 +107,12 @@ abstract class Method extends LazyLogging {
 
       // create the execution context
       implicit val context: Context = new Context(this, Option(opts.config)) {
-        override lazy val db: Db          = if (opts.test()) new Db() else new Db(opts.config.aws.rds.secret.get)
-        override lazy val s3: S3.Bucket   = new S3.Bucket(opts.config.aws.s3.bucket)
-        override lazy val emr: Emr.Runner = new Emr.Runner(opts.config.aws.emr, s3.bucket)
+        override lazy val db: Db                = if (opts.test()) new Db() else new Db(opts.config.aws.runs.secret.get)
+        override lazy val portal: RdsConfig     = opts.config.aws.portal
+        override lazy val s3: S3.Bucket         = new S3.Bucket(opts.config.aws.input.bucket, opts.config.aws.input.subdir)
+        override lazy val s3Output: S3.Bucket   = new S3.Bucket(opts.config.aws.output.bucket, opts.config.aws.output.subdir)
+        override lazy val s3Bioindex: S3.Bucket = new S3.Bucket(opts.config.aws.bioindex.bucket, opts.config.aws.bioindex.subdir)
+        override lazy val emr: Emr.Runner       = new Emr.Runner(opts.config.aws.emr, s3.path)
       }
 
       // execute the method
@@ -117,7 +121,7 @@ abstract class Method extends LazyLogging {
         initStages(context)
 
         // ensure the runs table exists
-        logger.info(s"Connecting to ${opts.config.aws.rds.instance}...")
+        logger.info(s"Connecting to ${opts.config.aws.runs.instance}...")
         Runs.migrate()
 
         // verify the action and execute it

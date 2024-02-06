@@ -119,8 +119,13 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
        * For PySpark steps, this is done using the yarn-env configuration.
        * Scripts can also access the environment using `yarn` command.
        */
-      var env = Map(
+      var env: Map[String, String] = Map(
         "JOB_BUCKET" -> s"s3://${context.s3.bucket}",
+        "INPUT_PATH" -> s"s3://${context.s3.path}",
+        "OUTPUT_PATH" -> s"s3://${context.s3Output.path}",
+        "BIOINDEX_PATH" -> s"s3://${context.s3Bioindex.path}",
+        "PORTAL_SECRET" -> context.config.get.aws.portal.instance,
+        "PORTAL_DB" -> context.portal.secret.get.dbname,
         "JOB_METHOD" -> context.method.getName,
         "JOB_STAGE"  -> getName,
         "JOB_PREFIX" -> s"$prefix/${context.method.getName}/$getName"
