@@ -107,6 +107,7 @@ abstract class Method extends LazyLogging {
 
       // create the execution context
       implicit val context: Context = new Context(this, Option(opts.config)) {
+        override lazy val project: String       = opts.config.aws.project
         override lazy val db: Db                = if (opts.test()) new Db() else new Db(opts.config.aws.runs.secret.get)
         override lazy val portal: RdsConfig     = opts.config.aws.portal
         override lazy val s3: S3.Bucket         = new S3.Bucket(opts.config.aws.input.bucket, opts.config.aws.input.subdir)
@@ -123,6 +124,7 @@ abstract class Method extends LazyLogging {
         // ensure the runs table exists
         logger.info(s"Connecting to ${opts.config.aws.runs.instance}...")
         Runs.migrate()
+        RunStatus.migrate()
 
         // verify the action and execute it
         confirmReprocess(opts) {
