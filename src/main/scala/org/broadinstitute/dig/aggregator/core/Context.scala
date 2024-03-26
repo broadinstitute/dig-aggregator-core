@@ -7,6 +7,8 @@ import org.broadinstitute.dig.aws.config.RdsConfig
 /** Method execution context. */
 abstract class Context(val method: Method, val config: Option[Config]) {
 
+  lazy val project: String = throw new NotImplementedError("No project defined in context!")
+
   /** Override to provide a valid database connection. */
   lazy val db: Db = throw new NotImplementedError("No DB defined in context!")
 
@@ -29,4 +31,5 @@ abstract class Context(val method: Method, val config: Option[Config]) {
 /** Method execution context for testing. */
 class TestContext(override val method: Method) extends Context(method, None) {
   override lazy val db: Db = new Db()
+  override lazy val project: String = "test"
 }

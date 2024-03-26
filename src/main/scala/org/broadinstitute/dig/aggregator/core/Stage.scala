@@ -149,6 +149,8 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
 
       // prepare to run all the jobs
       output.keys.foreach(prepareJob)
+      output.keys.foreach(o => RunStatus.insert(this, o))
+      output.keys.foreach(o => RunStatus.start(this, o))
 
       // spins up the cluster(s) and runs all the jobs
       context.emr.runJobs(clusterCommon, env, jobs.toSeq, maxParallel = opts.maxClusters())
@@ -268,6 +270,7 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     for ((output, inputs) <- outputs.toList.sortBy(_._1)) {
       logger.info(s"Updating output $output for $getName (${inputs.size} inputs)...")
       Runs.insert(this, output, inputs.toList)
+      RunStatus.end(this, output)
     }
   }
 
