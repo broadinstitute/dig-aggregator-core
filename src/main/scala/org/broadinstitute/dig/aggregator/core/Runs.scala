@@ -17,6 +17,7 @@ import scala.io.Source
   * an instance, multiple records are inserted.
   */
 case class Runs(
+    project: String,
     method: String,
     stage: String,
     input: String,
@@ -64,6 +65,7 @@ object Runs extends LazyLogging {
 
     context.db.ctx.run(quote {
       query[Runs].filter { r =>
+        r.project == lift(context.project) &&
         r.method == lift(context.method.getName) &&
         r.stage == lift(stage.getName) &&
         r.output == lift(output)
@@ -78,6 +80,7 @@ object Runs extends LazyLogging {
     // generate runs to insert
     val runs = inputs.map { input =>
       Runs(
+        context.project,
         context.method.getName,
         stage.getName,
         input.key,
@@ -105,6 +108,7 @@ object Runs extends LazyLogging {
 
     context.db.ctx.run(quote {
       query[Runs].filter { r =>
+        r.project == lift(context.project) &&
         r.method == lift(context.method.getName) &&
         r.stage == lift(stage.getName)
       }
