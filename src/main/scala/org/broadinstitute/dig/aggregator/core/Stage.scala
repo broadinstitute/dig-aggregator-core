@@ -301,6 +301,8 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
     getWork(opts) match {
       case outputMap if outputMap.isEmpty => ()
       case outputMap if opts.insertRuns() =>
+        outputMap.keys.foreach(o => RunStatus.insert(this, o))
+        outputMap.keys.foreach(o => RunStatus.start(this, o))
         insertRuns(outputMap)
         outputMap.keys.foreach(success)
 
