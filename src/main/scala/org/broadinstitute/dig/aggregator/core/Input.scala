@@ -1,8 +1,8 @@
 package org.broadinstitute.dig.aggregator.core
 
 import java.time.LocalDateTime
-
 import Implicits._
+import org.broadinstitute.dig.aws.S3
 
 /** A run Input is a S3 key and eTag (checksum) pair. */
 case class Input(key: String, version: LocalDateTime) {
@@ -26,7 +26,7 @@ object Input {
    * The ETag of those objects is compared against the ETag of the
    * last time it was processed by the stage.
    */
-  case class Source(prefix: String, basename: String) {
+  case class Source(prefix: String, basename: String, s3BucketOverride: Option[S3.Bucket]) {
     require(prefix.endsWith("/"))
     require(!basename.endsWith("/"))
 
@@ -36,7 +36,7 @@ object Input {
 
     /** Create inputs for all keys in the bucket matching the prefix + basename. */
     def inputs()(implicit context: Context): Seq[Input] = {
-      context.s3
+      s3BucketOverride.getOrElse(context.s3)
         .ls(prefix.commonPrefix)
         .view
         .map(s3ObjToInput)
@@ -66,19 +66,21 @@ object Input {
   object Source {
 
     /** Raw inputs match a specific file. */
-    def Raw(key: String): Source = {
+    def Raw(key: String, s3BucketOverride: Option[S3.Bucket] = None): Source = {
       val (prefix, name) = key.lastIndexOf('/') match {
         case n if n < 0 => throw new Exception(s"Invalid raw Input.Source: $key")
         case n          => key.splitAt(n + 1)
       }
 
-      Source(prefix, name)
+      Source(prefix, name, s3BucketOverride)
     }
 
     /** Dataset inputs match a prefix to the metadata basename. */
-    def Dataset(prefix: String): Source = Source(prefix, "metadata")
+    def Dataset(prefix: String, s3BucketOverride: Option[S3.Bucket] = None): Source =
+      Source(prefix, "metadata", s3BucketOverride)
 
     /** Successful job results match a prefix to the _SUCCESS basename. */
-    def Success(prefix: String): Source = Source(prefix, "_SUCCESS")
+    def Success(prefix: String, s3BucketOverride: Option[S3.Bucket] = None): Source =
+      Source(prefix, "_SUCCESS", s3BucketOverride)
   }
 }

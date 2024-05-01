@@ -128,7 +128,8 @@ abstract class Stage(implicit context: Context) extends LazyLogging {
         "PORTAL_DB" -> context.portal.secret.get.dbname,
         "JOB_METHOD" -> context.method.getName,
         "JOB_STAGE"  -> getName,
-        "JOB_PREFIX" -> s"$prefix/${context.method.getName}/$getName"
+        "JOB_PREFIX" -> s"$prefix/${context.method.getName}/$getName",
+        "PROJECT" -> context.project
       )
 
       // if --test, set the dry run environment variable
