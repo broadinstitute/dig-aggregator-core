@@ -12,7 +12,7 @@ lazy val Versions = new {
   val ScalaLogging     = "3.9.2"
   val ScalaTest        = "3.1.2"
   val Scallop          = "3.5.0"
-  val DigAws           = "0.3.5-SNAPSHOT"
+  val DigAws           = "0.3.6-SNAPSHOT"
 }
 
 lazy val Orgs = new {
