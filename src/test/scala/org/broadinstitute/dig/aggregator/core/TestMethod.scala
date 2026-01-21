@@ -6,8 +6,8 @@ object TestMethod extends Method {
 
   // define a simple stage class
   class TestStage(implicit context: Context) extends Stage {
-    val sourceA: Input.Source = Input.Source("a/*/", "*")
-    val sourceB: Input.Source = Input.Source("b/*/", "*")
+    val sourceA: Input.Source = Input.Source("a/*/", "*", None)
+    val sourceB: Input.Source = Input.Source("b/*/", "*", None)
 
     /** No dependencies to upload. */
     override val sources: Seq[Input.Source] = Seq.empty

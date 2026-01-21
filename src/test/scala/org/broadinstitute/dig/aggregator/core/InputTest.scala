@@ -40,26 +40,26 @@ final class InputTest extends AnyFunSuite {
 
   test("source prefix must end with /") {
     assertThrows[IllegalArgumentException] {
-      Input.Source("foo", "bar")
+      Input.Source("foo", "bar", None)
     }
   }
 
   test("source basename must not end with /") {
     assertThrows[IllegalArgumentException] {
-      Input.Source("foo", "bar/")
+      Input.Source("foo", "bar/", None)
     }
   }
 
   test("source match inputs") {
-    val a = Input.Source("a/*/", "bar")
-    val b = Input.Source("b/test=*/", "*")
+    val a = Input.Source("a/*/", "bar", None)
+    val b = Input.Source("b/test=*/", "*", None)
 
     assert(a.matches(input("a/foo/bar")))
     assert(b.matches(input("b/test=foo/any")))
   }
 
   test("source pattern matching prefix") {
-    val source = Input.Source("a/test=*/bar/*/", "baz")
+    val source = Input.Source("a/test=*/bar/*/", "baz", None)
 
     input("a/test=foo/bar/test/baz") match {
       case source(foo, test) => assert(foo == "foo" && test == "test")
@@ -68,7 +68,7 @@ final class InputTest extends AnyFunSuite {
   }
 
   test("source pattern matching basename") {
-    val source = Input.Source("a/test=*/bar/*/", "b*")
+    val source = Input.Source("a/test=*/bar/*/", "b*", None)
 
     input("a/test=foo/bar/test/baz") match {
       case source(foo, test, az) => assert(foo == "foo" && test == "test" && az == "az")
